@@ -16,7 +16,7 @@ BENCHMARKS = {
     "Nifty Smallcap 250": "^NIFTYSMLCAP250.NS",
 }
 
-# CSVs hosted on GitHub (Indices Universe)
+
 GITHUB_BASE = "https://raw.githubusercontent.com/anki1007/rrg-stocks/main/ticker/"
 CSV_FILES = {
     "Nifty 200":           GITHUB_BASE + "nifty200.csv",
@@ -27,11 +27,11 @@ CSV_FILES = {
     "Nifty Total Market":  GITHUB_BASE + "niftytotalmarket.csv",
 }
 
-# Core logic parameters (kept)
+
 RS_LOOKBACK_DAYS = 252    # ~1y window for RS/JdK
 JDK_WINDOW = 21           # JdK standard window
 
-# ================== HELPERS (same logic) ==================
+
 def tv_symbol_from_yf(symbol: str) -> str:
     s = symbol.strip().upper()
     return "NSE:" + s[:-3] if s.endswith(".NS") else "NSE:" + s
@@ -134,7 +134,7 @@ def load_universe_from_csv(url: str) -> pd.DataFrame:
 
 @st.cache_data(show_spinner=True)
 def fetch_prices(tickers: list[str], benchmark: str, period: str, interval: str):
-    # Use yfinance to grab all tickers + benchmark together
+    
     raw = yf.download(
         tickers + [benchmark],
         period=period,            # e.g., "2y"
@@ -147,7 +147,7 @@ def fetch_prices(tickers: list[str], benchmark: str, period: str, interval: str)
     return raw
 
 def row_bg_for_serial(sno: int) -> str:
-    # Do not change color criteria
+    
     if sno <= 30: return "#dff5df"  # light green
     if sno <= 60: return "#fff6b3"  # light yellow
     if sno <= 90: return "#dfe9ff"  # light blue
@@ -194,7 +194,7 @@ def build_table_dataframe(raw, benchmark: str, universe_df: pd.DataFrame) -> pd.
             "RS-Ratio": rr_last,
             "RS-Momentum": mm_last,
             "Performance": status,
-            "Symbol": sym,  # kept for link; hidden in display/export if needed
+            "Symbol": sym,
             "Chart": tradingview_chart_url(sym),
         })
 
@@ -203,13 +203,13 @@ def build_table_dataframe(raw, benchmark: str, universe_df: pd.DataFrame) -> pd.
 
     df = pd.DataFrame(rows)
 
-    # rounding (unchanged)
+    
     for col in ("Return_6M", "Return_3M", "Return_1M"):
         df[col] = pd.to_numeric(df[col], errors="coerce").round(1)
     df["RS-Ratio"] = pd.to_numeric(df["RS-Ratio"], errors="coerce").round(2)
     df["RS-Momentum"] = pd.to_numeric(df["RS-Momentum"], errors="coerce").round(2)
 
-    # ranks and position (unchanged)
+    # ranks and position
     df["Rank_6M"] = df["Return_6M"].rank(ascending=False, method="min")
     df["Rank_3M"] = df["Return_3M"].rank(ascending=False, method="min")
     df["Rank_1M"] = df["Return_1M"].rank(ascending=False, method="min")
@@ -218,7 +218,7 @@ def build_table_dataframe(raw, benchmark: str, universe_df: pd.DataFrame) -> pd.
     df["Position"] = np.arange(1, len(df) + 1)
     df.insert(0, "S.No", np.arange(1, len(df) + 1))
 
-    # Final order (keep Symbol only for link, we can hide from styled output if you prefer)
+    
     order = ["S.No", "Name", "Industry",
              "Return_6M", "Rank_6M",
              "Return_3M", "Rank_3M",
@@ -235,9 +235,9 @@ def style_rows(df: pd.DataFrame):
         return [f"background-color: {bg}"] * len(df.columns)
 
     styler = df.style.apply(lambda r: _row_style(r), axis=1)
-    # Left-align Name & Industry like your Tk app
+    
     styler = styler.set_properties(subset=["Name", "Industry"], **{"text-align": "left"})
-    # Center-align numeric-ish columns to match original
+    
     num_cols = [c for c in df.columns if c not in ("Name", "Industry", "Chart", "Symbol")]
     styler = styler.set_properties(subset=num_cols, **{"text-align": "center"})
     return styler
@@ -246,16 +246,16 @@ def style_rows(df: pd.DataFrame):
 st.set_page_config(page_title="Momentum Screener", layout="wide")
 st.title("Momentum Screener")
 
-# ---- Sidebar controls (left dashboard) ----
+
 st.sidebar.header("Controls")
 
 indices_universe = st.sidebar.selectbox("a) Indices Universe", list(CSV_FILES.keys()), index=4)
 benchmark_key = st.sidebar.selectbox("b) Benchmark", list(BENCHMARKS.keys()), index=1)
 
-# Timeframe (yfinance interval). Core logic uses daily; offering choices but 1d is recommended.
+
 timeframe = st.sidebar.selectbox("c) Timeframe", ["1d", "1wk", "1mo"], index=0)
 
-# Period for yfinance download
+
 period = st.sidebar.selectbox(
     "d) Period",
     ["1y", "2y", "3y", "5y"],
@@ -264,15 +264,15 @@ period = st.sidebar.selectbox(
 
 col_btn1, col_btn2 = st.sidebar.columns(2)
 do_load = col_btn1.button("e) Load / Refresh", use_container_width=True)
-# export button will appear below table when data is ready
 
-# ---- Status / Info ----
+
+
 st.caption(
     "Tip: Results depend on the CSV universe and available price history. "
     "If few rows appear, try a longer **Period** (e.g., 2y+) and **Timeframe** = 1d."
 )
 
-# ---- Run build on click or when first landing (auto-run once) ----
+
 if "ran_once" not in st.session_state:
     st.session_state.ran_once = True
     do_load = True
@@ -290,7 +290,7 @@ if do_load:
 
         df = build_table_dataframe(raw, benchmark, universe_df)
 
-        # Build a display dataframe that hides Symbol but keeps Chart link
+        
         display_cols = [
             "S.No", "Name", "Industry",
             "Return_6M", "Rank_6M",
@@ -302,7 +302,7 @@ if do_load:
         display_df = df[display_cols].copy()
 
         st.subheader("Screened Momentum Table")
-        # Make Chart clickable via column_config LinkColumn
+        
         st.dataframe(
             style_rows(display_df),
             use_container_width=True,
@@ -330,3 +330,4 @@ if do_load:
 
     except Exception as e:
         st.error(str(e))
+
