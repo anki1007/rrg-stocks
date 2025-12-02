@@ -49,11 +49,11 @@ a.name-link:hover { text-decoration: underline; }
 # Six benchmarks (resolver tries in order; falls back to ^NSEI if needed)
 BENCHMARKS: Dict[str, List[str]] = {
     "Nifty 50": ["^NSEI"],
-    "Nifty 200": ["^CNX200", "^NSE200", "^NSEI"],
-    "Nifty 500": ["^CRSLDX", "^CNX500", "^NSE500", "^NSEI"],
-    "Nifty Midcap 150": ["^NIFTYMIDCAP150.NS", "^NSEI"],
-    "Nifty Mid Smallcap 400": ["^NIFTYMIDSML400.NS", "^NIFTYMIDSMALLCAP400.NS", "^NSEI"],
-    "Nifty Total Market": ["^NIFTYTOTALMKT.NS", "^NIFTYTOTMKT", "^NSEI"],
+    "Nifty 200": ["^CNX200"],
+    "Nifty 500": ["^CRSLDX"],
+    "Nifty Midcap 150": ["^NIFTYMIDCAP150.NS"],
+    "Nifty Mid Smallcap 400": ["^NIFTYMIDSML400.NS"],
+    "Nifty Total Market": ["^NIFTYTOTALMKT.NS"],
 }
 DEFAULT_PERIODS = {"1Y": "1y", "2Y": "2y", "5Y": "5y"}
 RS_LOOKBACK_DAYS = 252
@@ -349,3 +349,4 @@ if "last_df" in st.session_state:
         file_name=f"{st.session_state['meta']['indices'].replace(' ','_').lower()}_{st.session_state['meta']['timeframe'].lower()}_{st.session_state['meta']['period'].lower()}_momentum.csv",
         mime="text/csv"
     )
+
