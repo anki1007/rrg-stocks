@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 from typing import Dict, List
 
@@ -7,122 +6,98 @@ import pandas as pd
 import yfinance as yf
 import streamlit as st
 
-# -------------------- PAGE / CSS --------------------
-st.set_page_config(page_title="Nifty Total Market Momentum", layout="wide")
+# ---------------- Page + CSS ----------------
+st.set_page_config(page_title="Momentum Screener", layout="wide")
 
-# Minimal CSS to mirror your Tkinter layout and ensure colors are visible (even in dark mode)
 st.markdown("""
 <style>
-html, body, [class^="css"]  {
-  font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
-  font-size: 14px;
-}
+html, body, [class^="css"] { font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif; }
 .block-container { padding-top: 8px; padding-bottom: 8px; }
 
-/* toolbar look */
-div.stSelectbox label, div.stButton>button p { font-weight: 600; }
-div.stSelectbox>div>div { font-size: 14px; }
-div.stButton>button {
-  padding: 6px 14px;
-  border-radius: 6px;
-}
+/* Sidebar spacing */
+section[data-testid="stSidebar"] .block-container { padding: 16px 12px; }
 
-/* table surface – force white so colors pop in dark theme */
-.table-wrap {
-  max-height: 78vh;
-  overflow: auto;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  background: #ffffff;
-}
-.table-wrap table {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  background: #ffffff;
-}
-.table-wrap thead th {
+/* Table shell */
+.table-wrap { max-height: 74vh; overflow: auto; border: 1px solid #cbd5e1; border-radius: 10px; background:#ffffff; }
+.table { width: 100%; border-collapse: separate; border-spacing: 0; }
+.table thead th {
   position: sticky; top: 0;
-  background: #ececec !important;
-  color: #111827;
-  padding: 8px 10px;
-  font-weight: 700;
-  border-bottom: 2px solid #cbd5e1;
-  white-space: nowrap;
+  background: #e6edf5; color:#0f172a; font-weight: 800;
+  border-bottom: 2px solid #cbd5e1; padding: 10px; white-space: nowrap;
 }
-.table-wrap tbody td {
-  padding: 6px 10px;
-  border-bottom: 1px solid #e5e7eb;
-  white-space: nowrap;
-  color: #0f172a;
+.table tbody td {
+  padding: 8px 10px; border-bottom: 1px solid #e5e7eb; white-space: nowrap; color: #0f172a;
   background-clip: padding-box;
 }
-a.name-link { text-decoration: none; color: inherit; }
+
+/* Row color bands */
+.row-green  td { background: #2aa86e1a; }   /* soft green */
+.row-yellow td { background: #ffd84d33; }   /* soft yellow */
+.row-blue   td { background: #3b82f633; }   /* soft blue */
+.row-red    td { background: #ef444433; }   /* soft red */
+
+/* Serial chip */
+.serial {
+  background:#1f2937; color:#fff; font-weight:700; border-radius:8px;
+  padding: 2px 8px; display:inline-block; min-width: 28px; text-align:center;
+}
+
+a.name-link { color: inherit; text-decoration: none; font-weight: 600; }
 a.name-link:hover { text-decoration: underline; }
 </style>
 """, unsafe_allow_html=True)
 
-# -------------------- CONFIG --------------------
-# Benchmarks with alias candidates (first working symbol is used)
-BENCHMARKS: Dict[str, list] = {
+# ---------------- Config ----------------
+BENCHMARKS: Dict[str, List[str]] = {
     "NIFTY 50": ["^NSEI"],
     "Nifty 200": ["^CNX200", "^NSE200", "^NSEI"],
     "Nifty 500": ["^CRSLDX", "^CNX500", "^NSE500", "^NSEI"],
     "Nifty Midcap 150": ["^NIFTYMIDCAP150.NS", "^NSEMDCP150", "^NSEI"],
     "Nifty Smallcap 250": ["^NIFTYSMLCAP250.NS", "^NSESMLCAP250", "^NSEI"],
 }
-
-MOMENTUM_YEARS = 2
+DEFAULT_PERIODS = {"1Y": "1y", "2Y": "2y", "5Y": "5y"}
 RS_LOOKBACK_DAYS = 252
 JDK_WINDOW = 21
 
-# -------------------- CSV DISCOVERY --------------------
+# ---------------- CSV discovery ----------------
 def discover_universe_csvs() -> Dict[str, Path]:
     root = Path(__file__).resolve().parent
-    ticker_dir = root / "ticker"
-    files = {}
-    if ticker_dir.exists():
-        for p in sorted(ticker_dir.glob("*.csv")):
-            canonical = {
-                "nifty50": "Nifty 50",
-                "nifty200": "Nifty 200",
-                "nifty500": "Nifty 500",
-                "niftyindices": "Nifty Indices",
-                "niftymidcap150": "Nifty Midcap 150",
-                "niftysmallcap250": "Nifty Smallcap 250",
-                "niftymidsmallcap400": "Nifty Mid+Small 400",
+    tdir = root / "ticker"
+    out: Dict[str, Path] = {}
+    if tdir.exists():
+        for p in sorted(tdir.glob("*.csv")):
+            names = {
+                "nifty50": "Nifty 50", "nifty200": "Nifty 200", "nifty500": "Nifty 500",
+                "niftyindices": "Nifty Indices", "niftymidcap150": "Nifty Midcap 150",
+                "niftysmallcap250": "Nifty Smallcap 250", "niftymidsmallcap400": "Nifty Mid+Small 400",
                 "niftytotalmarket": "Nifty Total Market",
             }
-            key = canonical.get(p.stem.lower(), p.stem.replace("_", " ").title())
-            files[key] = p
-    return files
+            key = names.get(p.stem.lower(), p.stem.replace("_", " ").title())
+            out[key] = p
+    return out
 
-# -------------------- HELPERS --------------------
-def tv_symbol_from_yf(symbol: str) -> str:
-    s = symbol.strip().upper()
+# ---------------- Helpers ----------------
+def tv_symbol_from_yf(sym: str) -> str:
+    s = sym.strip().upper()
     return "NSE:" + s[:-3] if s.endswith(".NS") else "NSE:" + s
 
-def tradingview_chart_url(symbol: str) -> str:
-    return f"https://in.tradingview.com/chart/?symbol={tv_symbol_from_yf(symbol)}"
+def tradingview_url(sym: str) -> str:
+    return f"https://in.tradingview.com/chart/?symbol={tv_symbol_from_yf(sym)}"
 
 def _pick_close(df, symbol: str) -> pd.Series:
-    if isinstance(df, pd.Series):
-        return df.dropna()
+    if isinstance(df, pd.Series): return df.dropna()
     if isinstance(df, pd.DataFrame):
         if isinstance(df.columns, pd.MultiIndex):
             for lvl in ("Adj Close", "Close"):
-                if (symbol, lvl) in df.columns:
-                    return df[(symbol, lvl)].dropna()
+                if (symbol, lvl) in df.columns: return df[(symbol, lvl)].dropna()
         else:
             for col in ("Adj Close", "Close"):
-                if col in df.columns:
-                    return df[col].dropna()
+                if col in df.columns: return df[col].dropna()
     return pd.Series(dtype=float)
 
 def jdk_components(price: pd.Series, bench: pd.Series, win: int = JDK_WINDOW):
     df = pd.concat([price.rename("p"), bench.rename("b")], axis=1).dropna()
-    if df.empty:
-        return pd.Series(dtype=float), pd.Series(dtype=float)
+    if df.empty: return pd.Series(dtype=float), pd.Series(dtype=float)
     rs = 100 * (df["p"] / df["b"])
     m = rs.rolling(win).mean()
     s = rs.rolling(win).std(ddof=0).replace(0, np.nan).fillna(1e-9)
@@ -134,240 +109,213 @@ def jdk_components(price: pd.Series, bench: pd.Series, win: int = JDK_WINDOW):
     ix = rs_ratio.index.intersection(rs_mom.index)
     return rs_ratio.loc[ix], rs_mom.loc[ix]
 
-def perf_quadrant(x: float, y: float) -> str:
+def perf_quadrant(x, y) -> str:
     if x >= 100 and y >= 100: return "Leading"
     if x < 100 and y >= 100:  return "Improving"
     if x < 100 and y < 100:   return "Lagging"
     return "Weakening"
 
 def analyze_momentum(adj: pd.Series) -> dict | None:
-    if adj is None or adj.empty or len(adj) < 252:
-        return None
+    if adj is None or adj.empty or len(adj) < 252: return None
     ema100 = adj.ewm(span=100, adjust=False).mean()
     try:
-        one_year_return = (adj.iloc[-1] / adj.iloc[-252] - 1.0) * 100.0
+        one_year = (adj.iloc[-1] / adj.iloc[-252] - 1.0) * 100.0
     except Exception:
         return None
     high_52w = adj.iloc[-252:].max()
-    within_20pct_high = adj.iloc[-1] >= high_52w * 0.8
-    if len(adj) < 126:
-        return None
-    six_month = adj.iloc[-126:]
-    up_days_pct = (six_month.pct_change() > 0).sum() / len(six_month) * 100.0
-    if (adj.iloc[-1] >= ema100.iloc[-1] and one_year_return >= 6.5 and
-        within_20pct_high and up_days_pct > 45.0):
+    within_20 = adj.iloc[-1] >= high_52w * 0.8
+    if len(adj) < 126: return None
+    six = adj.iloc[-126:]
+    up_days = (six.pct_change() > 0).sum() / len(six) * 100.0
+    if (adj.iloc[-1] >= ema100.iloc[-1] and one_year >= 6.5 and within_20 and up_days > 45.0):
         try:
-            r6 = (adj.iloc[-1] / adj.iloc[-126] - 1.0) * 100.0
-            r3 = (adj.iloc[-1] / adj.iloc[-63]  - 1.0) * 100.0
-            r1 = (adj.iloc[-1] / adj.iloc[-21]  - 1.0) * 100.0
+            r6 = (adj.iloc[-1]/adj.iloc[-126]-1.0)*100.0
+            r3 = (adj.iloc[-1]/adj.iloc[-63]-1.0)*100.0
+            r1 = (adj.iloc[-1]/adj.iloc[-21]-1.0)*100.0
         except Exception:
             return None
         return {"Return_6M": r6, "Return_3M": r3, "Return_1M": r1}
     return None
 
 @st.cache_data(show_spinner=False)
-def yf_download_cached(tickers: List[str], period: str = "2y", interval: str = "1d"):
-    return yf.download(
-        tickers,
-        period=period,
-        interval=interval,
-        auto_adjust=True,
-        group_by="ticker",
-        progress=False,
-        threads=True,
-    )
+def yf_download_cached(tickers: List[str], period: str, interval: str = "1d"):
+    return yf.download(tickers, period=period, interval=interval, auto_adjust=True,
+                       group_by="ticker", progress=False, threads=True)
 
 def resolve_benchmark_symbol(preferred_key: str) -> str:
     for sym in BENCHMARKS.get(preferred_key, []):
         try:
             probe = yf.download(sym, period="3mo", interval="1d", progress=False, auto_adjust=True)
             s = _pick_close(probe, sym).dropna()
-            if not s.empty:
-                return sym
+            if not s.empty: return sym
         except Exception:
             pass
     return "^NSEI"
 
-def build_table_dataframe(benchmark_symbol: str, universe_df: pd.DataFrame) -> pd.DataFrame:
-    tickers = universe_df["Symbol"].tolist()
-    raw = yf_download_cached(tickers + [benchmark_symbol], period=f"{MOMENTUM_YEARS}y", interval="1d")
+def resample_weekly(series: pd.Series) -> pd.Series:
+    return series.resample("W-FRI").last().dropna()
 
-    bench = _pick_close(raw, benchmark_symbol).dropna()
-    if bench.empty:
-        raise RuntimeError(f"Benchmark {benchmark_symbol} series empty")
+# ---------------- Core build ----------------
+def build_table(universe: pd.DataFrame, bench_symbol: str, period_key: str, timeframe: str) -> pd.DataFrame:
+    period = DEFAULT_PERIODS.get(period_key, "1y")
+    tickers = universe["Symbol"].tolist()
+    raw = yf_download_cached(tickers + [bench_symbol], period=period, interval="1d")
+
+    bench = _pick_close(raw, bench_symbol).dropna()
+    if timeframe == "Weekly": bench = resample_weekly(bench)
+    if bench.empty: raise RuntimeError(f"Benchmark {bench_symbol} series empty")
 
     cutoff = bench.index.max() - pd.Timedelta(days=RS_LOOKBACK_DAYS + 5)
     bench_rs = bench.loc[bench.index >= cutoff].copy()
 
     rows = []
-    for _, rec in universe_df.iterrows():
-        sym = rec.Symbol
-        name = rec.Name
-        industry = rec.Industry
-
+    for _, rec in universe.iterrows():
+        sym, name, ind = rec.Symbol, rec.Name, rec.Industry
         s = _pick_close(raw, sym).dropna()
-        if s.empty:
-            continue
+        if s.empty: continue
+        if timeframe == "Weekly": s = resample_weekly(s)
 
         mom = analyze_momentum(s)
-        if mom is None:
-            continue
+        if mom is None: continue
 
         s_rs = s.loc[s.index >= cutoff].copy()
         rr, mm = jdk_components(s_rs, bench_rs)
-        if rr.empty or mm.empty:
-            continue
+        if rr.empty or mm.empty: continue
         ix = rr.index.intersection(mm.index)
         rr_last = float(rr.loc[ix].iloc[-1])
         mm_last = float(mm.loc[ix].iloc[-1])
-        status = perf_quadrant(rr_last, mm_last)
 
         rows.append({
-            "Name": name,
-            "Industry": industry,
-            "Return_6M": mom["Return_6M"],
-            "Return_3M": mom["Return_3M"],
-            "Return_1M": mom["Return_1M"],
-            "RS-Ratio": rr_last,
-            "RS-Momentum": mm_last,
-            "Performance": status,
-            "Final_Rank": None,
-            "Position": None,
-            "Symbol": sym,
+            "#": None, "Name": name, "Industry": ind,
+            "RS-Ratio": rr_last, "RS-Momentum": mm_last,
+            "Status": perf_quadrant(rr_last, mm_last),
+            "Return_6M": mom["Return_6M"], "Return_3M": mom["Return_3M"], "Return_1M": mom["Return_1M"],
+            "Symbol": sym
         })
 
-    if not rows:
-        raise RuntimeError("No tickers passed the filters.")
+    if not rows: raise RuntimeError("No tickers passed the filters.")
 
     df = pd.DataFrame(rows)
-    for col in ("Return_6M", "Return_3M", "Return_1M"):
-        df[col] = df[col].round(1)
-    df["RS-Ratio"] = df["RS-Ratio"].round(2)
-    df["RS-Momentum"] = df["RS-Momentum"].round(2)
 
+    # Ranks & sort by Final Rank (classic momentum stack)
     df["Rank_6M"] = df["Return_6M"].rank(ascending=False, method="min")
     df["Rank_3M"] = df["Return_3M"].rank(ascending=False, method="min")
     df["Rank_1M"] = df["Return_1M"].rank(ascending=False, method="min")
-    df["Final_Rank"] = df["Rank_6M"] + df["Rank_3M"] + df["Rank_1M"]
-    df = df.sort_values("Final_Rank").reset_index(drop=True)
-    df["Position"] = np.arange(1, len(df) + 1)
-    df.insert(0, "S.No", np.arange(1, len(df) + 1))
+    df["Final Rank"] = df["Rank_6M"] + df["Rank_3M"] + df["Rank_1M"]
 
-    order = [
-        "S.No", "Name", "Industry",
-        "Return_6M", "Rank_6M",
-        "Return_3M", "Rank_3M",
-        "Return_1M", "Rank_1M",
-        "RS-Ratio", "RS-Momentum", "Performance",
-        "Final_Rank", "Position", "Symbol"
-    ]
-    return df[order]
+    # Round visible values
+    for col in ("Return_6M","Return_3M","Return_1M"): df[col] = df[col].round(1)
+    df["RS-Ratio"] = df["RS-Ratio"].round(2); df["RS-Momentum"] = df["RS-Momentum"].round(2)
 
-def df_to_html_table(df: pd.DataFrame) -> str:
-    headers = [
-        "S.No", "Name", "Industry",
-        "Return_6M", "Rank_6M",
-        "Return_3M", "Rank_3M",
-        "Return_1M", "Rank_1M",
-        "RS-Ratio", "RS-Momentum", "Performance",
-        "Final_Rank", "Position"
-    ]
+    df = df.sort_values("Final Rank", ascending=True).reset_index(drop=True)
 
-    def row_color(sno: int) -> str:
-        if sno <= 30: return "#dff5df"   # green
-        if sno <= 60: return "#fff6b3"   # yellow
-        if sno <= 90: return "#dfe9ff"   # blue
-        return "#f7d6d6"                 # red
+    # Serial numbers & row classes
+    df["#"] = np.arange(1, len(df)+1)
+    def band_class(n):
+        if n <= 30: return "row-green"
+        if n <= 60: return "row-yellow"
+        if n <= 90: return "row-blue"
+        return "row-red"
+    df["__rowclass"] = df["#"].apply(band_class)
 
-    rows_html = []
+    # Final display set
+    show_cols = ["#", "Name", "Status", "Industry", "RS-Ratio", "RS-Momentum", "Return_6M", "Return_3M", "Return_1M"]
+    return df[show_cols + ["Symbol", "__rowclass"]]
+
+# ---------------- HTML render ----------------
+def render_table(df: pd.DataFrame):
+    headers = ["#", "Name", "Status", "Industry", "RS-Ratio", "RS-Momentum", "Return 6M", "Return 3M", "Return 1M"]
+    body = []
     for _, r in df.iterrows():
-        sno = int(r["S.No"])
-        bg = row_color(sno)
-        name = str(r["Name"])
-        sym = str(r["Symbol"]).strip()
-        url = tradingview_chart_url(sym) if sym else "#"
-
-        vals = [
-            str(sno),
-            f'<a class="name-link" href="{url}" target="_blank">{name}</a>',
-            str(r["Industry"]),
-            f'{r["Return_6M"]:.1f}', f'{r["Rank_6M"]:.0f}',
-            f'{r["Return_3M"]:.1f}', f'{r["Rank_3M"]:.0f}',
-            f'{r["Return_1M"]:.1f}', f'{r["Rank_1M"]:.0f}',
-            f'{r["RS-Ratio"]:.2f}', f'{r["RS-Momentum"]:.2f}',
-            str(r["Performance"]), f'{r["Final_Rank"]:.0f}', f'{r["Position"]:.0f}',
+        rowcls = r["__rowclass"]
+        name = r["Name"]; sym = r["Symbol"]; url = tradingview_url(sym)
+        cells = [
+            f'<td><span class="serial">{int(r["#"])}</span></td>',
+            f'<td><a class="name-link" href="{url}" target="_blank">{name}</a></td>',
+            f'<td style="text-align:center;">{r["Status"]}</td>',
+            f'<td>{r["Industry"]}</td>',
+            f'<td style="text-align:center;">{r["RS-Ratio"]:.2f}</td>',
+            f'<td style="text-align:center;">{r["RS-Momentum"]:.2f}</td>',
+            f'<td style="text-align:center;">{r["Return_6M"]:.1f}</td>',
+            f'<td style="text-align:center;">{r["Return_3M"]:.1f}</td>',
+            f'<td style="text-align:center;">{r["Return_1M"]:.1f}</td>',
         ]
+        body.append(f'<tr class="{rowcls}">{"".join(cells)}</tr>')
 
-        tds = "".join(
-            f'<td style="text-align:{ "left" if i in (1,2) else "center"}; '
-            f'background:{bg}; color:#0f172a;">{v}</td>'
-            for i, v in enumerate(vals)
-        )
-        rows_html.append(f"<tr>{tds}</tr>")
-
-    ths = "".join(
-        f'<th style="text-align:{ "left" if h in ("Name","Industry") else "center"};">{h}</th>'
-        for h in headers
-    )
-
-    return f"""
+    thead = "".join(f"<th>{h}</th>" for h in headers)
+    html = f"""
     <div class="table-wrap">
-      <table>
-        <thead><tr>{ths}</tr></thead>
-        <tbody>{''.join(rows_html)}</tbody>
+      <table class="table">
+        <thead><tr>{thead}</tr></thead>
+        <tbody>{''.join(body)}</tbody>
       </table>
     </div>
     """
+    st.markdown(html, unsafe_allow_html=True)
 
-# -------------------- UI (top toolbar + table) --------------------
+# ---------------- Sidebar (ONLY requested controls) ----------------
 csv_map = discover_universe_csvs()
 if not csv_map:
-    st.error("No CSVs found under ./ticker/*.csv")
+    st.sidebar.error("No CSVs found under ./ticker/*.csv")
     st.stop()
 
-toolbar_cols = st.columns([1.1, 1.1, 0.9, 0.9, 6])
-with toolbar_cols[0]:
-    bench_key = st.selectbox("Benchmark:", list(BENCHMARKS.keys()),
-                             index=list(BENCHMARKS.keys()).index("Nifty 500") if "Nifty 500" in BENCHMARKS else 0)
-with toolbar_cols[1]:
-    options = list(csv_map.keys())
-    default_idx = options.index("Nifty 200") if "Nifty 200" in options else 0
-    uni_key = st.selectbox("Universe:", options, index=default_idx)
-with toolbar_cols[2]:
+with st.sidebar:
+    st.markdown("### Momentum Screener Controls")
+
+    # 1) Indices Universe
+    indices = st.selectbox("Indices Universe", list(csv_map.keys()),
+                           index=(list(csv_map.keys()).index("Nifty 200")
+                                  if "Nifty 200" in csv_map else 0))
+
+    # 2) Benchmark
+    benchmark_key = st.selectbox("Benchmark", list(BENCHMARKS.keys()),
+                                 index=(list(BENCHMARKS.keys()).index("Nifty 500")
+                                        if "Nifty 500" in BENCHMARKS else 0))
+
+    # 3) Load / Refresh
     load_click = st.button("Load / Refresh")
-with toolbar_cols[3]:
-    export_placeholder = st.empty()
 
-info_placeholder = st.empty()
-table_placeholder = st.empty()
+    # 4) Timeframe
+    timeframe = st.selectbox("Timeframe", ["Daily", "Weekly"], index=0)
 
+    # 5) Period
+    period_key = st.selectbox("Period", list(DEFAULT_PERIODS.keys()), index=0)
+
+    # 6) Export CSV placeholder (filled after load)
+    export_csv_btn = st.empty()
+
+info = st.empty()
+table_slot = st.empty()
+
+# ---------------- Build & render ----------------
 if load_click or "last_df" not in st.session_state:
     try:
-        bench_symbol = resolve_benchmark_symbol(bench_key)
-        uni_df = pd.read_csv(csv_map[uni_key])
-        # normalize columns
-        cols = {c.strip().lower(): c for c in uni_df.columns}
-        uni_df = uni_df[[cols["symbol"], cols["company name"], cols["industry"]]].copy()
-        uni_df.columns = ["Symbol", "Name", "Industry"]
+        bench_symbol = resolve_benchmark_symbol(benchmark_key)
+        dfu = pd.read_csv(csv_map[indices])
+        cols = {c.strip().lower(): c for c in dfu.columns}
+        dfu = dfu[[cols["symbol"], cols["company name"], cols["industry"]]].copy()
+        dfu.columns = ["Symbol", "Name", "Industry"]
 
-        df = build_table_dataframe(bench_symbol, uni_df)
-        st.session_state["last_df"] = df.copy()
-        st.session_state["meta"] = {"bench_key": bench_key, "bench_symbol": bench_symbol, "uni_key": uni_key}
-        info_placeholder.write(f"Rows: **{len(df)}**")
+        table_df = build_table(dfu, bench_symbol, period_key, timeframe)
+        st.session_state["last_df"] = table_df.copy()
+        st.session_state["meta"] = {
+            "indices": indices, "bench_key": benchmark_key, "bench_symbol": bench_symbol,
+            "timeframe": timeframe, "period": period_key
+        }
+        info.write(f"Rows: **{len(table_df)}** • Benchmark symbol: `{bench_symbol}` • {timeframe} • {period_key}")
     except Exception as e:
-        info_placeholder.error(f"Error: {e}")
+        info.error(f"Error: {e}")
         st.stop()
 
 if "last_df" in st.session_state:
-    df = st.session_state["last_df"]
-    table_placeholder.markdown(df_to_html_table(df), unsafe_allow_html=True)
+    table_df = st.session_state["last_df"]
+    render_table(table_df)
 
-    # Export button (CSV) like original
-    export_df = df.drop(columns=["Symbol"]).copy()
-    csv_bytes = export_df.to_csv(index=False).encode("utf-8")
-    export_placeholder.download_button(
+    # Export CSV (sidebar button)
+    export_df = table_df.drop(columns=["Symbol", "__rowclass"]).copy()
+    export_csv_btn.download_button(
         "Export CSV",
-        data=csv_bytes,
-        file_name=f"{st.session_state['meta']['uni_key'].replace(' ','_').lower()}_momentum.csv",
-        mime="text/csv",
+        data=export_df.to_csv(index=False).encode("utf-8"),
+        file_name=f"{st.session_state['meta']['indices'].replace(' ','_').lower()}_{st.session_state['meta']['timeframe'].lower()}_{st.session_state['meta']['period'].lower()}_momentum.csv",
+        mime="text/csv"
     )
