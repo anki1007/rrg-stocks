@@ -1,26 +1,15 @@
 import os
-import webbrowser
-import threading
-import tkinter as tk
-from tkinter import ttk, messagebox
-import tkinter.font as tkfont
+from pathlib import Path
+from typing import Dict, List
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 import yfinance as yf
+import streamlit as st
 
 # ================== CONFIG ==================
-# CSV universe files (from your folder)
-CSV_FILES = {
-    "Nifty 200":             r"D:\RRG\ticker\nifty200.csv",
-    "Nifty 500":             r"D:\RRG\ticker\nifty500.csv",
-    "Nifty Midcap 150":      r"D:\RRG\ticker\niftymidcap150.csv",
-    "Nifty Mid+Small 400":   r"D:\RRG\ticker\niftymidsmallcap400.csv",
-    "Nifty Smallcap 250":    r"D:\RRG\ticker\niftysmallcap250.csv",
-    "Nifty Total Market":    r"D:\RRG\ticker\niftytotalmarket.csv",
-}
-
-BENCHMARKS = {
+# Benchmarks are stable; keep explicit mapping
+BENCHMARKS: Dict[str, str] = {
     "NIFTY 50": "^NSEI",
     "Nifty 200": "^CNX200",
     "Nifty 500": "^CRSLDX",
@@ -28,10 +17,34 @@ BENCHMARKS = {
     "Nifty Smallcap 250": "^NIFTYSMLCAP250.NS",
 }
 
-# Data windows
-MOMENTUM_YEARS = 2           # download window for momentum screen
-RS_LOOKBACK_DAYS = 252       # ~1y for RS calculations
-JDK_WINDOW = 21              # JdK standard window
+MOMENTUM_YEARS = 2
+RS_LOOKBACK_DAYS = 252
+JDK_WINDOW = 21
+
+# ================== CSV DISCOVERY ==================
+def discover_universe_csvs() -> Dict[str, Path]:
+    """Find all *.csv under repo-relative 'ticker' folder and build a nice label -> path map."""
+    root = Path(__file__).resolve().parent
+    ticker_dir = root / "ticker"
+    files = {}
+    if ticker_dir.exists():
+        for p in sorted(ticker_dir.glob("*.csv")):
+            # Pretty label from filename
+            label = p.stem.replace("_", " ").title()
+            # Preserve original Nifty names for your set
+            canonical = {
+                "nifty50": "Nifty 50",
+                "nifty200": "Nifty 200",
+                "nifty500": "Nifty 500",
+                "niftyindices": "Nifty Indices",
+                "niftymidcap150": "Nifty Midcap 150",
+                "niftysmallcap250": "Nifty Smallcap 250",
+                "niftymidsmallcap400": "Nifty Mid+Small 400",
+                "niftytotalmarket": "Nifty Total Market",
+            }
+            key = canonical.get(p.stem.lower(), label)
+            files[key] = p
+    return files
 
 # ================== HELPERS ==================
 def tv_symbol_from_yf(symbol: str) -> str:
@@ -46,11 +59,11 @@ def _pick_close(df, symbol: str) -> pd.Series:
         return df.dropna()
     if isinstance(df, pd.DataFrame):
         if isinstance(df.columns, pd.MultiIndex):
-            for lvl in ("Close", "Adj Close"):
+            for lvl in ("Adj Close", "Close"):
                 if (symbol, lvl) in df.columns:
                     return df[(symbol, lvl)].dropna()
         else:
-            for col in ("Close", "Adj Close"):
+            for col in ("Adj Close", "Close"):
                 if col in df.columns:
                     return df[col].dropna()
     return pd.Series(dtype=float)
@@ -59,14 +72,16 @@ def jdk_components(price: pd.Series, bench: pd.Series, win: int = JDK_WINDOW):
     df = pd.concat([price.rename("p"), bench.rename("b")], axis=1).dropna()
     if df.empty:
         return pd.Series(dtype=float), pd.Series(dtype=float)
-    rs = 100 * (df["p"] / df["b"])              # raw RS line
+    rs = 100 * (df["p"] / df["b"])
     m = rs.rolling(win).mean()
     s = rs.rolling(win).std(ddof=0).replace(0, np.nan).fillna(1e-9)
-    rs_ratio = (100 + (rs - m) / s).dropna()   # ~centered around 100
+    rs_ratio = (100 + (rs - m) / s).dropna()
+
     rroc = rs_ratio.pct_change().mul(100)
     m2 = rroc.rolling(win).mean()
     s2 = rroc.rolling(win).std(ddof=0).replace(0, np.nan).fillna(1e-9)
-    rs_mom = (101 + (rroc - m2) / s2).dropna() # ~centered around 101
+    rs_mom = (101 + (rroc - m2) / s2).dropna()
+
     ix = rs_ratio.index.intersection(rs_mom.index)
     return rs_ratio.loc[ix], rs_mom.loc[ix]
 
@@ -77,7 +92,6 @@ def perf_quadrant(x: float, y: float) -> str:
     return "Weakening"
 
 def analyze_momentum(adj: pd.Series) -> dict | None:
-    """Script-1 filter + compute 6M/3M/1M returns."""
     if adj is None or adj.empty or len(adj) < 252:
         return None
     ema100 = adj.ewm(span=100, adjust=False).mean()
@@ -102,15 +116,13 @@ def analyze_momentum(adj: pd.Series) -> dict | None:
         return {"Return_6M": r6, "Return_3M": r3, "Return_1M": r1}
     return None
 
-def load_universe_from_csv(path: str) -> pd.DataFrame:
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"CSV not found: {path}")
+def load_universe_from_csv(path: Path) -> pd.DataFrame:
     df = pd.read_csv(path)
     cols = {c.strip().lower(): c for c in df.columns}
     need = ["symbol", "company name", "industry"]
     for n in need:
         if n not in cols:
-            raise ValueError(f"CSV must include columns: {need}. Missing: {n}")
+            raise ValueError(f"{path.name} must include columns: {need}. Missing: {n}")
     df = df[[cols["symbol"], cols["company name"], cols["industry"]]].copy()
     df.columns = ["Symbol", "Name", "Industry"]
     df = df.dropna(subset=["Symbol"])
@@ -120,21 +132,33 @@ def load_universe_from_csv(path: str) -> pd.DataFrame:
     df = df[df["Symbol"] != ""].drop_duplicates(subset=["Symbol"])
     return df
 
-# ================== DATA BUILD ==================
-def build_table_dataframe(benchmark: str, universe_df: pd.DataFrame) -> pd.DataFrame:
-    tickers = universe_df["Symbol"].tolist()
-    raw = yf.download(
-        tickers + [benchmark],
-        period=f"{MOMENTUM_YEARS}y",
-        interval="1d",
+# ================== FETCH ==================
+@st.cache_data(show_spinner=False)
+def yf_download_cached(tickers: List[str], period: str = "2y", interval: str = "1d"):
+    return yf.download(
+        tickers,
+        period=period,
+        interval=interval,
         auto_adjust=True,
         group_by="ticker",
         progress=False,
         threads=True,
     )
+
+def resample_weekly_last(series: pd.Series) -> pd.Series:
+    return series.resample("W-FRI").last().dropna()
+
+def build_table_dataframe(benchmark: str, universe_df: pd.DataFrame, price_tf: str) -> pd.DataFrame:
+    tickers = universe_df["Symbol"].tolist()
+    raw = yf_download_cached(tickers + [benchmark], period=f"{MOMENTUM_YEARS}y", interval="1d")
+
     bench = _pick_close(raw, benchmark).dropna()
     if bench.empty:
         raise RuntimeError(f"Benchmark {benchmark} series empty")
+
+    if price_tf == "Weekly":
+        bench = resample_weekly_last(bench)
+
     cutoff = bench.index.max() - pd.Timedelta(days=RS_LOOKBACK_DAYS + 5)
     bench_rs = bench.loc[bench.index >= cutoff].copy()
 
@@ -143,12 +167,17 @@ def build_table_dataframe(benchmark: str, universe_df: pd.DataFrame) -> pd.DataF
         sym = rec.Symbol
         name = rec.Name
         industry = rec.Industry
+
         s = _pick_close(raw, sym).dropna()
         if s.empty:
             continue
+        if price_tf == "Weekly":
+            s = resample_weekly_last(s)
+
         mom = analyze_momentum(s)
         if mom is None:
             continue
+
         s_rs = s.loc[s.index >= cutoff].copy()
         rr, mm = jdk_components(s_rs, bench_rs)
         if rr.empty or mm.empty:
@@ -157,6 +186,7 @@ def build_table_dataframe(benchmark: str, universe_df: pd.DataFrame) -> pd.DataF
         rr_last = float(rr.loc[ix].iloc[-1])
         mm_last = float(mm.loc[ix].iloc[-1])
         status = perf_quadrant(rr_last, mm_last)
+
         rows.append({
             "Name": name,
             "Industry": industry,
@@ -166,20 +196,20 @@ def build_table_dataframe(benchmark: str, universe_df: pd.DataFrame) -> pd.DataF
             "RS-Ratio": rr_last,
             "RS-Momentum": mm_last,
             "Performance": status,
-            "Symbol": sym,  # keep for click-through, will be dropped before export
+            "Final_Rank": None,
+            "Position": None,
+            "Symbol": sym,
         })
 
     if not rows:
         raise RuntimeError("No tickers passed the filters.")
 
     df = pd.DataFrame(rows)
-    # rounding
     for col in ("Return_6M", "Return_3M", "Return_1M"):
         df[col] = df[col].round(1)
     df["RS-Ratio"] = df["RS-Ratio"].round(2)
     df["RS-Momentum"] = df["RS-Momentum"].round(2)
 
-    # ranks and position
     df["Rank_6M"] = df["Return_6M"].rank(ascending=False, method="min")
     df["Rank_3M"] = df["Return_3M"].rank(ascending=False, method="min")
     df["Rank_1M"] = df["Return_1M"].rank(ascending=False, method="min")
@@ -188,190 +218,141 @@ def build_table_dataframe(benchmark: str, universe_df: pd.DataFrame) -> pd.DataF
     df["Position"] = np.arange(1, len(df) + 1)
     df.insert(0, "S.No", np.arange(1, len(df) + 1))
 
-    # Final display order (keep Symbol separately for hyperlink only)
-    order = ["S.No", "Name", "Industry",
-             "Return_6M", "Rank_6M",
-             "Return_3M", "Rank_3M",
-             "Return_1M", "Rank_1M",
-             "RS-Ratio", "RS-Momentum", "Performance",
-             "Final_Rank", "Position", "Symbol"]
+    order = [
+        "S.No", "Name", "Industry",
+        "Return_6M", "Rank_6M",
+        "Return_3M", "Rank_3M",
+        "Return_1M", "Rank_1M",
+        "RS-Ratio", "RS-Momentum", "Performance",
+        "Final_Rank", "Position", "Symbol"
+    ]
     return df[order]
 
-# ================== UI ==================
-HEADERS = [
-    "S.No", "Name", "Industry", "Return_6M", "Rank_6M",
-    "Return_3M", "Rank_3M", "Return_1M", "Rank_1M",
-    "RS-Ratio", "RS-Momentum", "Performance", "Final_Rank", "Position",
-]
+# ================== RENDER ==================
+def bg_for_serial(sno: int) -> str:
+    if sno <= 30: return "#dff5df"
+    if sno <= 60: return "#fff6b3"
+    if sno <= 90: return "#dfe9ff"
+    return "#f7d6d6"
 
-def row_bg_for_serial(sno: int) -> str:
-    if sno <= 30: return "#dff5df"  # light green
-    if sno <= 60: return "#fff6b3"  # light yellow
-    if sno <= 90: return "#dfe9ff"  # light blue
-    return "#f7d6d6"                # light red
-
-class App:
-    def __init__(self):
-        self.root = tk.Tk()
-        self.root.title("Nifty Total Market Momentum")
-
-        self.style = ttk.Style(self.root)
-        try:
-            self.style.theme_use("clam")
-        except Exception:
-            pass
-
-        top = ttk.Frame(self.root, padding=8)
-        top.pack(fill="x")
-
-        # Benchmark selection (no custom box)
-        ttk.Label(top, text="Benchmark:").pack(side="left")
-        self.bench_var = tk.StringVar(value="Nifty 500")
-        self.bench_combo = ttk.Combobox(
-            top,
-            textvariable=self.bench_var,
-            values=list(BENCHMARKS.keys()),
-            width=24,
-            state="readonly"
+def df_to_html_table(df: pd.DataFrame) -> str:
+    headers = [
+        "S.No", "Name", "Industry",
+        "Return_6M", "Rank_6M",
+        "Return_3M", "Rank_3M",
+        "Return_1M", "Rank_1M",
+        "RS-Ratio", "RS-Momentum", "Performance",
+        "Final_Rank", "Position"
+    ]
+    rows_html = []
+    for _, r in df.iterrows():
+        sno = int(r["S.No"])
+        bg = bg_for_serial(sno)
+        name = str(r["Name"])
+        sym = str(r["Symbol"]).strip()
+        url = tradingview_chart_url(sym) if sym else "#"
+        vals = [
+            str(sno),
+            f'<a href="{url}" target="_blank">{name}</a>',
+            str(r["Industry"]),
+            f'{r["Return_6M"]:.1f}',
+            f'{r["Rank_6M"]:.0f}',
+            f'{r["Return_3M"]:.1f}',
+            f'{r["Rank_3M"]:.0f}',
+            f'{r["Return_1M"]:.1f}',
+            f'{r["Rank_1M"]:.0f}',
+            f'{r["RS-Ratio"]:.2f}',
+            f'{r["RS-Momentum"]:.2f}',
+            str(r["Performance"]),
+            f'{r["Final_Rank"]:.0f}',
+            f'{r["Position"]:.0f}',
+        ]
+        tds = "".join(
+            f'<td style="padding:6px 10px; text-align:{ "left" if i in (1,2) else "center"};">{v}</td>'
+            for i, v in enumerate(vals)
         )
-        self.bench_combo.pack(side="left", padx=6)
+        rows_html.append(f'<tr style="background:{bg}; border-bottom:1px solid #e5e7eb;">{tds}</tr>')
 
-        # Universe CSV dropdown
-        ttk.Label(top, text="Universe:").pack(side="left", padx=(12, 0))
-        self.csv_var = tk.StringVar(value="Nifty Smallcap 250")
-        self.csv_combo = ttk.Combobox(
-            top,
-            textvariable=self.csv_var,
-            values=list(CSV_FILES.keys()),
-            width=22,
-            state="readonly",
-        )
-        self.csv_combo.pack(side="left", padx=6)
+    ths = "".join(
+        f'<th style="position:sticky; top:0; background:#ececec; padding:8px 10px; '
+        f'font-weight:700; text-align:{ "left" if h in ("Name","Industry") else "center"}; '
+        f'border-bottom:2px solid #cbd5e1;">{h}</th>'
+        for h in headers
+    )
+    return f"""
+    <div style="max-height:70vh; overflow:auto; border:1px solid #33415533; border-radius:12px;">
+      <table style="width:100%; border-collapse:separate; border-spacing:0; font-family:Segoe UI,system-ui,-apple-system,Arial; font-size:14px;">
+        <thead><tr>{ths}</tr></thead>
+        <tbody>{''.join(rows_html)}</tbody>
+      </table>
+    </div>
+    """
 
-        ttk.Button(top, text="Load / Refresh", command=self.load_async).pack(side="left")
-        ttk.Button(top, text="Export CSV", command=self.export_csv).pack(side="left", padx=6)
+# ================== APP ==================
+st.set_page_config(page_title="Relative Rotation Graph (RRG) — Momentum Screen", layout="wide")
+st.title("Relative Rotation Graph (RRG) — Momentum Screen")
+st.caption("CSV path fixed: the app reads CSVs from the repo’s **ticker/** folder. Hyperlink is on the **Name** column.")
 
-        self.status = tk.StringVar(value="")
-        ttk.Label(top, textvariable=self.status).pack(side="right")
+with st.sidebar:
+    st.subheader("⚙️ Settings")
+    csv_map = discover_universe_csvs()
+    if not csv_map:
+        st.error("No CSVs found under ./ticker/*.csv. Please add files like ticker/nifty200.csv.")
+        st.stop()
 
-        # Scrollable canvas table
-        self.canvas = tk.Canvas(self.root, highlightthickness=0)
-        self.vsb = ttk.Scrollbar(self.root, orient="vertical", command=self.canvas.yview)
-        self.hsb = ttk.Scrollbar(self.root, orient="horizontal", command=self.canvas.xview)
-        self.canvas.configure(yscrollcommand=self.vsb.set, xscrollcommand=self.hsb.set)
-        self.vsb.pack(side="right", fill="y")
-        self.hsb.pack(side="bottom", fill="x")
-        self.canvas.pack(side="left", fill="both", expand=True)
+    # Prefer Nifty Total Market if present, else first
+    options = list(csv_map.keys())
+    default_idx = options.index("Nifty Total Market") if "Nifty Total Market" in options else 0
+    uni_key = st.selectbox("Universe CSV", options, index=default_idx)
 
-        self.table = ttk.Frame(self.canvas)
-        self.canvas.create_window((0, 0), window=self.table, anchor="nw")
-        self.table.bind("<Configure>", lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
+    bench_key = st.selectbox("Benchmark", list(BENCHMARKS.keys()),
+                             index=(list(BENCHMARKS.keys()).index("Nifty 500")
+                                    if "Nifty 500" in BENCHMARKS else 0))
+    price_tf = st.radio("Price timeframe", ["Daily", "Weekly"], horizontal=True)
+    st.markdown("---")
+    run_btn = st.button("🔄 Load / Refresh", use_container_width=True)
 
-        self.header_font = tkfont.Font(family="Segoe UI", size=12, weight="bold")
-        self.cell_font = tkfont.Font(family="Segoe UI", size=11)
+info = st.empty()
+table_slot = st.empty()
+download_slot = st.empty()
 
-        self.df = pd.DataFrame()
-        self.load_async()
+if run_btn or "last_df" not in st.session_state:
+    try:
+        info.info(f"Loading universe: {uni_key} …")
+        uni = load_universe_from_csv(csv_map[uni_key])
+        bench = BENCHMARKS[bench_key]
+        df = build_table_dataframe(bench, uni, price_tf)
+        st.session_state["last_df"] = df.copy()
+        st.session_state["last_meta"] = {"universe": uni_key, "benchmark": bench_key, "price_tf": price_tf}
+        info.success(f"Loaded {len(df)} rows • Universe: {uni_key} • Benchmark: {bench_key} • {price_tf}")
+    except Exception as e:
+        info.error(f"Error: {e}")
+        st.stop()
 
-    def current_benchmark(self) -> str:
-        return BENCHMARKS.get(self.bench_var.get().strip())
+if "last_df" in st.session_state:
+    df = st.session_state["last_df"]
+    with st.expander(f"📊 Momentum Table — {len(df)} rows (collapse/expand)", expanded=True):
+        st.markdown(df_to_html_table(df), unsafe_allow_html=True)
 
-    def load_async(self):
-        if getattr(self, "_thread", None) and self._thread.is_alive():
-            messagebox.showinfo("Loading", "Fetch already in progress.")
-            return
-        self.status.set("Loading…")
-        self._thread = threading.Thread(target=self._load_data, daemon=True)
-        self._thread.start()
+    export_df = df.drop(columns=["Symbol"]).copy()
+    csv_bytes = export_df.to_csv(index=False).encode("utf-8")
+    download_slot.download_button(
+        "⬇️ Export CSV",
+        data=csv_bytes,
+        file_name=f"{st.session_state['last_meta']['universe'].replace(' ','_').lower()}_momentum.csv",
+        mime="text/csv",
+        use_container_width=True,
+    )
 
-    def _load_data(self):
-        try:
-            # Use selected CSV file
-            selected_csv_path = CSV_FILES.get(self.csv_var.get())
-            if not selected_csv_path:
-                raise RuntimeError("Please select a universe CSV.")
-            uni = load_universe_from_csv(selected_csv_path)
-
-            bench = self.current_benchmark()
-            if not bench:
-                raise RuntimeError("Please pick a valid benchmark")
-
-            df = build_table_dataframe(bench, uni)
-        except Exception as e:
-            self.root.after(0, lambda: messagebox.showerror("Error", str(e)))
-            self.root.after(0, lambda: self.status.set(""))
-            return
-        self.root.after(0, lambda: self._render_table(df))
-
-    def _render_table(self, df: pd.DataFrame):
-        for w in self.table.winfo_children():
-            w.destroy()
-
-        PAD_PX = 18
-        col_px = [self.header_font.measure(h) + PAD_PX for h in HEADERS]
-
-        def row_vals(r):
-            return [
-                int(r["S.No"]), str(r["Name"]), str(r["Industry"]),
-                f"{r['Return_6M']:.1f}", f"{r['Rank_6M']:.0f}",
-                f"{r['Return_3M']:.1f}", f"{r['Rank_3M']:.0f}",
-                f"{r['Return_1M']:.1f}", f"{r['Rank_1M']:.0f}",
-                f"{r['RS-Ratio']:.2f}", f"{r['RS-Momentum']:.2f}",
-                str(r["Performance"]), f"{r['Final_Rank']:.0f}", f"{r['Position']:.0f}",
-            ]
-
-        for _, r in df.iterrows():
-            vals = row_vals(r)
-            for j, val in enumerate(vals):
-                w = self.cell_font.measure(str(val)) + PAD_PX
-                if w > col_px[j]:
-                    col_px[j] = w
-
-        # headers
-        for j, h in enumerate(HEADERS):
-            anchor = "w" if h in ("Name", "Industry") else "center"
-            tk.Label(self.table, text=h, relief=tk.RIDGE, font=self.header_font, anchor=anchor, bg="#ececec")\
-              .grid(row=0, column=j, sticky="nsew", padx=1, pady=1)
-            self.table.grid_columnconfigure(j, minsize=int(col_px[j]))
-            self.table.grid_columnconfigure(j, weight=(3 if j in (1, 2) else 1), uniform="cols")
-
-        # rows
-        for i, r in df.iterrows():
-            sno = int(r["S.No"])
-            bg = row_bg_for_serial(sno)
-            vals = row_vals(r)
-            for j, val in enumerate(vals):
-                anchor = "w" if j in (1, 2) else "center"
-                lbl = tk.Label(self.table, text=str(val), relief=tk.RIDGE, font=self.cell_font, bg=bg, anchor=anchor)
-                lbl.grid(row=i+1, column=j, sticky="nsew", padx=1, pady=1)
-                if j == 1:  # Name clickable
-                    sym = str(r.get("Symbol", "")).strip()
-                    if sym:
-                        lbl.bind("<Button-1>", lambda e, s=sym: webbrowser.open_new_tab(tradingview_chart_url(s)))
-                        lbl.configure(cursor="hand2")
-
-        # store df for export (drop Symbol)
-        self.df = df.drop(columns=["Symbol"]).copy()
-        self.status.set(f"Rows: {len(df)}")
-
-    def export_csv(self):
-        if self.df.empty:
-            messagebox.showwarning("Export", "Nothing to export.")
-            return
-        ts = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
-
-        # Base the filename on the selected CSV file
-        selected_path = CSV_FILES.get(self.csv_var.get())
-        base = os.path.splitext(os.path.basename(selected_path))[0] if selected_path else "universe"
-
-        out = os.path.join(os.path.expanduser("~"), "Downloads", f"{base}_momentum_{ts}.csv")
-        try:
-            self.df.to_csv(out, index=False)
-            messagebox.showinfo("Export", f"Saved {out}")
-        except Exception as e:
-            messagebox.showerror("Export", f"Failed to save CSV.\n\n{e}")
-
-if __name__ == "__main__":
-    app = App()
-    app.root.geometry("1300x800")
-    app.root.mainloop()
+    st.markdown(
+        """
+        <div style="display:flex; gap:14px; align-items:center; font-size:13px; opacity:.85;">
+          <span>Row color bands: </span>
+          <span style="background:#dff5df; padding:4px 10px; border-radius:6px;">Top 1–30</span>
+          <span style="background:#fff6b3; padding:4px 10px; border-radius:6px;">31–60</span>
+          <span style="background:#dfe9ff; padding:4px 10px; border-radius:6px;">61–90</span>
+          <span style="background:#f7d6d6; padding:4px 10px; border-radius:6px;">91+</span>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
