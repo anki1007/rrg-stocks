@@ -40,11 +40,11 @@ CACHE_DIR.mkdir(exist_ok=True)
 
 # ---------- Matplotlib ----------
 mpl.rcParams["figure.dpi"] = 120
-mpl.rcParams["font.size"] = 13
+mpl.rcParams["font.size"] = 15
 mpl.rcParams["font.sans-serif"] = ["Inter", "Segoe UI", "DejaVu Sans", "Arial"]
 mpl.rcParams["axes.grid"] = False
 mpl.rcParams["axes.edgecolor"] = "#222"
-mpl.rcParams["axes.labelcolor"] = "#111"]
+mpl.rcParams["axes.labelcolor"] = "#111"
 mpl.rcParams["xtick.color"] = "#333"
 mpl.rcParams["ytick.color"] = "#333"
 
