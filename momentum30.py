@@ -1,5 +1,3 @@
-# streamlit_app.py — Momentum Screener (repo ticker discovery, your benchmarks)
-
 from pathlib import Path
 from typing import Dict, List
 
@@ -354,3 +352,4 @@ if "last_df" in st.session_state:
         file_name=f"{st.session_state['meta']['indices'].replace(' ','_').lower()}_{st.session_state['meta']['timeframe'].lower()}_{st.session_state['meta']['period'].lower()}_momentum.csv",
         mime="text/csv"
     )
+
