@@ -27,13 +27,14 @@ GITHUB_TICKER_DIR = "ticker"
 RAW_BASE = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/{GITHUB_BRANCH}/{GITHUB_TICKER_DIR}/"
 
 # -------------------- Matplotlib ------------------
-mpl.rcParams['figure.dpi'] = 110
+# Larger, crisper fonts for readability
+mpl.rcParams['figure.dpi'] = 120
 mpl.rcParams['axes.grid'] = False
 mpl.rcParams['axes.edgecolor'] = '#222'
 mpl.rcParams['axes.labelcolor'] = '#111'
 mpl.rcParams['xtick.color'] = '#333'
 mpl.rcParams['ytick.color'] = '#333'
-mpl.rcParams['font.size'] = 10
+mpl.rcParams['font.size'] = 13
 mpl.rcParams['font.sans-serif'] = ['Inter','Segoe UI','DejaVu Sans','Arial']
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
@@ -45,13 +46,28 @@ st.markdown("""
 :root { color-scheme: light !important; }
 [data-testid="stAppViewContainer"] { background: #ffffff !important; }
 [data-testid="stHeader"] { background: #ffffff00; }
-.block-container { padding-top: 1.2rem; }
-.rrg-rank { font-weight: 700; line-height: 1.15; font-size: 0.95rem; white-space: pre; }
+.block-container { padding-top: 1.0rem; }
+
+/* Global text bump for readability */
+html, body, [data-testid="stSidebar"], [data-testid="stMarkdownContainer"] {
+  font-size: 16px;
+}
+
+/* Ranking list */
+.rrg-rank { font-weight: 700; line-height: 1.25; font-size: 1.05rem; white-space: pre; }
+.rrg-rank .row { display: flex; gap: 8px; align-items: baseline; margin: 2px 0; }
+.rrg-rank .name { color: #0b57d0; }
+
+/* Table */
+.rrg-wrap { max-height: 65vh; overflow: auto; border: 1px solid #e5e5e5; border-radius: 6px; }
 .rrg-table { width: 100%; border-collapse: collapse; font-family: 'Segoe UI', -apple-system, Arial, sans-serif; }
-.rrg-table th, .rrg-table td { border: 1px solid #e5e5e5; padding: 6px 8px; font-size: 13px; }
-.rrg-table th { text-align: left; background: #f7f7f7; }
-.rrg-row { transition: background .15s ease; }
-.rrg-name a { color: #1a73e8; text-decoration: underline; }
+.rrg-table th, .rrg-table td { border-bottom: 1px solid #ececec; padding: 10px 10px; font-size: 15px; }
+.rrg-table th {
+  position: sticky; top: 0; z-index: 2;
+  text-align: left; background: #eef2f7; color: #0f172a; font-weight: 800; letter-spacing: .2px;
+}
+.rrg-row { transition: background .12s ease; }
+.rrg-name a { color: #0b57d0; text-decoration: underline; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -75,7 +91,7 @@ def friendly_name_from_file(b: str) -> str:
     b2=b.lower()
     if b2 in _FRIENDLY: return _FRIENDLY[b2]
     core=os.path.splitext(b)[0].replace("_"," ").replace("-"," ")
-    out=""; 
+    out=""
     for ch in core:
         out += (" "+ch) if (ch.isdigit() and out and (out[-1]!=" " and not out[-1].isdigit())) else ch
     return out.title()
@@ -314,6 +330,10 @@ rank_modes = ["RRG Power (dist)","RS-Ratio","RS-Momentum","Price %Δ (tail)","Mo
 rank_mode = st.sidebar.selectbox("Rank by", rank_modes, index=0)
 tail_len = st.sidebar.slider("Trail Length", 1, 20, DEFAULT_TAIL, 1)
 
+# Optional: label toggle to avoid dense chart (default OFF)
+show_labels = st.sidebar.toggle("Show labels on chart", value=False)
+label_top_n = st.sidebar.slider("Label top N by distance", 3, 30, 12, 1, disabled=not show_labels)
+
 # ---------- Playback controls ----------
 if "playing" not in st.session_state: st.session_state.playing = False
 play_toggle = st.sidebar.toggle("Play / Pause", value=st.session_state.playing, key="playing")
@@ -347,16 +367,11 @@ SYMBOL_COLORS = symbol_color_map(tickers)
 idx = bench_idx; idx_len = len(idx)
 
 # -------------------- Date index + animation ----------
-# Keep end_idx in session_state so autoplay can advance it
 if "end_idx" not in st.session_state:
     st.session_state.end_idx = idx_len - 1
-
-# If user changed TF/period/index, clamp end_idx into range
 st.session_state.end_idx = min(max(st.session_state.end_idx, DEFAULT_TAIL), idx_len - 1)
 
-# Auto-advance when playing using st_autorefresh
 if st.session_state.playing:
-    # increment before render so plot shows next frame
     nxt = st.session_state.end_idx + 1
     if nxt > idx_len - 1:
         if looping:
@@ -365,10 +380,8 @@ if st.session_state.playing:
             nxt = idx_len - 1
             st.session_state.playing = False
     st.session_state.end_idx = nxt
-    # trigger a timed rerun
     st.autorefresh(interval=speed_ms, key="rrg_auto_refresh")
 
-# Manual slider (still works while playing; autoplay will move it)
 end_idx = st.slider("Date", min_value=DEFAULT_TAIL, max_value=idx_len-1,
                     value=st.session_state.end_idx, step=1, key="end_idx",
                     format=" ", help="RRG date position (closed bars only).")
@@ -380,26 +393,35 @@ date_str = format_bar_date(idx[end_idx], interval)
 st.markdown(f"**Relative Rotation Graph (RRG) — {bench_label} — {period_label} — {interval_label} — {csv_disp} — {date_str}**")
 
 # -------------------- Layout: Plot + Ranking ----------
-plot_col, rank_col = st.columns([4.5, 1.6], gap="medium")
+plot_col, rank_col = st.columns([4.5, 1.8], gap="medium")
 
 with plot_col:
-    fig, ax = plt.subplots(1, 1, figsize=(9.8, 6.4))
-    ax.set_title("Relative Rotation Graph (RRG)", fontsize=13, pad=10)
-    ax.set_xlabel("JdK RS-Ratio"); ax.set_ylabel("JdK RS-Momentum")
-    ax.axhline(y=100, color="#777", linestyle=":", linewidth=1.0)
-    ax.axvline(x=100, color="#777", linestyle=":", linewidth=1.0)
-    ax.fill_between([94,100],[94,94],[100,100], color=(1.0,0.0,0.0,0.25))
-    ax.fill_between([100,106],[94,94],[100,100], color=(1.0,1.0,0.0,0.25))
-    ax.fill_between([100,106],[100,100],[106,106], color=(0.0,1.0,0.0,0.25))
-    ax.fill_between([94,100],[100,100],[106,106], color=(0.0,0.0,1.0,0.25))
-    ax.text(95,105,"Improving", fontsize=11, color="#111", weight="bold")
-    ax.text(104,105,"Leading",   fontsize=11, color="#111", weight="bold", ha="right")
-    ax.text(104,95,"Weakening",  fontsize=11, color="#111", weight="bold", ha="right")
-    ax.text(95,95,"Lagging",     fontsize=11, color="#111", weight="bold")
+    fig, ax = plt.subplots(1, 1, figsize=(10.6, 6.8))
+    ax.set_title("Relative Rotation Graph (RRG)", fontsize=15, pad=10)
+    ax.set_xlabel("JdK RS-Ratio", fontsize=14); ax.set_ylabel("JdK RS-Momentum", fontsize=14)
+    ax.axhline(y=100, color="#777", linestyle=":", linewidth=1.1)
+    ax.axvline(x=100, color="#777", linestyle=":", linewidth=1.1)
+    ax.fill_between([94,100],[94,94],[100,100], color=(1.0,0.0,0.0,0.20))
+    ax.fill_between([100,106],[94,94],[100,100], color=(1.0,1.0,0.0,0.20))
+    ax.fill_between([100,106],[100,100],[106,106], color=(0.0,1.0,0.0,0.20))
+    ax.fill_between([94,100],[100,100],[106,106], color=(0.0,0.0,1.0,0.20))
+    ax.text(95,105,"Improving", fontsize=13, color="#111", weight="bold")
+    ax.text(104,105,"Leading",   fontsize=13, color="#111", weight="bold", ha="right")
+    ax.text(104,95,"Weakening",  fontsize=13, color="#111", weight="bold", ha="right")
+    ax.text(95,95,"Lagging",     fontsize=13, color="#111", weight="bold")
     ax.set_xlim(94,106); ax.set_ylim(94,106)
 
     if "visible_set" not in st.session_state:
         st.session_state.visible_set = set(tickers)
+
+    # Pre-compute distance for optional labeling
+    def dist_last(t):
+        rr_last=rs_ratio_map[t].iloc[end_idx]; mm_last=rs_mom_map[t].iloc[end_idx]
+        return float(np.hypot(rr_last-100.0, mm_last-100.0))
+
+    label_allow_set = set()
+    if show_labels:
+        label_allow_set = set([t for t,_ in sorted([(t, dist_last(t)) for t in tickers], key=lambda x:x[1], reverse=True)[:label_top_n]])
 
     for t in tickers:
         if t not in st.session_state.visible_set: continue
@@ -407,13 +429,15 @@ with plot_col:
         mm=rs_mom_map[t].iloc[start_idx+1:end_idx+1].dropna()
         rr,mm=rr.align(mm, join="inner")
         if len(rr)==0 or len(mm)==0: continue
-        ax.plot(rr.values, mm.values, linewidth=1.1, alpha=0.6, color=SYMBOL_COLORS[t])
-        sizes=[18]*(len(rr)-1)+[70]
+        ax.plot(rr.values, mm.values, linewidth=1.2, alpha=0.7, color=SYMBOL_COLORS[t])
+        sizes=[22]*(len(rr)-1)+[76]
         ax.scatter(rr.values, mm.values, s=sizes, linewidths=0.6,
                    facecolor=SYMBOL_COLORS[t], edgecolor="#333333")
-        rr_last, mm_last = rr.values[-1], mm.values[-1]
-        ax.annotate(f"{t}  [{get_status(rr_last, mm_last)}]", (rr_last, mm_last),
-                    fontsize=9, color=SYMBOL_COLORS[t])
+        # Hide labels by default to avoid density; show only if toggled
+        if show_labels and t in label_allow_set:
+            rr_last, mm_last = rr.values[-1], mm.values[-1]
+            ax.annotate(f"{t}", (rr_last, mm_last), fontsize=11, color=SYMBOL_COLORS[t],
+                        xytext=(6,6), textcoords="offset points")
     st.pyplot(fig, use_container_width=True)
 
 with rank_col:
@@ -421,7 +445,6 @@ with rank_col:
     def compute_rank_metric(t: str) -> float:
         rr_last=rs_ratio_map[t].iloc[end_idx]; mm_last=rs_mom_map[t].iloc[end_idx]
         if np.isnan(rr_last) or np.isnan(mm_last): return float("-inf")
-        if st.session_state.get("rank_mode_override", None): pass
         if rank_mode=="RRG Power (dist)": return float(np.hypot(rr_last-100.0, mm_last-100.0))
         if rank_mode=="RS-Ratio": return float(rr_last)
         if rank_mode=="RS-Momentum": return float(mm_last)
@@ -445,13 +468,19 @@ with rank_col:
     if not perf:
         st.write("—")
     else:
-        lines=[]
+        # Ranking now shows COMPANY NAME (not the symbol)
+        rows_html=[]
         for i,(sym,_m) in enumerate(perf[:22], start=1):
             rr=float(rs_ratio_map[sym].iloc[end_idx]); mm=float(rs_mom_map[sym].iloc[end_idx])
             stat=get_status(rr, mm)
             color=SYMBOL_COLORS.get(sym, "#333")
-            lines.append(f'<div style="color:{color}">{i}. {sym} [{stat}]</div>')
-        st.markdown(f'<div class="rrg-rank">{"".join(lines)}</div>', unsafe_allow_html=True)
+            name=safe_long_name(sym, META)
+            rows_html.append(
+                f'<div class="row" style="color:{color}"><span>{i}.</span>'
+                f'<span class="name">{name}</span>'
+                f'<span>[{stat}]</span></div>'
+            )
+        st.markdown(f'<div class="rrg-rank">{"".join(rows_html)}</div>', unsafe_allow_html=True)
 
 # -------------------- Table under the plot -----------
 def make_table_html(rows):
@@ -469,8 +498,9 @@ def make_table_html(rows):
             f'<td>{("-" if pd.isna(r["chg"]) else f"{r["chg"]:.2f}")}</td>'
             f'</tr>'
         )
-    return f'<table class="rrg-table">{th}{"".join(tr)}</table>'
+    return f'<div class="rrg-wrap"><table class="rrg-table">{th}{"".join(tr)}</table></div>'
 
+# For the rank number in table, keep RS-Ratio ordering (unchanged logic)
 rank_dict = {sym:i for i,(sym,_m) in enumerate(sorted(
     [(t, rs_ratio_map[t].iloc[end_idx]) for t in tickers if t in st.session_state.visible_set],
     key=lambda x:x[1], reverse=True), start=1)}
