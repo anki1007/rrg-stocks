@@ -1,4 +1,4 @@
-# app.py — Streamlit RRG with Play/Pause animation (UI matched to your Tk layout)
+# app.py — Streamlit RRG with Play/Pause + white UI + name links + scrollable table
 import os, json, time, pathlib, logging, functools, calendar, io
 import datetime as _dt
 import email.utils as _eutils
@@ -35,7 +35,7 @@ mpl.rcParams['axes.labelcolor'] = '#111'
 mpl.rcParams['xtick.color'] = '#333'
 mpl.rcParams['ytick.color'] = '#333'
 mpl.rcParams['font.size'] = 10
-mpl.rcParams['font.sans-serif'] = ['Inter','Segoe UI','DejaVu Sans','Arial']
+mpl.rcParams['font.sans-serif'] = ['Segoe UI','Inter','DejaVu Sans','Arial']
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 
@@ -46,11 +46,16 @@ st.markdown("""
 :root { color-scheme: light !important; }
 [data-testid="stAppViewContainer"] { background: #ffffff !important; }
 [data-testid="stHeader"] { background: #ffffff00; }
-.block-container { padding-top: 1.2rem; }
-.rrg-rank { font-weight: 700; line-height: 1.15; font-size: 0.95rem; white-space: pre; }
-.rrg-table { width: 100%; border-collapse: collapse; font-family: 'Segoe UI', -apple-system, Arial, sans-serif; }
-.rrg-table th, .rrg-table td { border: 1px solid #e5e5e5; padding: 6px 8px; font-size: 13px; }
-.rrg-table th { text-align: left; background: #f7f7f7; }
+.block-container { padding-top: 1.0rem; }
+
+/* ranking */
+.rrg-rank { font-weight: 700; line-height: 1.2; font-size: 0.98rem; white-space: pre; }
+
+/* table */
+.rrg-wrap { max-height: 520px; overflow-y: auto; border: 1px solid #e5e5e5; border-radius: 8px; }
+.rrg-table { width: 100%; border-collapse: separate; border-spacing: 0; font-family: 'Segoe UI', -apple-system, Arial, sans-serif; }
+.rrg-table th, .rrg-table td { border-bottom: 1px solid #ececec; padding: 10px 12px; font-size: 14px; }
+.rrg-table th { position: sticky; top: 0; z-index: 2; text-align: left; background: #eaeaea; font-weight: 700; font-size: 15px;}
 .rrg-row { transition: background .15s ease; }
 .rrg-name a { color: #1a73e8; text-decoration: underline; }
 </style>
@@ -317,7 +322,7 @@ tail_len = st.sidebar.slider("Trail Length", 1, 20, DEFAULT_TAIL, 1)
 
 # ---------- Playback controls ----------
 if "playing" not in st.session_state: st.session_state.playing = False
-play_toggle = st.sidebar.toggle("Play / Pause", value=st.session_state.playing, key="playing")
+st.session_state.playing = st.sidebar.toggle("Play / Pause", value=st.session_state.playing, key="playing")
 speed_ms = st.sidebar.slider("Speed (ms/frame)", 150, 1500, 300, 50)
 looping = st.sidebar.checkbox("Loop", value=True)
 
@@ -348,28 +353,20 @@ SYMBOL_COLORS = symbol_color_map(tickers)
 idx = bench_idx; idx_len = len(idx)
 
 # -------------------- Date index + animation ----------
-# Keep end_idx in session_state so autoplay can advance it
 if "end_idx" not in st.session_state:
     st.session_state.end_idx = idx_len - 1
-
-# If user changed TF/period/index, clamp end_idx into range
 st.session_state.end_idx = min(max(st.session_state.end_idx, DEFAULT_TAIL), idx_len - 1)
 
-# Auto-advance when playing using st_autorefresh
 if st.session_state.playing:
-    # increment before render so plot shows next frame
     nxt = st.session_state.end_idx + 1
     if nxt > idx_len - 1:
-        if looping:
-            nxt = DEFAULT_TAIL
+        if looping: nxt = DEFAULT_TAIL
         else:
             nxt = idx_len - 1
             st.session_state.playing = False
     st.session_state.end_idx = nxt
-    # trigger a timed rerun
     st.autorefresh(interval=speed_ms, key="rrg_auto_refresh")
 
-# Manual slider (still works while playing; autoplay will move it)
 end_idx = st.slider("Date", min_value=DEFAULT_TAIL, max_value=idx_len-1,
                     value=st.session_state.end_idx, step=1, key="end_idx",
                     format=" ", help="RRG date position (closed bars only).")
@@ -381,7 +378,7 @@ date_str = format_bar_date(idx[end_idx], interval)
 st.markdown(f"**Relative Rotation Graph (RRG) — {bench_label} — {period_label} — {interval_label} — {csv_disp} — {date_str}**")
 
 # -------------------- Layout: Plot + Ranking ----------
-plot_col, rank_col = st.columns([4.5, 1.6], gap="medium")
+plot_col, rank_col = st.columns([4.5, 1.8], gap="medium")
 
 with plot_col:
     fig, ax = plt.subplots(1, 1, figsize=(9.8, 6.4))
@@ -402,6 +399,7 @@ with plot_col:
     if "visible_set" not in st.session_state:
         st.session_state.visible_set = set(tickers)
 
+    # plot trails with NAME labels (not symbols)
     for t in tickers:
         if t not in st.session_state.visible_set: continue
         rr=rs_ratio_map[t].iloc[start_idx+1:end_idx+1].dropna()
@@ -413,7 +411,8 @@ with plot_col:
         ax.scatter(rr.values, mm.values, s=sizes, linewidths=0.6,
                    facecolor=SYMBOL_COLORS[t], edgecolor="#333333")
         rr_last, mm_last = rr.values[-1], mm.values[-1]
-        ax.annotate(f"{t}  [{get_status(rr_last, mm_last)}]", (rr_last, mm_last),
+        label_name = safe_long_name(t, META)  # <-- use company name
+        ax.annotate(f"{label_name}  [{get_status(rr_last, mm_last)}]", (rr_last, mm_last),
                     fontsize=9, color=SYMBOL_COLORS[t])
     st.pyplot(fig, use_container_width=True)
 
@@ -422,7 +421,6 @@ with rank_col:
     def compute_rank_metric(t: str) -> float:
         rr_last=rs_ratio_map[t].iloc[end_idx]; mm_last=rs_mom_map[t].iloc[end_idx]
         if np.isnan(rr_last) or np.isnan(mm_last): return float("-inf")
-        if st.session_state.get("rank_mode_override", None): pass
         if rank_mode=="RRG Power (dist)": return float(np.hypot(rr_last-100.0, mm_last-100.0))
         if rank_mode=="RS-Ratio": return float(rr_last)
         if rank_mode=="RS-Momentum": return float(mm_last)
@@ -451,11 +449,14 @@ with rank_col:
             rr=float(rs_ratio_map[sym].iloc[end_idx]); mm=float(rs_mom_map[sym].iloc[end_idx])
             stat=get_status(rr, mm)
             color=SYMBOL_COLORS.get(sym, "#333")
-            lines.append(f'<div style="color:{color}">{i}. {sym} [{stat}]</div>')
+            name = safe_long_name(sym, META)
+            tv = f'https://www.tradingview.com/chart/?symbol={quote("NSE:"+display_symbol(sym).replace("-","_"), safe="")}'
+            lines.append(f'<div style="color:{color}">{i}. <a href="{tv}" target="_blank" style="color:{color};text-decoration:underline">{name}</a> [{stat}]</div>')
         st.markdown(f'<div class="rrg-rank">{"".join(lines)}</div>', unsafe_allow_html=True)
 
 # -------------------- Table under the plot -----------
 def make_table_html(rows):
+    # header row (sticky)
     th = "<tr>" + "".join([f"<th>{h}</th>" for h in ["#", "Name", "Status", "Industry", "Price", "Change %"]]) + "</tr>"
     tr = []
     for r in rows:
@@ -470,8 +471,9 @@ def make_table_html(rows):
             f'<td>{("-" if pd.isna(r["chg"]) else f"{r["chg"]:.2f}")}</td>'
             f'</tr>'
         )
-    return f'<table class="rrg-table">{th}{"".join(tr)}</table>'
+    return f'<div class="rrg-wrap"><table class="rrg-table">{th}{"".join(tr)}</table></div>'
 
+# Simple rank (by RS-Ratio) so the first column isn’t empty
 rank_dict = {sym:i for i,(sym,_m) in enumerate(sorted(
     [(t, rs_ratio_map[t].iloc[end_idx]) for t in tickers if t in st.session_state.visible_set],
     key=lambda x:x[1], reverse=True), start=1)}
@@ -494,7 +496,8 @@ for t in tickers:
     })
 
 st.markdown("### Table")
-st.markdown(make_table_html(rows), unsafe_allow_html=True)
+with st.expander("Show / Hide Table", expanded=True):
+    st.markdown(make_table_html(rows), unsafe_allow_html=True)
 
 # -------------------- Downloads ----------------------
 def export_ranks_csv(perf_sorted):
@@ -513,20 +516,22 @@ def export_table_csv(rows):
     } for r in rows])
     buf=io.StringIO(); df.to_csv(buf, index=False); return buf.getvalue().encode()
 
+# Ranking (same metric as side panel) for CSV
 perf=[]
+def metric_for_csv(t):
+    rr_last=rs_ratio_map[t].iloc[end_idx]; mm_last=rs_mom_map[t].iloc[end_idx]
+    if rank_mode=="RRG Power (dist)": return float(np.hypot(rr_last-100.0, mm_last-100.0))
+    if rank_mode=="RS-Ratio": return float(rr_last)
+    if rank_mode=="RS-Momentum": return float(mm_last)
+    if rank_mode=="Price %Δ (tail)":
+        px=tickers_data[t].reindex(idx).dropna()
+        return float((px.iloc[end_idx]/px.iloc[start_idx]-1)*100.0) if len(px.iloc[start_idx:end_idx+1])>=2 else float("-inf")
+    series=rs_mom_map[t].iloc[start_idx:end_idx+1].dropna()
+    return float(np.linalg.lstsq(np.vstack([np.arange(len(series)), np.ones(len(series))]).T, series.values, rcond=None)[0][0]) if len(series)>=2 else float("-inf")
+
 for t in tickers:
     if t not in st.session_state.visible_set: continue
-    rr_last=rs_ratio_map[t].iloc[end_idx]; mm_last=rs_mom_map[t].iloc[end_idx]
-    if rank_mode=="RRG Power (dist)": metric=float(np.hypot(rr_last-100.0, mm_last-100.0))
-    elif rank_mode=="RS-Ratio": metric=float(rr_last)
-    elif rank_mode=="RS-Momentum": metric=float(mm_last)
-    elif rank_mode=="Price %Δ (tail)":
-        px=tickers_data[t].reindex(idx).dropna()
-        metric=float((px.iloc[end_idx]/px.iloc[start_idx]-1)*100.0) if len(px.iloc[start_idx:end_idx+1])>=2 else float("-inf")
-    else:
-        series=rs_mom_map[t].iloc[start_idx:end_idx+1].dropna()
-        metric=float(np.linalg.lstsq(np.vstack([np.arange(len(series)), np.ones(len(series))]).T, series.values, rcond=None)[0][0]) if len(series)>=2 else float("-inf")
-    perf.append((t, metric))
+    perf.append((t, metric_for_csv(t)))
 perf.sort(key=lambda x:x[1], reverse=True)
 
 dl1, dl2 = st.columns(2)
@@ -537,4 +542,4 @@ with dl2:
     st.download_button("Download Table CSV", data=export_table_csv(rows),
                        file_name=f"table_{date_str}.csv", mime="text/csv", use_container_width=True)
 
-st.caption("Names open TradingView. Use Play/Pause to watch rotation; Speed adjusts frame interval, and Loop wraps frames.")
+st.caption("Names are clickable (TradingView). RRG labels use company names. Use Play/Pause to watch rotation; the table is scrollable and collapsible.")
