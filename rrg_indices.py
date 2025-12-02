@@ -10,6 +10,14 @@ import pandas as pd
 import yfinance as yf
 import streamlit as st
 
+# --- NEW: safe autorefresh imports ---
+try:
+    from streamlit_autorefresh import st_autorefresh
+except Exception:
+    st_autorefresh = None
+import streamlit.components.v1 as components
+# -------------------------------------
+
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.colors import to_hex
@@ -384,7 +392,14 @@ if st.session_state.playing:
         if not looping:
             st.session_state.playing = False
     st.session_state.end_idx = nxt
-    st.autorefresh(interval=speed_ms, key="rrg_auto_refresh")
+    # --- FIX: use st_autorefresh or JS fallback ---
+    if st_autorefresh:
+        st_autorefresh(interval=speed_ms, limit=None, key="rrg_auto_refresh")
+    else:
+        components.html(
+            f"<script>setTimeout(function(){{window.parent.location.reload()}},{int(speed_ms)});</script>",
+            height=0,
+        )
 
 end_idx = st.slider("Date", min_value=DEFAULT_TAIL, max_value=idx_len - 1,
                     value=st.session_state.end_idx, step=1, key="end_idx", format=" ")
