@@ -1,5 +1,3 @@
-# streamlit_app.py — Pure Streamlit Momentum Screener (web-ready)
-
 from pathlib import Path
 from typing import Dict, List
 
@@ -48,7 +46,7 @@ a.name-link:hover { text-decoration: underline; }
 """, unsafe_allow_html=True)
 
 # ---------------- Config ----------------
-# Six benchmark options you requested; resolver will pick the first symbol that works else fall back to ^NSEI.
+# Six benchmarks (resolver tries in order; falls back to ^NSEI if needed)
 BENCHMARKS: Dict[str, List[str]] = {
     "Nifty 50": ["^NSEI"],
     "Nifty 200": ["^CNX200", "^NSE200", "^NSEI"],
@@ -57,7 +55,7 @@ BENCHMARKS: Dict[str, List[str]] = {
     "Nifty Mid Smallcap 400": ["^NIFTYMIDSML400.NS", "^NIFTYMIDSMALLCAP400.NS", "^NSEI"],
     "Nifty Total Market": ["^NIFTYTOTALMKT.NS", "^NIFTYTOTMKT", "^NSEI"],
 }
-DEFAULT_PERIODS = {"1Y": "1y", "2Y": "2y", "3Y": "3y"}
+DEFAULT_PERIODS = {"1Y": "1y", "2Y": "2y", "5Y": "5y"}
 RS_LOOKBACK_DAYS = 252
 JDK_WINDOW = 21
 
@@ -156,7 +154,7 @@ def yf_download_cached(tickers: List[str], period: str, interval: str = "1d"):
                        group_by="ticker", progress=False, threads=True)
 
 def resolve_benchmark_symbol(label: str) -> str:
-    """Pick the first working Yahoo symbol from the list; else fall back to ^NSEI."""
+    """Pick first working Yahoo symbol for the benchmark; else ^NSEI."""
     for sym in BENCHMARKS.get(label, ["^NSEI"]):
         try:
             probe = yf.download(sym, period="3mo", interval="1d", progress=False, auto_adjust=True)
@@ -351,4 +349,3 @@ if "last_df" in st.session_state:
         file_name=f"{st.session_state['meta']['indices'].replace(' ','_').lower()}_{st.session_state['meta']['timeframe'].lower()}_{st.session_state['meta']['period'].lower()}_momentum.csv",
         mime="text/csv"
     )
-
