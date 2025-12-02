@@ -1,4 +1,4 @@
-import os, time, pathlib, logging, functools, calendar, io
+import os, json, time, pathlib, logging, functools, calendar, io
 import datetime as _dt
 import email.utils as _eutils
 import urllib.request as _urlreq
@@ -15,18 +15,18 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.colors import to_hex
 
-# =============== Defaults ===============
+# -------------------- Defaults --------------------
 DEFAULT_TF = "Daily"
 DEFAULT_PERIOD = "1Y"
 
-# =============== GitHub CSVs ============
+# -------------------- GitHub CSVs -----------------
 GITHUB_USER = "anki1007"
 GITHUB_REPO = "rrg-stocks"
 GITHUB_BRANCH = "main"
 GITHUB_TICKER_DIR = "ticker"
 RAW_BASE = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/{GITHUB_BRANCH}/{GITHUB_TICKER_DIR}/"
 
-# =============== Matplotlib =============
+# -------------------- Matplotlib ------------------
 mpl.rcParams['figure.dpi'] = 110
 mpl.rcParams['axes.grid'] = False
 mpl.rcParams['axes.edgecolor'] = '#222'
@@ -38,7 +38,7 @@ mpl.rcParams['font.sans-serif'] = ['Segoe UI','Inter','DejaVu Sans','Arial']
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 
-# =============== Streamlit page =========
+# -------------------- Streamlit page --------------
 st.set_page_config(page_title="Relative Rotation Graph (RRG)", layout="wide")
 st.markdown("""
 <style>
@@ -60,7 +60,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# =============== GitHub helpers =========
+# -------------------- GitHub helpers --------------
 @st.cache_data(ttl=600)
 def list_csv_files_from_github(user: str, repo: str, branch: str, folder: str) -> List[str]:
     url = f"https://api.github.com/repos/{user}/{repo}/contents/{folder}?ref={branch}"
@@ -80,7 +80,7 @@ def friendly_name_from_file(b: str) -> str:
     b2=b.lower()
     if b2 in _FRIENDLY: return _FRIENDLY[b2]
     core=os.path.splitext(b)[0].replace("_"," ").replace("-"," ")
-    out=""
+    out=""; 
     for ch in core:
         out += (" "+ch) if (ch.isdigit() and out and (out[-1]!=" " and not out[-1].isdigit())) else ch
     return out.title()
@@ -90,7 +90,7 @@ def build_name_maps_from_github():
     name_map = {friendly_name_from_file(f): f for f in files}
     return name_map, sorted(name_map.keys())
 
-# =============== Universe CSV ===========
+# -------------------- Universe CSV -----------------
 def _normalize_cols(cols: List[str]) -> Dict[str, str]:
     return {c: c.strip().lower().replace(" ","").replace("_","") for c in cols}
 
@@ -114,7 +114,7 @@ def load_universe_from_github_csv(basename: str):
     meta = {r["Symbol"]:{"name":r["Company Name"] or r["Symbol"], "industry":r["Industry"] or "-"} for _,r in sel.iterrows()}
     return universe, meta
 
-# =============== Config & utils =========
+# -------------------- Config & utils ----------------
 PERIOD_MAP = {"6M":"6mo","1Y":"1y","2Y":"2y","3Y":"3y","5Y":"5y","10Y":"10y"}
 TF_LABELS = ["Daily","Weekly","Monthly"]
 TF_TO_INTERVAL = {"Daily":"1d","Weekly":"1wk","Monthly":"1mo"}
@@ -177,7 +177,7 @@ def status_bg_color(x,y):
     m=get_status(x,y)
     return {"Lagging":"#e06a6a","Leading":"#3fa46a","Improving":"#5d86d1","Weakening":"#e2d06b"}.get(m,"#aaaaaa")
 
-# =============== Closed-bar enforcement ==============
+# -------------------- Closed-bar enforcement --------
 IST_TZ="Asia/Kolkata"; BAR_CUTOFF_HOUR=18; NET_TIME_MAX_AGE=300
 def _utc_now_from_network(timeout=2.5) -> pd.Timestamp:
     try:
@@ -240,7 +240,7 @@ def _is_bar_complete_for_timestamp(last_ts, interval, now=None):
         return False
     return False
 
-# =============== Cache / Download ====================
+# -------------------- Cache / Download --------------
 CACHE_DIR = pathlib.Path("cache"); CACHE_DIR.mkdir(exist_ok=True)
 def _cache_path(symbol, period, interval):
     safe=symbol.replace("^","").replace(".","_")
@@ -296,7 +296,7 @@ def symbol_color_map(symbols):
     tab=plt.get_cmap('tab20').colors
     return {s: to_hex(tab[i%len(tab)], keep_alpha=False) for i,s in enumerate(symbols)}
 
-# =============== Sidebar Controls ====================
+# -------------------- Controls (left) ----------------
 st.sidebar.header("RRG — Controls")
 
 NAME_MAP, DISPLAY_LIST = build_name_maps_from_github()
@@ -308,7 +308,6 @@ csv_disp = st.sidebar.selectbox("Indices", DISPLAY_LIST, index=(DISPLAY_LIST.ind
 csv_basename = NAME_MAP[csv_disp]
 
 bench_label = st.sidebar.selectbox("Benchmark", list(BENCH_CHOICES.keys()), index=list(BENCH_CHOICES.keys()).index("Nifty 500"))
-TF_LABELS = ["Daily","Weekly","Monthly"]
 interval_label = st.sidebar.selectbox("Strength vs (TF)", TF_LABELS, index=TF_LABELS.index(DEFAULT_TF))
 interval = TF_TO_INTERVAL[interval_label]
 default_period_for_tf = {"1d":"1Y","1wk":"3Y","1mo":"10Y"}[interval]
@@ -320,13 +319,13 @@ rank_modes = ["RRG Power (dist)","RS-Ratio","RS-Momentum","Price %Δ (tail)","Mo
 rank_mode = st.sidebar.selectbox("Rank by", rank_modes, index=0)
 tail_len = st.sidebar.slider("Trail Length", 1, 20, DEFAULT_TAIL, 1)
 
-# Playback controls
+# ---------- Playback controls ----------
 if "playing" not in st.session_state: st.session_state.playing = False
 st.session_state.playing = st.sidebar.toggle("Play / Pause", value=st.session_state.playing, key="playing")
 speed_ms = st.sidebar.slider("Speed (ms/frame)", 150, 1500, 300, 50)
 looping = st.sidebar.checkbox("Loop", value=True)
 
-# =============== Build data ==========================
+# -------------------- Data build ---------------------
 UNIVERSE, META = load_universe_from_github_csv(csv_basename)
 bench_symbol = BENCH_CHOICES[bench_label]
 benchmark_data, tickers_data = download_block_with_benchmark(UNIVERSE, bench_symbol, period, interval)
@@ -352,7 +351,7 @@ tickers = kept
 SYMBOL_COLORS = symbol_color_map(tickers)
 idx = bench_idx; idx_len = len(idx)
 
-# =============== Date index + animation ==============
+# -------------------- Date index + animation ----------
 if "end_idx" not in st.session_state:
     st.session_state.end_idx = idx_len - 1
 st.session_state.end_idx = min(max(st.session_state.end_idx, DEFAULT_TAIL), idx_len - 1)
@@ -374,10 +373,10 @@ end_idx = st.slider("Date", min_value=DEFAULT_TAIL, max_value=idx_len-1,
 start_idx = max(end_idx - tail_len, 0)
 date_str = format_bar_date(idx[end_idx], interval)
 
-# =============== Title ===============================
+# -------------------- Title -------------------------
 st.markdown(f"**Relative Rotation Graph (RRG) — {bench_label} — {period_label} — {interval_label} — {csv_disp} — {date_str}**")
 
-# =============== Plot + Ranking layout ===============
+# -------------------- Layout: Plot + Ranking ----------
 plot_col, rank_col = st.columns([4.5, 1.8], gap="medium")
 
 with plot_col:
@@ -399,7 +398,7 @@ with plot_col:
     if "visible_set" not in st.session_state:
         st.session_state.visible_set = set(tickers)
 
-    # plot trails & points ONLY (no labels on chart)
+    # plot trails with NAME labels (not symbols)
     for t in tickers:
         if t not in st.session_state.visible_set: continue
         rr=rs_ratio_map[t].iloc[start_idx+1:end_idx+1].dropna()
@@ -410,7 +409,10 @@ with plot_col:
         sizes=[18]*(len(rr)-1)+[70]
         ax.scatter(rr.values, mm.values, s=sizes, linewidths=0.6,
                    facecolor=SYMBOL_COLORS[t], edgecolor="#333333")
-
+        rr_last, mm_last = rr.values[-1], mm.values[-1]
+        label_name = safe_long_name(t, META)  # <-- use company name
+        ax.annotate(f"{label_name}  [{get_status(rr_last, mm_last)}]", (rr_last, mm_last),
+                    fontsize=9, color=SYMBOL_COLORS[t])
     st.pyplot(fig, use_container_width=True)
 
 with rank_col:
@@ -447,11 +449,13 @@ with rank_col:
             stat=get_status(rr, mm)
             color=SYMBOL_COLORS.get(sym, "#333")
             name = safe_long_name(sym, META)
-            lines.append(f'<div style="color:{color}">{i}. {name} [{stat}]</div>')
+            tv = f'https://www.tradingview.com/chart/?symbol={quote("NSE:"+display_symbol(sym).replace("-","_"), safe="")}'
+            lines.append(f'<div style="color:{color}">{i}. <a href="{tv}" target="_blank" style="color:{color};text-decoration:underline">{name}</a> [{stat}]</div>')
         st.markdown(f'<div class="rrg-rank">{"".join(lines)}</div>', unsafe_allow_html=True)
 
-# =============== Table (scroll, links) ===============
+# -------------------- Table under the plot -----------
 def make_table_html(rows):
+    # header row (sticky)
     th = "<tr>" + "".join([f"<th>{h}</th>" for h in ["#", "Name", "Status", "Industry", "Price", "Change %"]]) + "</tr>"
     tr = []
     for r in rows:
@@ -468,7 +472,7 @@ def make_table_html(rows):
         )
     return f'<div class="rrg-wrap"><table class="rrg-table">{th}{"".join(tr)}</table></div>'
 
-# Simple rank (by RS-Ratio) for first column
+# Simple rank (by RS-Ratio) so the first column isn’t empty
 rank_dict = {sym:i for i,(sym,_m) in enumerate(sorted(
     [(t, rs_ratio_map[t].iloc[end_idx]) for t in tickers if t in st.session_state.visible_set],
     key=lambda x:x[1], reverse=True), start=1)}
@@ -494,7 +498,7 @@ st.markdown("### Table")
 with st.expander("Show / Hide Table", expanded=True):
     st.markdown(make_table_html(rows), unsafe_allow_html=True)
 
-# =============== Downloads ===========================
+# -------------------- Downloads ----------------------
 def export_ranks_csv(perf_sorted):
     out=[]
     for t,_m in perf_sorted:
@@ -511,6 +515,7 @@ def export_table_csv(rows):
     } for r in rows])
     buf=io.StringIO(); df.to_csv(buf, index=False); return buf.getvalue().encode()
 
+# Ranking (same metric as side panel) for CSV
 perf=[]
 def metric_for_csv(t):
     rr_last=rs_ratio_map[t].iloc[end_idx]; mm_last=rs_mom_map[t].iloc[end_idx]
@@ -536,4 +541,4 @@ with dl2:
     st.download_button("Download Table CSV", data=export_table_csv(rows),
                        file_name=f"table_{date_str}.csv", mime="text/csv", use_container_width=True)
 
-st.caption("Play/Pause animates the date. Chart shows trails only (no names). Names are clickable (TradingView) in the table.")
+st.caption("Names are clickable (TradingView). RRG labels use company names. Use Play/Pause to watch rotation; the table is scrollable and collapsible.")
