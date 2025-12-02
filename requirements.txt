@@ -1,0 +1,13 @@
+streamlit
+pandas
+numpy
+yfinance
+matplotlib
+plotly
+requests
+beautifulsoup4
+pytz
+scipy
+tk
+mplcursors
+openpyxl
