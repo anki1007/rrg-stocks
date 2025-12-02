@@ -385,7 +385,9 @@ end_idx = st.slider("Date", min_value=DEFAULT_TAIL, max_value=idx_len - 1,
 start_idx = max(end_idx - tail_len, 0)
 date_str = format_bar_date(idx[end_idx], interval)
 
-st.markdown(f"**Relative Rotation Graph (RRG) — {bench_label} — {period_label} — {interval_label} — {CSV_BASENAME} — {date_str}**")
+# ---------- Title ----------
+st.markdown(f"### Relative Rotation Graphs – Indices – {date_str}")
+
 
 # ---------- Unified ranking value (1 = strongest) ----------
 def ranking_value(t: str) -> float:
