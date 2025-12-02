@@ -16,3 +16,4 @@ PyYAML
 altair==5.5.0
 protobuf==6.33.1
 watchdog==6.0.0
+streamlit-autorefresh>=1.0.1
