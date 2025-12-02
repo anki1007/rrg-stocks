@@ -1,661 +1,593 @@
-# app.py — RRG Indicator (Streamlit port of your Tk UI)
-# - Uses your GitHub /ticker folder for CSV universes
-# - JdK RS-Ratio/Momentum logic preserved
-# - TradingView links in Name column
-# - Status-colored table rows + color swatch column
-# - Scrollable table inside expander
-# - Export ranks/table PNG
+# app.py — Relative Rotation Graph (RRG) — Streamlit
+# - Pulls universes from your GitHub /ticker folder
+# - Enforces closed bars in IST (Daily 18:00 IST, W-FRI, Month-end)
+# - JdK RS-Ratio / RS-Momentum with your window & tail controls
+# - Chart + Ranking + Scrollable, colored, link-enabled table
+# - Play/Pause animation with speed & loop
+# - CSV exports
 
-import os, io, json, time, yaml, pathlib, logging, functools
+import os, json, time, pathlib, logging, functools, calendar, io
+import datetime as _dt
+import email.utils as _eutils
+import urllib.request as _urlreq
+from urllib.parse import quote
 from typing import Dict, List, Tuple
 
-import streamlit as st
 import numpy as np
 import pandas as pd
 import yfinance as yf
+import requests
+import streamlit as st
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.colors import to_hex
 
-# ---------------- Appearance (match your defaults) ----------------
-mpl.rcParams['figure.dpi'] = 110
+# -------------------- Defaults --------------------
+DEFAULT_TF = "Daily"
+DEFAULT_PERIOD = "1Y"
+
+# -------------------- GitHub CSVs -----------------
+GITHUB_USER = "anki1007"
+GITHUB_REPO = "rrg-stocks"
+GITHUB_BRANCH = "main"
+GITHUB_TICKER_DIR = "ticker"
+RAW_BASE = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/{GITHUB_BRANCH}/{GITHUB_TICKER_DIR}/"
+
+# -------------------- Matplotlib ------------------
+mpl.rcParams['figure.dpi'] = 120
 mpl.rcParams['axes.grid'] = False
 mpl.rcParams['axes.edgecolor'] = '#222'
 mpl.rcParams['axes.labelcolor'] = '#111'
 mpl.rcParams['xtick.color'] = '#333'
 mpl.rcParams['ytick.color'] = '#333'
-mpl.rcParams['font.size'] = 10
-mpl.rcParams['font.sans-serif'] = ['Inter', 'Segoe UI', 'DejaVu Sans', 'Arial']
+mpl.rcParams['font.size'] = 13
+mpl.rcParams['font.sans-serif'] = ['Inter','Segoe UI','DejaVu Sans','Arial']
 
-# ---------------- Logging ----------------
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 
-# ---------------- Config (YAML) ----------------
-CFG_PATH = "rrg_config.yaml"
-REQUIRED_TICKERS = [
-    "^CNXAUTO","^CNXFMCG","^CNXIT","^NSEBANK","^CNXPHARMA","^CNXENERGY",
-    "^CNXREALTY","^CNXINFRA","^CNXPSUBANK","^NSMIDCP","^NSEMDCP50",
-    "^CNXCONSUM","^CNXCMDT","^CNXMEDIA","^CNXSERVICE",
-    "^CNXMETAL","^CNXPSE","NIFTY_CPSE.NS","NIFTY_FIN_SERVICE.NS","NIFTYMIDCAP150.NS"
-]
-if not os.path.exists(CFG_PATH):
-    DEFAULT_CFG = {
-        "ui_default_period": "1Y",
-        "interval": "1wk",
-        "window": 14,
-        "default_tail": 8,
-        "default_benchmark": "^CRSLDX",
-        "benchmark_choices": ["^CRSLDX", "^CNX200", "^NSEI", "NIFTYMIDCAP150.NS"],
-        "tickers": REQUIRED_TICKERS,
-        "cache_dir": "cache",
-        "github_ticker_base": "https://raw.githubusercontent.com/anki1007/rrg-stocks/main/ticker/",
-        "ticker_csvs": [
-            "nifty200.csv","nifty500.csv","niftymidcap150.csv",
-            "niftymidsmallcap400.csv","niftysmallcap250.csv","niftytotalmarket.csv"
-        ]
-    }
-    with open(CFG_PATH, "w") as f:
-        yaml.safe_dump(DEFAULT_CFG, f)
+# -------------------- Streamlit page --------------
+st.set_page_config(page_title="Relative Rotation Graph (RRG)", layout="wide")
+st.markdown("""
+<style>
+:root { color-scheme: light !important; }
+[data-testid="stAppViewContainer"] { background: #ffffff !important; }
+[data-testid="stHeader"] { background: #ffffff00; }
+.block-container { padding-top: 1.0rem; }
 
-CFG = yaml.safe_load(open(CFG_PATH, "r"))
+/* Global text bump for readability */
+html, body, [data-testid="stSidebar"], [data-testid="stMarkdownContainer"] { font-size: 16px; }
 
-# --- Benchmark display <-> symbol mapping ---
-BENCHMARK_LABEL_TO_SYMBOL = {
-    "NIFTY 50": "^NSEI",
-    "NIFTY 200": "^CNX200",
-    "NIFTY 500": "^CRSLDX",
-    "NIFTY Midcap 150": "NIFTYMIDCAP150.NS",
+/* Fix low-contrast headings/labels */
+h1, h2, h3, h4, h5, h6, strong, b { color:#0f172a !important; }
+[data-testid="stMarkdownContainer"] h3 { font-weight: 800; }
+[data-testid="stSlider"] label, label span, .st-cq { color:#0f172a !important; }
+
+/* Ranking list */
+.rrg-rank { font-weight: 700; line-height: 1.25; font-size: 1.05rem; white-space: pre; }
+.rrg-rank .row { display: flex; gap: 8px; align-items: baseline; margin: 2px 0; }
+.rrg-rank .name { color: #0b57d0; }
+
+/* Scrollable table wrapper with sticky header */
+.rrg-wrap {
+  max-height: calc(100vh - 260px);
+  overflow: auto;
+  border: 1px solid #e5e5e5; border-radius: 6px;
 }
-BENCHMARK_SYMBOL_TO_LABEL = {v: k for k, v in BENCHMARK_LABEL_TO_SYMBOL.items()}
-BENCHMARK_SYMBOLS = list(BENCHMARK_LABEL_TO_SYMBOL.values())
-
-DEFAULT_BENCHMARK = CFG.get("default_benchmark", "^CRSLDX")
-if DEFAULT_BENCHMARK not in BENCHMARK_SYMBOLS:
-    DEFAULT_BENCHMARK = "^CRSLDX"
-DEFAULT_BENCHMARK_LABEL = BENCHMARK_SYMBOL_TO_LABEL.get(DEFAULT_BENCHMARK, "NIFTY 500")
-
-# Period & timeframe
-PERIOD_MAP = {"6M": "6mo", "1Y": "1y", "2Y": "2y", "3Y": "3y"}
-period_label_cfg = CFG.get("ui_default_period", "1Y")
-TIMEFRAME_CHOICES = {"Daily": "1d", "Weekly": "1wk", "Monthly": "1mo"}
-interval_cfg = CFG.get("interval", "1wk")
-_default_tf_label = next((k for k, v in TIMEFRAME_CHOICES.items() if v == interval_cfg), "Weekly")
-
-WINDOW = int(CFG.get("window", 14))
-DEFAULT_TAIL = int(CFG.get("default_tail", 8))
-
-# Universe baseline
-_cfg_tickers = CFG.get("tickers", [])
-UNIVERSE = list(dict.fromkeys(_cfg_tickers + REQUIRED_TICKERS))
-
-CACHE_DIR = pathlib.Path(CFG.get("cache_dir", "cache"))
-CACHE_DIR.mkdir(exist_ok=True)
-NAMES_FILE = CACHE_DIR / "names.json"
-
-# ---------------- Theme palettes ----------------
-pal_light = {
-    "bg": "#f5f6f8","panel": "#ffffff","text": "#111111","muted": "#333333",
-    "axes": "#ffffff","axes_edge": "#222222","grid": "#777777","figure": "#f5f6f8",
-    "rank_text": "#222222","quad_alpha": 0.22,"quad_edges": "#777777","scatter_edge": "#333333",
+.rrg-table { width: 100%; border-collapse: collapse; font-family: 'Segoe UI', -apple-system, Arial, sans-serif; }
+.rrg-table th, .rrg-table td { border-bottom: 1px solid #ececec; padding: 10px 10px; font-size: 15px; }
+.rrg-table th {
+  position: sticky; top: 0; z-index: 2;
+  text-align: left; background: #eef2f7; color: #0f172a; font-weight: 800; letter-spacing: .2px;
 }
-pal_dark = {
-    "bg": "#0f1115","panel": "#151821","text": "#e8eaed","muted": "#c2c3c7",
-    "axes": "#121420","axes_edge": "#565b66","grid": "#6b7280","figure": "#0f1115",
-    "rank_text": "#e8eaed","quad_alpha": 0.20,"quad_edges": "#6b7280","scatter_edge": "#8b8f99",
+.rrg-row { transition: background .12s ease; }
+.rrg-name a { color: #0b57d0; text-decoration: underline; }
+
+/* WebKit scrollbars (Chrome/Edge) */
+.rrg-wrap::-webkit-scrollbar { height: 12px; width: 12px; }
+.rrg-wrap::-webkit-scrollbar-thumb { background:#c7ccd6; border-radius: 8px; }
+</style>
+""", unsafe_allow_html=True)
+
+# -------------------- GitHub helpers --------------
+@st.cache_data(ttl=600)
+def list_csv_files_from_github(user: str, repo: str, branch: str, folder: str) -> List[str]:
+    url = f"https://api.github.com/repos/{user}/{repo}/contents/{folder}?ref={branch}"
+    r = requests.get(url, timeout=15)
+    r.raise_for_status()
+    items = r.json()
+    files = [it["name"] for it in items if it.get("type") == "file" and it["name"].lower().endswith(".csv")]
+    files.sort()
+    return files
+
+_FRIENDLY = {
+    "nifty50.csv":"Nifty 50","nifty200.csv":"Nifty 200","nifty500.csv":"Nifty 500",
+    "niftymidcap150.csv":"Nifty Midcap 150","niftysmallcap250.csv":"Nifty Smallcap 250",
+    "niftymidsmallcap400.csv":"Nifty MidSmallcap 400","niftytotalmarket.csv":"Nifty Total Market",
 }
+def friendly_name_from_file(b: str) -> str:
+    b2=b.lower()
+    if b2 in _FRIENDLY: return _FRIENDLY[b2]
+    core=os.path.splitext(b)[0].replace("_"," ").replace("-"," ")
+    out=""
+    for ch in core:
+        out += (" "+ch) if (ch.isdigit() and out and (out[-1]!=" " and not out[-1].isdigit())) else ch
+    return out.title()
 
-# ---------------- TradingView Symbol Mapping ----------------
-TRADINGVIEW_MAP = {
-    "^NSEI": "NIFTY",
-    "^NSEBANK": "BANKNIFTY",
-    "^CNXIT": "CNXIT",
-    "^CNXFMCG": "CNXFMCG",
-    "^CNXPHARMA": "CNXPHARMA",
-    "^CNXENERGY": "CNXENERGY",
-    "^CNXAUTO": "CNXAUTO",
-    "^CNXREALTY": "CNXREALTY",
-    "^CNXINFRA": "CNXINFRA",
-    "^CNXPSE": "CNXPSE",
-    "^CNXPSUBANK": "CNXPSUBANK",
-    "^CNXCMDT": "CNXCOMMODITIES",
-    "^CNXCONSUM": "CNXCONSUMPTION",
-    "^CNXMEDIA": "CNXMEDIA",
-    "^CNXSERVICE": "CNXSERVICE",
-    "^CNXMETAL": "CNXMETAL",
-    "^NSEMDCP50": "NIFTYMIDCAP50",
-    "^NSMIDCP": "NIFTYJR",
-    "NIFTYMIDCAP150.NS": "NIFTYMIDCAP150",
-    "NIFTY_CPSE.NS": "CPSE",
-    "NIFTY_FIN_SERVICE.NS": "CNXFINANCE",
-}
-INDEX_PREFIXES = ("CNX", "NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "MIDCAP")
+def build_name_maps_from_github():
+    files = list_csv_files_from_github(GITHUB_USER, GITHUB_REPO, GITHUB_BRANCH, GITHUB_TICKER_DIR)
+    name_map = {friendly_name_from_file(f): f for f in files}
+    return name_map, sorted(name_map.keys())
 
-def tv_symbol_and_is_index(sym: str):
-    if sym in TRADINGVIEW_MAP:
-        return TRADINGVIEW_MAP[sym], True
-    if sym.startswith("^"):
-        return sym.replace("^", ""), True
-    if sym.endswith(".NS"):
-        base = sym[:-3]
-        if base in ("NIFTYMIDCAP150","CPSE","CNXFINANCE"):
-            return base, True
-        return base, False
-    if sym.startswith(INDEX_PREFIXES):
-        return sym, True
-    return sym.replace("^",""), sym.startswith(INDEX_PREFIXES)
+# -------------------- Universe CSV -----------------
+def _normalize_cols(cols: List[str]) -> Dict[str, str]:
+    return {c: c.strip().lower().replace(" ","").replace("_","") for c in cols}
 
-def tv_build_link(sym: str):
-    tv_sym, is_index = tv_symbol_and_is_index(sym)
-    if is_index:
-        return tv_sym, f"https://www.tradingview.com/chart/?symbol={tv_sym}"
-    else:
-        return f"NSE:{tv_sym}", f"https://www.tradingview.com/chart/?symbol=NSE:{tv_sym}"
+@st.cache_data(ttl=600)
+def load_universe_from_github_csv(basename: str):
+    url = RAW_BASE + basename
+    df = pd.read_csv(url)
+    mapping = _normalize_cols(df.columns.tolist())
+    sym_col = next((c for c,k in mapping.items() if k in ("symbol","ticker","symbols")), None)
+    if sym_col is None: raise ValueError("CSV must contain a 'Symbol' column.")
+    name_col = next((c for c,k in mapping.items() if k in ("companyname","name","company","companyfullname")), sym_col)
+    ind_col  = next((c for c,k in mapping.items() if k in ("industry","sector","industries")), None)
+    if ind_col is None:
+        ind_col = "Industry"
+        df[ind_col] = "-"
+    sel = df[[sym_col, name_col, ind_col]].copy()
+    sel.columns = ["Symbol","Company Name","Industry"]
+    sel["Symbol"]=sel["Symbol"].astype(str).str.strip()
+    sel["Company Name"]=sel["Company Name"].astype(str).str.strip()
+    sel["Industry"]=sel["Industry"].astype(str).str.strip()
+    sel = sel[sel["Symbol"]!=""].drop_duplicates(subset=["Symbol"])
+    universe = sel["Symbol"].tolist()
+    meta = {r["Symbol"]:{"name":r["Company Name"] or r["Symbol"], "industry":r["Industry"] or "-"} for _,r in sel.iterrows()}
+    return universe, meta
 
-# ---------------- Utilities ----------------
-IST = "Asia/Kolkata"
+# -------------------- Config & utils ----------------
+PERIOD_MAP = {"6M":"6mo","1Y":"1y","2Y":"2y","3Y":"3y","5Y":"5y","10Y":"10y"}
+TF_LABELS = ["Daily","Weekly","Monthly"]
+TF_TO_INTERVAL = {"Daily":"1d","Weekly":"1wk","Monthly":"1mo"}
+WINDOW = 14
+DEFAULT_TAIL = 8
+BENCH_CHOICES = {"Nifty 500":"^CRSLDX","Nifty 200":"^CNX200","Nifty 50":"^NSEI"}
 
-def set_index_to_1700(dt_index: pd.DatetimeIndex) -> pd.DatetimeIndex:
-    idx_local = pd.to_datetime(dt_index)
-    try:
-        if idx_local.tz is not None:
-            idx_local = idx_local.tz_convert(IST).tz_localize(None)
-    except Exception:
-        pass
-    return pd.DatetimeIndex(idx_local.normalize() + pd.Timedelta(hours=17))
+def pick_close(df, symbol: str) -> pd.Series:
+    if isinstance(df, pd.Series): return df.dropna()
+    if isinstance(df, pd.DataFrame):
+        if isinstance(df.columns, pd.MultiIndex):
+            for lvl in ("Close","Adj Close"):
+                if (symbol, lvl) in df.columns: return df[(symbol, lvl)].dropna()
+        else:
+            for col in ("Close","Adj Close"):
+                if col in df.columns: return df[col].dropna()
+    return pd.Series(dtype=float)
 
-def to_1700_ist_series(s: pd.Series) -> pd.Series:
-    if s.empty: return s
-    s = s.copy()
-    s.index = set_index_to_1700(s.index)
-    return s
+def display_symbol(sym: str) -> str:
+    return sym[:-3] if sym.upper().endswith(".NS") else sym
 
-def resample_series_to_mode(s: pd.Series, mode: str) -> pd.Series:
-    if s.empty: return s
-    daily = to_1700_ist_series(s)
-    if mode == "1d":
-        return daily
-    idx_dates = pd.DatetimeIndex(daily.index.date)
-    daily = pd.Series(daily.values, index=idx_dates, name=daily.name)
-    if mode == "1wk":
-        w = daily.resample("W-FRI").last().dropna()
-        w.index = pd.DatetimeIndex(w.index) + pd.Timedelta(hours=17)
-        return w
-    if mode == "1mo":
-        m = daily.resample("ME").last().dropna()
-        m.index = pd.DatetimeIndex(m.index) + pd.Timedelta(hours=17)
-        return m
-    return daily
+def safe_long_name(symbol: str, META: dict) -> str:
+    return META.get(symbol,{}).get("name") or symbol
 
-def _now_ist():
-    return pd.Timestamp.now(IST)
+def format_bar_date(ts: pd.Timestamp, interval: str) -> str:
+    ts = pd.Timestamp(ts)
+    if interval=="1wk": return ts.to_period("W-FRI").end_time.date().isoformat()
+    if interval=="1mo": return ts.to_period("M").end_time.date().isoformat()
+    return ts.date().isoformat()
 
-def _is_last_bar_complete(index: pd.DatetimeIndex, mode: str) -> bool:
-    if len(index) == 0: return False
-    last = pd.Timestamp(index[-1]).tz_localize(IST)
-    now = _now_ist()
-    if mode == "1d": return now >= last
-    return now >= last + pd.Timedelta(days=1)
-
-def safe_long_name(symbol: str) -> str:
-    try:
-        info = yf.Ticker(symbol).info or {}
-        return info.get("longName") or info.get("shortName") or symbol
-    except Exception:
-        return symbol
-
-def safe_long_name_cached(sym: str) -> str:
-    try:
-        cache = json.load(open(NAMES_FILE, "r")) if NAMES_FILE.exists() else {}
-        if sym not in cache:
-            cache[sym] = safe_long_name(sym)
-            json.dump(cache, open(NAMES_FILE, "w"))
-        return cache.get(sym, sym)
-    except Exception:
-        return sym
-
-def get_status(x: float, y: float) -> str:
-    if x <= 100 and y <= 100: return "Lagging"
-    if x >= 100 and y >= 100: return "Leading"
-    if x <= 100 and y >= 100: return "Improving"
-    if x >= 100 and y <= 100: return "Weakening"
-    return "Unknown"
-
-def status_bg_color(x: float, y: float) -> str:
-    m = get_status(x, y)
-    if m == "Lagging":   return "#e06a6a"
-    if m == "Leading":   return "#3fa46a"
-    if m == "Improving": return "#5d86d1"
-    if m == "Weakening": return "#e2d06b"
-    return "#aaaaaa"
-
-def jdk_components(price: pd.Series, bench: pd.Series, win: int = 14) -> Tuple[pd.Series, pd.Series]:
-    df = pd.concat([price.rename("p"), bench.rename("b")], axis=1).dropna()
-    if df.empty:
-        return pd.Series(dtype=float), pd.Series(dtype=float)
-    rs = 100 * (df["p"] / df["b"])
+def jdk_components(price: pd.Series, bench: pd.Series, win=14):
+    df=pd.concat([price.rename("p"), bench.rename("b")], axis=1).dropna()
+    if df.empty: return pd.Series(dtype=float), pd.Series(dtype=float)
+    rs = 100 * (df["p"]/df["b"])
     m = rs.rolling(win).mean()
-    s = rs.rolling(win).std(ddof=0).replace(0, np.nan).fillna(1e-9)
-    rs_ratio = (100 + (rs - m) / s).dropna()
-    rsr_roc = rs_ratio.pct_change().mul(100)
-    m2 = rsr_roc.rolling(win).mean()
-    s2 = rsr_roc.rolling(win).std(ddof=0).replace(0, np.nan).fillna(1e-9)
-    rs_mom = (101 + (rsr_roc - m2) / s2).dropna()
+    s = rs.rolling(win).std(ddof=0).replace(0,np.nan).fillna(1e-9)
+    rs_ratio = (100 + (rs-m)/s).dropna()
+    rroc = rs_ratio.pct_change().mul(100)
+    m2 = rroc.rolling(win).mean()
+    s2 = rroc.rolling(win).std(ddof=0).replace(0,np.nan).fillna(1e-9)
+    rs_mom = (101 + (rroc-m2)/s2).dropna()
     ix = rs_ratio.index.intersection(rs_mom.index)
     return rs_ratio.loc[ix], rs_mom.loc[ix]
+
+def has_min_coverage(rr, mm, *, min_points=20, lookback_ok=30):
+    if rr is None or mm is None: return False
+    ok=(~rr.isna()) & (~mm.isna())
+    if ok.sum()<min_points: return False
+    tail = ok.iloc[-lookback_ok:] if len(ok)>=lookback_ok else ok
+    return bool(tail.any())
+
+def get_status(x, y):
+    if x<=100 and y<=100: return "Lagging"
+    if x>=100 and y>=100: return "Leading"
+    if x<=100 and y>=100: return "Improving"
+    if x>=100 and y<=100: return "Weakening"
+    return "Unknown"
+
+def status_bg_color(x,y):
+    m=get_status(x,y)
+    return {"Lagging":"#e06a6a","Leading":"#3fa46a","Improving":"#5d86d1","Weakening":"#e2d06b"}.get(m,"#aaaaaa")
+
+# -------------------- Closed-bar enforcement --------
+IST_TZ="Asia/Kolkata"; BAR_CUTOFF_HOUR=18; NET_TIME_MAX_AGE=300
+
+def _utc_now_from_network(timeout=2.5) -> pd.Timestamp:
+    # Try NTP
+    try:
+        import ntplib
+        c=ntplib.NTPClient()
+        for host in ("time.google.com","time.cloudflare.com","pool.ntp.org","asia.pool.ntp.org"):
+            try:
+                r=c.request(host, version=3, timeout=timeout)
+                return pd.Timestamp(r.tx_time, unit="s", tz="UTC")
+            except Exception: continue
+    except Exception:
+        pass
+    # Fallback to HTTP Date
+    for url in ("https://www.google.com/generate_204","https://www.cloudflare.com","https://www.nseindia.com","https://www.bseindia.com"):
+        try:
+            req=_urlreq.Request(url, method="HEAD")
+            with _urlreq.urlopen(req, timeout=timeout) as resp:
+                date_hdr=resp.headers.get("Date")
+                if date_hdr:
+                    dt=_eutils.parsedate_to_datetime(date_hdr)
+                    if dt.tzinfo is None: dt=dt.replace(tzinfo=_dt.timezone.utc)
+                    return pd.Timestamp(dt).tz_convert("UTC")
+        except Exception:
+            continue
+    return pd.Timestamp.now(tz="UTC")
+
+@st.cache_data(ttl=NET_TIME_MAX_AGE)
+def _now_ist_cached():
+    return _utc_now_from_network().tz_convert(IST_TZ)
+
+def _to_ist(ts):
+    ts=pd.Timestamp(ts)
+    if ts.tzinfo is None: ts=ts.tz_localize("UTC")
+    return ts.tz_convert(IST_TZ)
+
+def _after_cutoff_ist(now=None):
+    now=_now_ist_cached() if now is None else now
+    return (now.hour, now.minute) >= (BAR_CUTOFF_HOUR, 0)
+
+def _is_bar_complete_for_timestamp(last_ts, interval, now=None):
+    now=_now_ist_cached() if now is None else now
+    last_ist=_to_ist(last_ts); now_ist=_to_ist(now)
+    last_date=last_ist.date(); today=now_ist.date(); wd_now=now_ist.weekday()
+
+    if interval=="1d":
+        if last_date < today: return True
+        if last_date == today: return _after_cutoff_ist(now_ist)
+        return False
+    if interval=="1wk":
+        days_to_fri=(4-wd_now)%7
+        this_friday=(now_ist+_dt.timedelta(days=days_to_fri)).date()
+        last_friday=this_friday if wd_now>=4 else (this_friday - _dt.timedelta(days=7))
+        if last_date < last_friday: return True
+        if last_date == last_friday: return _after_cutoff_ist(now_ist) if wd_now==4 else True
+        return False
+    if interval=="1mo":
+        y,m=last_ist.year, last_ist.month
+        month_end=_dt.date(y,m,calendar.monthrange(y,m)[1])
+        if last_date < month_end: return True
+        if last_date == month_end:
+            if today > month_end: return True
+            return _after_cutoff_ist(now_ist)
+        return False
+    return False
+
+# -------------------- Cache / Download --------------
+CACHE_DIR = pathlib.Path("cache"); CACHE_DIR.mkdir(exist_ok=True)
+def _cache_path(symbol, period, interval):
+    safe=symbol.replace("^","").replace(".","_")
+    return CACHE_DIR/f"{safe}_{period}_{interval}.parquet"
+def _save_cache(symbol,s,period,interval):
+    try: s.to_frame("Close").to_parquet(_cache_path(symbol,period,interval))
+    except Exception: pass
+def _load_cache(symbol,period,interval):
+    p=_cache_path(symbol,period,interval)
+    if p.exists():
+        try: return pd.read_parquet(p)["Close"].dropna()
+        except Exception: pass
+    return pd.Series(dtype=float)
 
 def retry(n=4, delay=1.5, backoff=2.0):
     def deco(fn):
         @functools.wraps(fn)
-        def wrapper(*a, **kw):
-            d = delay
+        def wrap(*a, **k):
+            d=delay
             for i in range(n):
-                try:
-                    return fn(*a, **kw)
+                try: return fn(*a, **k)
                 except Exception as e:
-                    if i == n - 1:
-                        raise
-                    logging.warning(f"{fn.__name__} failed ({i+1}/{n}): {e}. Retry in {d:.1f}s")
-                    time.sleep(d); d *= backoff
-        return wrapper
+                    if i==n-1: raise
+                    time.sleep(d); d*=backoff
+        return wrap
     return deco
 
-def pick_close(raw, symbol: str) -> pd.Series:
-    if isinstance(raw, pd.Series):
-        return raw.dropna()
-    if isinstance(raw, pd.DataFrame):
-        if isinstance(raw.columns, pd.MultiIndex):
-            for lvl in ("Close", "Adj Close"):
-                if (symbol, lvl) in raw.columns:
-                    return raw[(symbol, lvl)].dropna()
+@st.cache_data(show_spinner=False)
+def download_block_with_benchmark(universe, benchmark, period, interval):
+    @retry()
+    def _dl():
+        return yf.download(list(universe)+[benchmark], period=period, interval=interval,
+                           group_by="ticker", auto_adjust=True, progress=False, threads=True)
+    raw=_dl()
+    def _pick(sym): return pick_close(raw, sym).dropna()
+    bench=_pick(benchmark)
+    if bench is None or bench.empty: return bench, {}
+    drop_last = not _is_bar_complete_for_timestamp(bench.index[-1], interval, now=_now_ist_cached())
+    def _maybe_trim(s): return s.iloc[:-1] if (drop_last and len(s)>=1) else s
+    bench=_maybe_trim(bench)
+    data={}
+    for t in universe:
+        s=_pick(t)
+        if not s.empty: data[t]=_maybe_trim(s)
         else:
-            for col in ("Close", "Adj Close"):
-                if col in raw.columns:
-                    return raw[col].dropna()
-    return pd.Series(dtype=float)
-
-@retry()
-def download_block_daily_then_resample(tickers: List[str], benchmark: str, period: str, mode: str, exclude_partial=True):
-    symbols = list(dict.fromkeys(list(tickers) + [benchmark]))
-    raw = yf.download(symbols, period=period, interval="1d",
-                      group_by="ticker", auto_adjust=True, progress=False, threads=True)
-
-    def _pipe(sym):
-        s = pick_close(raw, sym)
-        if s.empty:
-            return pd.Series(dtype=float)
-        s = resample_series_to_mode(s, mode).dropna()
-        if exclude_partial and len(s) >= 1:
-            if not _is_last_bar_complete(s.index, mode):
-                s = s.iloc[:-1]
-        return s
-
-    bench = _pipe(benchmark)
-    data: Dict[str, pd.Series] = {}
-    for t in tickers:
-        ss = _pipe(t)
-        if not ss.empty:
-            data[t] = ss
+            c=_load_cache(t,period,interval)
+            if not c.empty: data[t]=_maybe_trim(c)
+    if not bench.empty: _save_cache(benchmark, bench, period, interval)
+    for t,s in data.items(): _save_cache(t, s, period, interval)
     return bench, data
 
-# ---------------- CSV Universe from GitHub /ticker ----------------
-def load_github_csv_universe() -> List[str]:
-    base = CFG.get("github_ticker_base","")
-    files = CFG.get("ticker_csvs",[])
-    extra = []
-    for fname in files:
-        try:
-            url = base + fname
-            df = pd.read_csv(url)
-            cols = [c for c in df.columns if str(c).lower() in ("symbol","ticker","tickers","symbols")]
-            if cols:
-                vals = df[cols[0]].astype(str).str.strip().tolist()
-                for v in vals:
-                    v = v.strip()
-                    if v.endswith(".NS") or v.startswith("^"):
-                        extra.append(v)
-                    else:
-                        extra.append(v + ".NS")
-        except Exception:
-            continue
-    return list(dict.fromkeys(extra))
+def symbol_color_map(symbols):
+    tab=plt.get_cmap('tab20').colors
+    return {s: to_hex(tab[i%len(tab)], keep_alpha=False) for i,s in enumerate(symbols)}
 
-# ---------------- Build data ----------------
-def build_rrg(benchmark: str, universe: List[str], period: str, mode: str, window: int):
-    bench, data = download_block_daily_then_resample(universe, benchmark, period, mode, True)
-    if bench is None or bench.empty:
-        raise RuntimeError("No benchmark data")
-    rs_ratio_map, rs_mom_map = {}, {}
-    for t, s in data.items():
-        if t == benchmark: continue
-        rr, mm = jdk_components(s, bench, window)
-        if len(rr) and len(mm) and not rr.isna().all() and not mm.isna().all():
-            ix = rr.index.intersection(mm.index)
-            rs_ratio_map[t] = rr.loc[ix]
-            rs_mom_map[t]   = mm.loc[ix]
-    if not rs_ratio_map:
-        raise RuntimeError("No valid tickers after RS calc.")
-    common = None
-    for t in rs_ratio_map:
-        c = rs_ratio_map[t].index.intersection(rs_mom_map[t].index)
-        common = c if common is None else common.intersection(c)
-    min_overlap = max(window + 5, 20)
-    if common is None or len(common) < min_overlap:
-        raise RuntimeError("Not enough overlapping data to draw RRG.")
-    for t in list(rs_ratio_map.keys()):
-        rs_ratio_map[t] = rs_ratio_map[t].reindex(common)
-        rs_mom_map[t]   = rs_mom_map[t].reindex(common)
-    idx = common
-    px_cache = {t: data[t].reindex(idx).dropna() for t in rs_ratio_map if t in data}
-    return bench, rs_ratio_map, rs_mom_map, px_cache, idx
+# -------------------- Controls (left) ----------------
+st.sidebar.header("RRG — Controls")
 
-def symbol_color_map(symbols: List[str]) -> Dict[str, str]:
-    tab20 = plt.get_cmap('tab20').colors
-    return {s: to_hex(tab20[i % len(tab20)], keep_alpha=False) for i, s in enumerate(symbols)}
-
-def display_name(sym: str) -> str:
-    return safe_long_name_cached(sym)
-
-# ---------------- Ranking metric (same modes) ----------------
-def compute_rank_metric(t: str, start_pos: int, end_pos: int,
-                        rs_ratio_map=None, rs_mom_map=None, px_cache=None, mode="RRG Power (dist)"):
-    rr_last = float(rs_ratio_map[t].iloc[end_pos]); mm_last = float(rs_mom_map[t].iloc[end_pos])
-    if mode == "RRG Power (dist)":
-        wq = 1.2 if (rr_last>=100 and mm_last>=100) else (0.9 if (rr_last>=100 and mm_last<100) else 1.0)
-        return float(np.hypot(rr_last-100.0, mm_last-100.0) * wq)
-    if mode == "RS-Ratio":         return float(rr_last)
-    if mode == "RS-Momentum":      return float(mm_last)
-    if mode == "Price %Δ (tail)":
-        px = px_cache.get(t, pd.Series(dtype=float))
-        if len(px.iloc[start_pos:end_pos+1]) >= 2:
-            return float((px.iloc[end_pos] / px.iloc[start_pos] - 1) * 100.0)
-        return float("-inf")
-    if mode == "Momentum Slope (tail)":
-        series = rs_mom_map[t].iloc[start_pos:end_pos+1]
-        if len(series) >= 2:
-            x = np.arange(len(series)); A = np.vstack([x, np.ones(len(x))]).T
-            slope = np.linalg.lstsq(A, series.values, rcond=None)[0][0]
-            return float(slope)
-        return float("-inf")
-    return float("-inf")
-
-# ---------------- Render table (scrollable, links, colors) ----------------
-def render_rrg_table(
-    tickers, rs_ratio_map, rs_mom_map, px_cache, idx, start_pos, sel_pos, COLORS,
-    tv_build_link, get_status, status_bg_color, rk_mode
-):
-    import numpy as np
-    import streamlit as st
-
-    if len(idx) == 0:
-        st.info("No data to display.")
-        return
-
-    def fmt_num(x, n=2):
-        if x is None or (isinstance(x,float) and np.isnan(x)):
-            return "-"
-        return f"{x:,.{n}f}"
-
-    # Build rows
-    rows = []
-    for t in tickers:
-        try:
-            rr = float(rs_ratio_map[t].iloc[sel_pos]); mm = float(rs_mom_map[t].iloc[sel_pos])
-            px = px_cache.get(t, pd.Series(dtype=float))
-            price = float(px.iloc[sel_pos]) if sel_pos < len(px) else np.nan
-            chg = ((px.iloc[sel_pos]/px.iloc[start_pos]-1)*100.0) if (sel_pos < len(px) and start_pos < len(px)) else np.nan
-            status = get_status(rr, mm)
-            rows.append((t, display_name(t), status, price, chg))
-        except Exception:
-            pass
-
-    # Ranking → SL No.
-    all_perf = []
-    for t in tickers:
-        try:
-            all_perf.append((t, compute_rank_metric(
-                t, start_pos, sel_pos,
-                rs_ratio_map=rs_ratio_map, rs_mom_map=rs_mom_map, px_cache=px_cache, mode=rk_mode
-            )))
-        except Exception:
-            pass
-    all_perf.sort(key=lambda x: x[1], reverse=True)
-    rank_map = {sym:i for i,(sym,_m) in enumerate(all_perf, start=1)}
-
-    # CSS + HTML
-    table_css = """
-    <style>
-    .rrg-wrap { max-height: 520px; overflow-y: auto; border: 1px solid rgba(128,128,128,0.25); border-radius: 6px; }
-    .rrg-table { width:100%; border-collapse:collapse; }
-    .rrg-table th, .rrg-table td {
-      padding:10px 12px; border-bottom:1px solid rgba(128,128,128,0.22);
-      font-family: Segoe UI, Inter, Arial, system-ui; font-size:15px; line-height: 1.2;
-    }
-    .rrg-table th { position: sticky; top: 0; background: rgba(200,200,200,0.10); text-align:left; z-index: 1; }
-    .rrg-color { width:14px; height:14px; border-radius:3px; display:inline-block; border:1px solid rgba(0,0,0,0.25); margin-right:4px; vertical-align: -2px; }
-    .rrg-name { font-weight: 600; text-decoration: underline; }
-    </style>
-    """
-
-    html = [table_css, f"<p><strong>Date:</strong> {str(idx[sel_pos].date())}</p>", """
-    <div class="rrg-wrap">
-    <table class="rrg-table">
-    <thead><tr>
-    <th style="width:72px;">SL No.</th>
-    <th style="width:26px;"></th>
-    <th>Name</th>
-    <th style="width:130px;">Status</th>
-    <th style="width:140px;">Price</th>
-    <th style="width:140px;">Change %</th>
-    </tr></thead>
-    <tbody>
-    """]
-
-    for sym, name, status, price, chg in rows:
-        sl = rank_map.get(sym, "")
-        _, url = tv_build_link(sym)
-        rr_last = float(rs_ratio_map[sym].iloc[sel_pos]); mm_last = float(rs_mom_map[sym].iloc[sel_pos])
-        bg = status_bg_color(rr_last, mm_last)
-        fg = "white" if bg in ("#e06a6a","#3fa46a","#5d86d1") else "black"
-        strip = COLORS.get(sym, "#888")
-        html.append(
-            f'<tr style="background:{bg}; color:{fg};">'
-            f'<td>{sl}</td>'
-            f'<td><span class="rrg-color" style="background:{strip}"></span></td>'
-            f'<td><a class="rrg-name" href="{url}" target="_blank" rel="noopener noreferrer" style="color:{fg};">{name}</a></td>'
-            f'<td>{status}</td>'
-            f'<td>{fmt_num(price,2)}</td>'
-            f'<td>{fmt_num(chg,2)}</td>'
-            f'</tr>'
-        )
-
-    html.append("</tbody></table></div>")
-
-    with st.expander("Table", expanded=True):
-        st.markdown("".join(html), unsafe_allow_html=True)
-
-# ========================== STREAMLIT APP ==========================
-st.set_page_config(page_title="RRG Indicator — Stallions", layout="wide")
-st.title("RRG Indicator")
-
-with st.sidebar:
-    st.markdown("**RRG — Controls**")
-    bench_label = st.selectbox("Benchmark", list(BENCHMARK_LABEL_TO_SYMBOL.keys()),
-                               index=list(BENCHMARK_LABEL_TO_SYMBOL.keys()).index(DEFAULT_BENCHMARK_LABEL))
-    timeframe_label = st.selectbox("Timeframe", list(TIMEFRAME_CHOICES.keys()),
-                                   index=list(TIMEFRAME_CHOICES.keys()).index(_default_tf_label))
-    period_label = st.selectbox("Period", list(PERIOD_MAP.keys()),
-                                index=list(PERIOD_MAP.keys()).index(period_label_cfg))
-    rank_modes = ["RRG Power (dist)", "RS-Ratio", "RS-Momentum", "Price %Δ (tail)", "Momentum Slope (tail)"]
-    rank_mode = st.selectbox("Rank by", rank_modes, index=0)
-    theme = st.selectbox("Theme", ["Light","Dark","System"], index=0)
-    tail = st.slider("Trail Length", 1, 20, DEFAULT_TAIL, 1)
-
-PAL = pal_dark if theme=="Dark" else pal_light
-mpl.rcParams['axes.edgecolor'] = PAL["axes_edge"]
-mpl.rcParams['axes.labelcolor'] = PAL["text"]
-mpl.rcParams['xtick.color'] = PAL["muted"]
-mpl.rcParams['ytick.color'] = PAL["muted"]
-mpl.rcParams['text.color'] = PAL["text"]
-mpl.rcParams['figure.facecolor'] = PAL["figure"]
-mpl.rcParams['axes.facecolor'] = PAL["axes"]
-
-# Universe (required + GitHub CSVs)
-universe = list(dict.fromkeys(UNIVERSE + load_github_csv_universe()))
-benchmark = BENCHMARK_LABEL_TO_SYMBOL[bench_label]
-interval = TIMEFRAME_CHOICES[timeframe_label]
-period = PERIOD_MAP[period_label]
-
-# Data build
-try:
-    bench, rs_ratio_map, rs_mom_map, px_cache, idx = build_rrg(benchmark, universe, period, interval, WINDOW)
-    tickers = list(rs_ratio_map.keys())
-    COLORS = symbol_color_map(tickers)
-except Exception as e:
-    st.error(f"Data build failed: {e}")
+NAME_MAP, DISPLAY_LIST = build_name_maps_from_github()
+if not DISPLAY_LIST:
+    st.error("No CSVs found in GitHub /ticker.")
     st.stop()
 
-# Date slider (top)
-end_idx = len(idx) - 1
-sel_pos = st.slider("Date", 0, end_idx, end_idx, 1)
-start_pos = max(sel_pos - tail, 0)
+csv_disp = st.sidebar.selectbox("Indices", DISPLAY_LIST, index=(DISPLAY_LIST.index("Nifty 200") if "Nifty 200" in DISPLAY_LIST else 0))
+csv_basename = NAME_MAP[csv_disp]
 
-# Visible selection (mirrors checkbox column in desktop)
-if "visible" not in st.session_state:
-    st.session_state.visible = tickers.copy()
-visible = st.multiselect("Visible series", options=tickers, default=st.session_state.visible, key="visible")
+bench_label = st.sidebar.selectbox("Benchmark", list(BENCH_CHOICES.keys()), index=list(BENCH_CHOICES.keys()).index("Nifty 500"))
+interval_label = st.sidebar.selectbox("Strength vs (TF)", TF_LABELS, index=TF_LABELS.index(DEFAULT_TF))
+interval = TF_TO_INTERVAL[interval_label]
+default_period_for_tf = {"1d":"1Y","1wk":"3Y","1mo":"10Y"}[interval]
+period_label = st.sidebar.selectbox("Period", list(PERIOD_MAP.keys()),
+                                    index=list(PERIOD_MAP.keys()).index(default_period_for_tf))
+period = PERIOD_MAP[period_label]
 
-# ---- Layout: chart + ranking
-c1, c2 = st.columns([4, 1])
+rank_modes = ["RRG Power (dist)","RS-Ratio","RS-Momentum","Price %Δ (tail)","Momentum Slope (tail)"]
+rank_mode = st.sidebar.selectbox("Rank by", rank_modes, index=0)
+tail_len = st.sidebar.slider("Trail Length", 1, 20, DEFAULT_TAIL, 1)
 
-# Chart
-with c1:
-    fig, ax = plt.subplots(figsize=(10,6))
-    ax.set_facecolor(PAL["axes"])
-    ax.set_title("RRG Indicator", fontsize=13, pad=10, color=PAL["text"])
-    ax.set_xlabel("JdK RS-Ratio"); ax.set_ylabel("JdK RS-Momentum")
-    ax.axhline(y=100, color=PAL["quad_edges"], linestyle=":", linewidth=1.0)
-    ax.axvline(x=100, color=PAL["quad_edges"], linestyle=":", linewidth=1.0)
+# Optional: label toggle (default OFF to avoid clutter)
+show_labels = st.sidebar.toggle("Show labels on chart", value=False)
+label_top_n = st.sidebar.slider("Label top N by distance", 3, 30, 12, 1, disabled=not show_labels)
 
-    a = PAL["quad_alpha"] * 0.9
-    ax.fill_between([92, 100], [92, 92],  [100, 100], color=(1.0, 0.0, 0.0, a))  # Lagging
-    ax.fill_between([100, 108],[92, 92],  [100, 100], color=(1.0, 1.0, 0.0, a))  # Weakening
-    ax.fill_between([100, 108],[100, 100],[108, 108], color=(0.0, 1.0, 0.0, a))  # Leading
-    ax.fill_between([92, 100], [100, 100],[108, 108], color=(0.0, 0.0, 1.0, a))  # Improving
+# ---------- Playback controls ----------
+if "playing" not in st.session_state: st.session_state.playing = False
+play_toggle = st.sidebar.toggle("Play / Pause", value=st.session_state.playing, key="playing")
+speed_ms = st.sidebar.slider("Speed (ms/frame)", 150, 1500, 300, 50)
+looping = st.sidebar.checkbox("Loop", value=True)
 
-    ax.text(95, 105, "Improving", fontsize=11, color=PAL["text"], weight="bold")
-    ax.text(104, 105, "Leading",   fontsize=11, color=PAL["text"], weight="bold", ha="right")
-    ax.text(104, 95,  "Weakening", fontsize=11, color=PAL["text"], weight="bold", ha="right")
-    ax.text(95, 95,   "Lagging",   fontsize=11, color=PAL["text"], weight="bold")
+# -------------------- Data build ---------------------
+UNIVERSE, META = load_universe_from_github_csv(csv_basename)
+bench_symbol = BENCH_CHOICES[bench_label]
+benchmark_data, tickers_data = download_block_with_benchmark(UNIVERSE, bench_symbol, period, interval)
+if benchmark_data is None or benchmark_data.empty:
+    st.error("Benchmark returned no data.")
+    st.stop()
 
-    xs_all, ys_all = [], []
+bench_idx = benchmark_data.index
+rs_ratio_map, rs_mom_map, kept = {}, {}, []
+for t,s in tickers_data.items():
+    if t==bench_symbol: continue
+    rr, mm = jdk_components(s, benchmark_data, WINDOW)
+    if len(rr)==0 or len(mm)==0: continue
+    rr=rr.reindex(bench_idx); mm=mm.reindex(bench_idx)
+    if has_min_coverage(rr, mm, min_points=max(WINDOW+5,20), lookback_ok=30):
+        rs_ratio_map[t]=rr; rs_mom_map[t]=mm; kept.append(t)
+
+if not kept:
+    st.warning("After alignment, no symbols have enough coverage. Try a longer period.")
+    st.stop()
+
+tickers = kept
+SYMBOL_COLORS = symbol_color_map(tickers)
+idx = bench_idx; idx_len = len(idx)
+
+# -------------------- Date index + animation ----------
+if "end_idx" not in st.session_state:
+    st.session_state.end_idx = idx_len - 1
+st.session_state.end_idx = min(max(st.session_state.end_idx, DEFAULT_TAIL), idx_len - 1)
+
+if st.session_state.playing:
+    nxt = st.session_state.end_idx + 1
+    if nxt > idx_len - 1:
+        if looping:
+            nxt = DEFAULT_TAIL
+        else:
+            nxt = idx_len - 1
+            st.session_state.playing = False
+    st.session_state.end_idx = nxt
+    st.autorefresh(interval=speed_ms, key="rrg_auto_refresh")
+
+end_idx = st.slider("Date", min_value=DEFAULT_TAIL, max_value=idx_len-1,
+                    value=st.session_state.end_idx, step=1, key="end_idx",
+                    format=" ", help="RRG date position (closed bars only).")
+
+start_idx = max(end_idx - tail_len, 0)
+date_str = format_bar_date(idx[end_idx], interval)
+
+# -------------------- Title -------------------------
+st.markdown(f"**Relative Rotation Graph (RRG) — {bench_label} — {period_label} — {interval_label} — {csv_disp} — {date_str}**")
+
+# -------------------- Layout: Plot + Ranking ----------
+plot_col, rank_col = st.columns([4.5, 1.8], gap="medium")
+
+with plot_col:
+    fig, ax = plt.subplots(1, 1, figsize=(10.6, 6.8))
+    ax.set_title("Relative Rotation Graph (RRG)", fontsize=15, pad=10)
+    ax.set_xlabel("JdK RS-Ratio", fontsize=14); ax.set_ylabel("JdK RS-Momentum", fontsize=14)
+    ax.axhline(y=100, color="#777", linestyle=":", linewidth=1.1)
+    ax.axvline(x=100, color="#777", linestyle=":", linewidth=1.1)
+    ax.fill_between([94,100],[94,94],[100,100], color=(1.0,0.0,0.0,0.20))
+    ax.fill_between([100,106],[94,94],[100,100], color=(1.0,1.0,0.0,0.20))
+    ax.fill_between([100,106],[100,100],[106,106], color=(0.0,1.0,0.0,0.20))
+    ax.fill_between([94,100],[100,100],[106,106], color=(0.0,0.0,1.0,0.20))
+    ax.text(95,105,"Improving", fontsize=13, color="#111", weight="bold")
+    ax.text(104,105,"Leading",   fontsize=13, color="#111", weight="bold", ha="right")
+    ax.text(104,95,"Weakening",  fontsize=13, color="#111", weight="bold", ha="right")
+    ax.text(95,95,"Lagging",     fontsize=13, color="#111", weight="bold")
+    ax.set_xlim(94,106); ax.set_ylim(94,106)
+
+    if "visible_set" not in st.session_state:
+        st.session_state.visible_set = set(tickers)
+
+    def dist_last(t):
+        rr_last=rs_ratio_map[t].iloc[end_idx]; mm_last=rs_mom_map[t].iloc[end_idx]
+        return float(np.hypot(rr_last-100.0, mm_last-100.0))
+
+    label_allow_set = set()
+    if show_labels:
+        label_allow_set = set([t for t,_ in sorted([(t, dist_last(t)) for t in tickers], key=lambda x:x[1], reverse=True)[:label_top_n]])
+
     for t in tickers:
-        if t not in visible:
-            continue
-        rr = rs_ratio_map[t].iloc[start_pos+1:sel_pos+1]
-        mm = rs_mom_map[t].iloc[start_pos+1:sel_pos+1]
+        if t not in st.session_state.visible_set: continue
+        rr=rs_ratio_map[t].iloc[start_idx+1:end_idx+1].dropna()
+        mm=rs_mom_map[t].iloc[start_idx+1:end_idx+1].dropna()
+        rr,mm=rr.align(mm, join="inner")
         if len(rr)==0 or len(mm)==0: continue
-        n = len(rr)
-        sizes  = np.linspace(12, 70, n)
-        alphas = np.linspace(0.40, 0.95, n)
-        ax.scatter(rr.values, mm.values, s=sizes,
-                   facecolors=[(*mpl.colors.to_rgb(COLORS[t]), a_) for a_ in alphas],
-                   edgecolors=PAL["scatter_edge"], linewidths=0.6)
-        ax.plot(rr.values, mm.values, linewidth=1.1, alpha=0.6, color=COLORS[t])
-        ax.annotate(f"{t}  [{get_status(rr.values[-1], mm.values[-1])}]",
-                    (rr.values[-1], mm.values[-1]), fontsize=9, color=COLORS[t])
-        xs_all.extend(rr.values); ys_all.extend(mm.values)
+        ax.plot(rr.values, mm.values, linewidth=1.2, alpha=0.7, color=SYMBOL_COLORS[t])
+        sizes=[22]*(len(rr)-1)+[76]
+        ax.scatter(rr.values, mm.values, s=sizes, linewidths=0.6,
+                   facecolor=SYMBOL_COLORS[t], edgecolor="#333333")
+        if show_labels and t in label_allow_set:
+            rr_last, mm_last = rr.values[-1], mm.values[-1]
+            ax.annotate(f"{t}", (rr_last, mm_last), fontsize=11, color=SYMBOL_COLORS[t],
+                        xytext=(6,6), textcoords="offset points")
+    st.pyplot(fig, use_container_width=True)
 
-    if xs_all and ys_all:
-        x0, x1 = min(xs_all + [96]), max(xs_all + [104])
-        y0, y1 = min(ys_all + [96]), max(ys_all + [104])
-        pad = 1.5
-        ax.set_xlim(x0 - pad, x1 + pad); ax.set_ylim(y0 - pad, y1 + pad)
-    ax.grid(True, linestyle=":", linewidth=0.6, alpha=0.35)
-    st.pyplot(fig, clear_figure=True)
-
-# Ranking
-with c2:
+with rank_col:
     st.markdown("### Ranking")
-    perf = []
+    def compute_rank_metric(t: str) -> float:
+        rr_last=rs_ratio_map[t].iloc[end_idx]; mm_last=rs_mom_map[t].iloc[end_idx]
+        if np.isnan(rr_last) or np.isnan(mm_last): return float("-inf")
+        if rank_mode=="RRG Power (dist)": return float(np.hypot(rr_last-100.0, mm_last-100.0))
+        if rank_mode=="RS-Ratio": return float(rr_last)
+        if rank_mode=="RS-Momentum": return float(mm_last)
+        if rank_mode=="Price %Δ (tail)":
+            px=tickers_data[t].reindex(idx).dropna()
+            return float((px.iloc[end_idx]/px.iloc[start_idx]-1)*100.0) if len(px.iloc[start_idx:end_idx+1])>=2 else float("-inf")
+        if rank_mode=="Momentum Slope (tail)":
+            series=rs_mom_map[t].iloc[start_idx:end_idx+1].dropna()
+            if len(series)>=2:
+                x=np.arange(len(series)); A=np.vstack([x, np.ones(len(x))]).T
+                return float(np.linalg.lstsq(A, series.values, rcond=None)[0][0])
+            return float("-inf")
+        return float("-inf")
+
+    perf=[]
     for t in tickers:
-        if t not in visible:
-            continue
-        try:
-            perf.append((t, compute_rank_metric(
-                t, start_pos, sel_pos,
-                rs_ratio_map=rs_ratio_map, rs_mom_map=rs_mom_map, px_cache=px_cache, mode=rank_mode
-            )))
-        except Exception:
-            pass
-    perf.sort(key=lambda x: x[1], reverse=True)
-    for i, (sym, _m) in enumerate(perf[:22], start=1):
-        rr_last = float(rs_ratio_map[sym].iloc[sel_pos]); mm_last = float(rs_mom_map[sym].iloc[sel_pos])
-        st.write(f"{i}. {display_name(sym)} [{get_status(rr_last, mm_last)}]")
+        if t not in st.session_state.visible_set: continue
+        perf.append((t, compute_rank_metric(t)))
+    perf.sort(key=lambda x:x[1], reverse=True)
 
-# ---- Table (scrollable + expander + colored + hyperlink)
-render_rrg_table(
-    tickers=tickers,
-    rs_ratio_map=rs_ratio_map,
-    rs_mom_map=rs_mom_map,
-    px_cache=px_cache,
-    idx=idx,
-    start_pos=start_pos,
-    sel_pos=sel_pos,
-    COLORS=COLORS,
-    tv_build_link=tv_build_link,
-    get_status=get_status,
-    status_bg_color=status_bg_color,
-    rk_mode=rank_mode,
-)
+    if not perf:
+        st.write("—")
+    else:
+        rows_html=[]
+        for i,(sym,_m) in enumerate(perf[:22], start=1):
+            rr=float(rs_ratio_map[sym].iloc[end_idx]); mm=float(rs_mom_map[sym].iloc[end_idx])
+            stat=get_status(rr, mm)
+            color=SYMBOL_COLORS.get(sym, "#333")
+            name=safe_long_name(sym, META)
+            rows_html.append(
+                f'<div class="row" style="color:{color}"><span>{i}.</span>'
+                f'<span class="name">{name}</span>'
+                f'<span>[{stat}]</span></div>'
+            )
+        st.markdown(f'<div class="rrg-rank">{"".join(rows_html)}</div>', unsafe_allow_html=True)
 
-# ---- Export buttons
-colA, colB, colC = st.columns(3)
-with colA:
-    if st.button("Export Ranks CSV"):
-        df = pd.DataFrame(
-            [(t,
-              compute_rank_metric(t, start_pos, sel_pos,
-                                  rs_ratio_map=rs_ratio_map, rs_mom_map=rs_mom_map, px_cache=px_cache, mode=rank_mode),
-              float(rs_ratio_map[t].iloc[sel_pos]),
-              float(rs_mom_map[t].iloc[sel_pos]),
-              get_status(float(rs_ratio_map[t].iloc[sel_pos]), float(rs_mom_map[t].iloc[sel_pos])))
-             for t in tickers if t in visible],
-            columns=["symbol","rank_metric","rs_ratio","rs_momentum","status"]
-        ).sort_values("rank_metric", ascending=False)
-        st.download_button("Download ranks.csv", df.to_csv(index=False),
-                           file_name=f"ranks_{idx[sel_pos].date()}.csv")
-
-with colB:
-    if st.button("Export Table CSV"):
-        rows = []
-        for t in tickers:
-            if t not in visible: continue
-            rr = float(rs_ratio_map[t].iloc[sel_pos]); mm = float(rs_mom_map[t].iloc[sel_pos])
-            px = px_cache.get(t, pd.Series(dtype=float))
-            price = float(px.iloc[sel_pos]) if sel_pos < len(px) else np.nan
-            chg = ((px.iloc[sel_pos]/px.iloc[start_pos]-1)*100.0) if (sel_pos < len(px) and start_pos < len(px)) else np.nan
-            rows.append({
-                "symbol": t,
-                "name": display_name(t),
-                "status": get_status(rr, mm),
-                "rs_ratio": rr,
-                "rs_momentum": mm,
-                "price": price,
-                "pct_change_tail": chg
-            })
-        df = pd.DataFrame(rows)
-        st.download_button("Download table.csv", df.to_csv(index=False),
-                           file_name=f"table_{idx[sel_pos].date()}.csv")
-
-with colC:
-    if st.button("Export Chart PNG"):
-        buf = io.BytesIO()
-        fig = plt.gcf()
-        fig.savefig(buf, format="png", bbox_inches="tight", dpi=180)
-        st.download_button(
-            "Download rrg.png",
-            buf.getvalue(),
-            file_name=f"rrg_{BENCHMARK_SYMBOL_TO_LABEL.get(benchmark,benchmark).replace(' ','')}_{idx[sel_pos].date()}.png",
-            mime="image/png"
+# -------------------- Table under the plot -----------
+def make_table_html(rows):
+    headers = ["#", "Name", "Status", "Industry", "Price", "Change %"]
+    th = "<tr>" + "".join([f"<th>{h}</th>" for h in headers]) + "</tr>"
+    tr = []
+    for r in rows:
+        bg = r["bg"]; fg = r["fg"]
+        price_txt = "-" if pd.isna(r["price"]) else f"{r['price']:.2f}"
+        chg_txt   = "-" if pd.isna(r["chg"])   else f"{r['chg']:.2f}"
+        tr.append(
+            "<tr class='rrg-row' style='background:%s; color:%s'>" % (bg, fg) +
+            f"<td>{r['rank']}</td>" +
+            f"<td class='rrg-name'><a href='{r['tv']}' target='_blank'>{r['name']}</a></td>" +
+            f"<td>{r['status']}</td>" +
+            f"<td>{r['industry']}</td>" +
+            f"<td>{price_txt}</td>" +
+            f"<td>{chg_txt}</td>" +
+            "</tr>"
         )
+    return f"<div class='rrg-wrap'><table class='rrg-table'>{th}{''.join(tr)}</table></div>"
+
+rank_dict = {sym:i for i,(sym,_m) in enumerate(sorted(
+    [(t, rs_ratio_map[t].iloc[end_idx]) for t in tickers if t in st.session_state.visible_set],
+    key=lambda x:x[1], reverse=True), start=1)}
+
+rows=[]
+for t in tickers:
+    if t not in st.session_state.visible_set: continue
+    rr=float(rs_ratio_map[t].iloc[end_idx]); mm=float(rs_mom_map[t].iloc[end_idx])
+    status=get_status(rr, mm)
+    bg = status_bg_color(rr, mm)
+    fg = "#ffffff" if bg in ("#e06a6a","#3fa46a","#5d86d1") else "#000000"
+    px=tickers_data[t].reindex(idx).dropna()
+    price=float(px.iloc[end_idx]) if end_idx < len(px) else np.nan
+    chg=((px.iloc[end_idx]/px.iloc[start_idx]-1)*100.0) if (end_idx < len(px) and start_idx < len(px)) else np.nan
+    tv=f"https://www.tradingview.com/chart/?symbol={quote('NSE:'+display_symbol(t).replace('-','_'), safe='')}"
+    rows.append({
+        "rank": rank_dict.get(t, ""), "name": safe_long_name(t, META), "status": status,
+        "industry": META.get(t,{}).get("industry","-"), "price": price, "chg": chg,
+        "bg": bg, "fg": fg, "tv": tv
+    })
+
+with st.expander("Table", expanded=True):
+    st.markdown(make_table_html(rows), unsafe_allow_html=True)
+
+# -------------------- Downloads ----------------------
+def export_ranks_csv(perf_sorted):
+    out=[]
+    for t,_m in perf_sorted:
+        rr=float(rs_ratio_map[t].iloc[end_idx]); mm=float(rs_mom_map[t].iloc[end_idx])
+        out.append((t, META.get(t,{}).get("name",t), META.get(t,{}).get("industry","-"),
+                    _m, rr, mm, get_status(rr, mm)))
+    df=pd.DataFrame(out, columns=["symbol","name","industry","rank_metric","rs_ratio","rs_momentum","status"])
+    buf=io.StringIO(); df.to_csv(buf, index=False); return buf.getvalue().encode()
+
+def export_table_csv(rows):
+    df=pd.DataFrame([{
+        "name": r["name"], "industry": r["industry"], "status": r["status"],
+        "price": r["price"], "pct_change_tail": r["chg"]
+    } for r in rows])
+    buf=io.StringIO(); df.to_csv(buf, index=False); return buf.getvalue().encode()
+
+perf=[]
+for t in tickers:
+    if t not in st.session_state.visible_set: continue
+    rr_last=rs_ratio_map[t].iloc[end_idx]; mm_last=rs_mom_map[t].iloc[end_idx]
+    if rank_mode=="RRG Power (dist)": metric=float(np.hypot(rr_last-100.0, mm_last-100.0))
+    elif rank_mode=="RS-Ratio": metric=float(rr_last)
+    elif rank_mode=="RS-Momentum": metric=float(mm_last)
+    elif rank_mode=="Price %Δ (tail)":
+        px=tickers_data[t].reindex(idx).dropna()
+        metric=float((px.iloc[end_idx]/px.iloc[start_idx]-1)*100.0) if len(px.iloc[start_idx:end_idx+1])>=2 else float("-inf")
+    else:
+        series=rs_mom_map[t].iloc[start_idx:end_idx+1].dropna()
+        metric=float(np.linalg.lstsq(np.vstack([np.arange(len(series)), np.ones(len(series))]).T, series.values, rcond=None)[0][0]) if len(series)>=2 else float("-inf")
+    perf.append((t, metric))
+perf.sort(key=lambda x:x[1], reverse=True)
+
+dl1, dl2 = st.columns(2)
+with dl1:
+    st.download_button("Download Ranks CSV", data=export_ranks_csv(perf),
+                       file_name=f"ranks_{date_str}.csv", mime="text/csv", use_container_width=True)
+with dl2:
+    st.download_button("Download Table CSV", data=export_table_csv(rows),
+                       file_name=f"table_{date_str}.csv", mime="text/csv", use_container_width=True)
+
+st.caption("Names open TradingView. Use Play/Pause to watch rotation; Speed adjusts frame interval, and Loop wraps frames.")
