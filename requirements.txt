@@ -1,13 +1,28 @@
-streamlit
-pandas
-numpy
-yfinance
-matplotlib
-plotly
-requests
-beautifulsoup4
-pytz
-scipy
-tk
-mplcursors
-openpyxl
+# --- Core app framework ---
+streamlit==1.51.0
+
+# --- Data & time ---
+pandas==2.3.3
+numpy==2.3.5
+python-dateutil==2.9.0.post0
+tzdata==2025.2
+
+# --- Market data ---
+yfinance==0.2.66
+multitasking==0.0.12
+requests==2.32.5
+
+# --- Plotting ---
+matplotlib==3.10.7
+plotly==6.5.0
+mplcursors==0.7
+pillow==12.0.0
+
+# --- Optional but helpful for CSV/Excel & speed ---
+openpyxl==3.1.5
+pyarrow==21.0.0
+
+# --- Streamlit internals/compat (usually pulled automatically, pinned here for reproducibility) ---
+altair==5.5.0
+protobuf==6.33.1
+watchdog==6.0.0
