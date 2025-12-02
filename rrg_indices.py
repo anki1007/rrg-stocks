@@ -3,7 +3,7 @@ import datetime as _dt
 import email.utils as _eutils
 import urllib.request as _urlreq
 from urllib.parse import quote
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 import numpy as np
 import pandas as pd
@@ -39,7 +39,7 @@ CACHE_DIR.mkdir(exist_ok=True)
 
 # -------------------- Matplotlib --------------------
 mpl.rcParams["figure.dpi"] = 120
-mpl.rcParams["font.size"] = 15
+mpl.rcParams["font.size"] = 13
 mpl.rcParams["font.sans-serif"] = ["Inter", "Segoe UI", "DejaVu Sans", "Arial"]
 mpl.rcParams["axes.grid"] = False
 mpl.rcParams["axes.edgecolor"] = "#222"
@@ -68,7 +68,7 @@ h1, h2, h3, h4, h5, h6, strong, b { color:#0f172a !important; }
 .rrg-rank .row { display: flex; gap: 8px; align-items: baseline; margin: 2px 0; }
 .rrg-rank .name { color: #0b57d0; }
 
-/* Scrollable table wrapper with sticky header */
+/* Scrollable table with sticky header */
 .rrg-wrap { max-height: calc(100vh - 260px); overflow: auto; border: 1px solid #e5e5e5; border-radius: 6px; }
 .rrg-table { width: 100%; border-collapse: collapse; font-family: 'Segoe UI', -apple-system, Arial, sans-serif; }
 .rrg-table th, .rrg-table td { border-bottom: 1px solid #ececec; padding: 10px 10px; font-size: 15px; }
@@ -322,7 +322,7 @@ st.sidebar.header("RRG — Controls")
 bench_label = st.sidebar.selectbox("Benchmark", list(BENCH_CHOICES.keys()), index=0)
 interval_label = st.sidebar.selectbox("Strength vs (TF)", TF_LABELS, index=TF_LABELS.index(DEFAULT_TF))
 interval = TF_TO_INTERVAL[interval_label]
-default_period_for_tf = {"1d": "1Y", "1wk": "1Y", "1mo": "5Y"}[interval]
+default_period_for_tf = {"1d": "1Y", "1wk": "1Y", "1mo": "10Y"}[interval]
 period_label = st.sidebar.selectbox("Period", list(PERIOD_MAP.keys()), index=list(PERIOD_MAP.keys()).index(default_period_for_tf))
 period = PERIOD_MAP[period_label]
 rank_modes = ["RRG Power (dist)", "RS-Ratio", "RS-Momentum", "Price %Δ (tail)", "Momentum Slope (tail)"]
@@ -419,6 +419,10 @@ def ranking_value(t: str) -> float:
 perf = [(t, ranking_value(t)) for t in tickers if t in st.session_state.visible_set]
 perf.sort(key=lambda x: x[1], reverse=True)
 
+# >>> Ranked symbols and rank-map used for BOTH the right panel and the table
+ranked_syms = [sym for sym, _ in perf]
+rank_dict = {sym: i for i, sym in enumerate(ranked_syms, start=1)}
+
 # -------------------- Plot + Ranking --------------------
 plot_col, rank_col = st.columns([4.5, 1.8], gap="medium")
 
@@ -467,16 +471,16 @@ with plot_col:
 
 with rank_col:
     st.markdown("### Ranking")
-    if perf:
+    if ranked_syms:
         rows_html = []
-        for i, (sym, _) in enumerate(perf[:22], start=1):
+        for sym in ranked_syms[:22]:
             rr = float(rs_ratio_map[sym].iloc[end_idx])
             mm = float(rs_mom_map[sym].iloc[end_idx])
             stat = get_status(rr, mm)
             color = SYMBOL_COLORS.get(sym, "#333")
             name = META.get(sym, {}).get("name", sym)
             rows_html.append(
-                f'<div class="row" style="color:{color}"><span>{i}.</span>'
+                f'<div class="row" style="color:{color}"><span>{rank_dict[sym]}.</span>'
                 f'<span class="name">{name}</span><span>[{stat}]</span></div>'
             )
         st.markdown(f'<div class="rrg-rank">{"".join(rows_html)}</div>', unsafe_allow_html=True)
@@ -507,13 +511,9 @@ def make_table_html(rows):
         )
     return f"<div class='rrg-wrap'><table class='rrg-table'>{th}{''.join(tr)}</table></div>"
 
-# Ranking number for first column
-rank_dict = {sym: i for i, (sym, _) in enumerate(perf, start=1)}
-
+# Build table rows IN RANK ORDER so it matches the right panel
 rows = []
-for t in tickers:
-    if t not in st.session_state.visible_set:
-        continue
+for t in ranked_syms:  # <<< ranked order (strongest → weakest)
     rr = float(rs_ratio_map[t].iloc[end_idx])
     mm = float(rs_mom_map[t].iloc[end_idx])
     status = get_status(rr, mm)
@@ -544,9 +544,9 @@ def export_ranks_csv(perf_sorted):
     out=[]
     for t,_m in perf_sorted:
         rr=float(rs_ratio_map[t].iloc[end_idx]); mm=float(rs_mom_map[t].iloc[end_idx])
-        out.append((t, META.get(t,{}).get("name",t), META.get(t,{}).get("industry","-"),
+        out.append((rank_dict[t], t, META.get(t,{}).get("name",t), META.get(t,{}).get("industry","-"),
                     _m, rr, mm, get_status(rr, mm)))
-    df=pd.DataFrame(out, columns=["symbol","name","industry","rank_metric","rs_ratio","rs_momentum","status"])
+    df=pd.DataFrame(out, columns=["ranking","symbol","name","industry","rank_metric","rs_ratio","rs_momentum","status"])
     buf=io.StringIO(); df.to_csv(buf, index=False); return buf.getvalue().encode()
 
 def export_table_csv(rows_):
