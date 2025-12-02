@@ -1,3 +1,5 @@
+# streamlit_app.py — Momentum Screener (repo ticker discovery, your benchmarks)
+
 from pathlib import Path
 from typing import Dict, List
 
@@ -13,8 +15,6 @@ st.markdown("""
 <style>
 html, body, [class^="css"] { font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif; }
 .block-container { padding-top: 8px; padding-bottom: 8px; }
-
-/* Sidebar spacing */
 section[data-testid="stSidebar"] .block-container { padding: 16px 12px; }
 
 /* Table shell */
@@ -48,33 +48,49 @@ a.name-link:hover { text-decoration: underline; }
 """, unsafe_allow_html=True)
 
 # ---------------- Config ----------------
-BENCHMARKS: Dict[str, List[str]] = {
-    "NIFTY 50": ["^NSEI"],
-    "Nifty 200": ["^CNX200", "^NSE200", "^NSEI"],
-    "Nifty 500": ["^CRSLDX", "^CNX500", "^NSE500", "^NSEI"],
-    "Nifty Midcap 150": ["^NIFTYMIDCAP150.NS", "^NSEMDCP150", "^NSEI"],
-    "Nifty Smallcap 250": ["^NIFTYSMLCAP250.NS", "^NSESMLCAP250", "^NSEI"],
+# Use this benchmark map exactly; resolver will fall back to ^NSEI if a symbol is empty.
+BENCHMARKS: Dict[str, str] = {
+    "NIFTY 50": "^NSEI",
+    "Nifty 200": "^CNX200",
+    "Nifty 500": "^CRSLDX",
+    "Nifty Midcap 150": "^NIFTYMIDCAP150.NS",
+    "Nifty Smallcap 250": "^NIFTYSMLCAP250.NS",
 }
+
 DEFAULT_PERIODS = {"1Y": "1y", "2Y": "2y", "5Y": "5y"}
 RS_LOOKBACK_DAYS = 252
 JDK_WINDOW = 21
 
-# ---------------- CSV discovery ----------------
+# ---------------- CSV discovery (repo /ticker) ----------------
 def discover_universe_csvs() -> Dict[str, Path]:
+    """
+    Build Indices Universe from ./ticker/*.csv (exclude niftyindices.csv).
+    Keys are pretty labels, values are absolute Paths.
+    """
     root = Path(__file__).resolve().parent
     tdir = root / "ticker"
     out: Dict[str, Path] = {}
-    if tdir.exists():
-        for p in sorted(tdir.glob("*.csv")):
-            names = {
-                "nifty50": "Nifty 50", "nifty200": "Nifty 200", "nifty500": "Nifty 500",
-                "niftyindices": "Nifty Indices", "niftymidcap150": "Nifty Midcap 150",
-                "niftysmallcap250": "Nifty Smallcap 250", "niftymidsmallcap400": "Nifty Mid+Small 400",
-                "niftytotalmarket": "Nifty Total Market",
-            }
-            key = names.get(p.stem.lower(), p.stem.replace("_", " ").title())
-            out[key] = p
-    return out
+    if not tdir.exists():
+        return out
+
+    pretty = {
+        "nifty50.csv":             "Nifty 50",
+        "nifty200.csv":            "Nifty 200",
+        "nifty500.csv":            "Nifty 500",
+        "niftymidcap150.csv":      "Nifty Midcap 150",
+        "niftymidsmallcap400.csv": "Nifty Mid Smallcap 400",
+        "niftysmallcap250.csv":    "Nifty Smallcap 250",
+        "niftytotalmarket.csv":    "Nifty Total Market",
+    }
+
+    for p in sorted(tdir.glob("*.csv")):
+        fname = p.name.lower()
+        if fname == "niftyindices.csv":
+            continue
+        label = pretty.get(fname, p.stem.replace("_", " ").title())
+        out[label] = p
+
+    return dict(sorted(out.items(), key=lambda kv: kv[0].lower()))
 
 # ---------------- Helpers ----------------
 def tv_symbol_from_yf(sym: str) -> str:
@@ -142,15 +158,17 @@ def yf_download_cached(tickers: List[str], period: str, interval: str = "1d"):
     return yf.download(tickers, period=period, interval=interval, auto_adjust=True,
                        group_by="ticker", progress=False, threads=True)
 
-def resolve_benchmark_symbol(preferred_key: str) -> str:
-    for sym in BENCHMARKS.get(preferred_key, []):
-        try:
-            probe = yf.download(sym, period="3mo", interval="1d", progress=False, auto_adjust=True)
-            s = _pick_close(probe, sym).dropna()
-            if not s.empty: return sym
-        except Exception:
-            pass
-    return "^NSEI"
+def resolve_benchmark_symbol(label: str) -> str:
+    """
+    Use your mapping, probe briefly; if empty, fall back to ^NSEI so the app keeps working.
+    """
+    sym = BENCHMARKS.get(label, "^NSEI")
+    try:
+        probe = yf.download(sym, period="3mo", interval="1d", progress=False, auto_adjust=True)
+        s = _pick_close(probe, sym).dropna()
+        return sym if not s.empty else "^NSEI"
+    except Exception:
+        return "^NSEI"
 
 def resample_weekly(series: pd.Series) -> pd.Series:
     return series.resample("W-FRI").last().dropna()
@@ -162,8 +180,10 @@ def build_table(universe: pd.DataFrame, bench_symbol: str, period_key: str, time
     raw = yf_download_cached(tickers + [bench_symbol], period=period, interval="1d")
 
     bench = _pick_close(raw, bench_symbol).dropna()
-    if timeframe == "Weekly": bench = resample_weekly(bench)
-    if bench.empty: raise RuntimeError(f"Benchmark {bench_symbol} series empty")
+    if timeframe == "Weekly":
+        bench = resample_weekly(bench)
+    if bench.empty:
+        raise RuntimeError(f"Benchmark {bench_symbol} series empty")
 
     cutoff = bench.index.max() - pd.Timedelta(days=RS_LOOKBACK_DAYS + 5)
     bench_rs = bench.loc[bench.index >= cutoff].copy()
@@ -172,15 +192,19 @@ def build_table(universe: pd.DataFrame, bench_symbol: str, period_key: str, time
     for _, rec in universe.iterrows():
         sym, name, ind = rec.Symbol, rec.Name, rec.Industry
         s = _pick_close(raw, sym).dropna()
-        if s.empty: continue
-        if timeframe == "Weekly": s = resample_weekly(s)
+        if s.empty:
+            continue
+        if timeframe == "Weekly":
+            s = resample_weekly(s)
 
         mom = analyze_momentum(s)
-        if mom is None: continue
+        if mom is None:
+            continue
 
         s_rs = s.loc[s.index >= cutoff].copy()
         rr, mm = jdk_components(s_rs, bench_rs)
-        if rr.empty or mm.empty: continue
+        if rr.empty or mm.empty:
+            continue
         ix = rr.index.intersection(mm.index)
         rr_last = float(rr.loc[ix].iloc[-1])
         mm_last = float(mm.loc[ix].iloc[-1])
@@ -193,23 +217,26 @@ def build_table(universe: pd.DataFrame, bench_symbol: str, period_key: str, time
             "Symbol": sym
         })
 
-    if not rows: raise RuntimeError("No tickers passed the filters.")
+    if not rows:
+        raise RuntimeError("No tickers passed the filters.")
 
     df = pd.DataFrame(rows)
 
-    # Ranks & sort by Final Rank (classic momentum stack)
+    # Rank stack and sort
     df["Rank_6M"] = df["Return_6M"].rank(ascending=False, method="min")
     df["Rank_3M"] = df["Return_3M"].rank(ascending=False, method="min")
     df["Rank_1M"] = df["Return_1M"].rank(ascending=False, method="min")
     df["Final Rank"] = df["Rank_6M"] + df["Rank_3M"] + df["Rank_1M"]
 
-    # Round visible values
-    for col in ("Return_6M","Return_3M","Return_1M"): df[col] = df[col].round(1)
-    df["RS-Ratio"] = df["RS-Ratio"].round(2); df["RS-Momentum"] = df["RS-Momentum"].round(2)
+    # Round for display
+    for col in ("Return_6M","Return_3M","Return_1M"):
+        df[col] = df[col].round(1)
+    df["RS-Ratio"] = df["RS-Ratio"].round(2)
+    df["RS-Momentum"] = df["RS-Momentum"].round(2)
 
     df = df.sort_values("Final Rank", ascending=True).reset_index(drop=True)
 
-    # Serial numbers & row classes
+    # Serial numbers & band classes
     df["#"] = np.arange(1, len(df)+1)
     def band_class(n):
         if n <= 30: return "row-green"
@@ -218,7 +245,6 @@ def build_table(universe: pd.DataFrame, bench_symbol: str, period_key: str, time
         return "row-red"
     df["__rowclass"] = df["#"].apply(band_class)
 
-    # Final display set
     show_cols = ["#", "Name", "Status", "Industry", "RS-Ratio", "RS-Momentum", "Return_6M", "Return_3M", "Return_1M"]
     return df[show_cols + ["Symbol", "__rowclass"]]
 
@@ -256,7 +282,7 @@ def render_table(df: pd.DataFrame):
 # ---------------- Sidebar (ONLY requested controls) ----------------
 csv_map = discover_universe_csvs()
 if not csv_map:
-    st.sidebar.error("No CSVs found under ./ticker/*.csv")
+    st.sidebar.error("No CSVs found under ./ticker/")
     st.stop()
 
 with st.sidebar:
@@ -269,8 +295,8 @@ with st.sidebar:
 
     # 2) Benchmark
     benchmark_key = st.selectbox("Benchmark", list(BENCHMARKS.keys()),
-                                 index=(list(BENCHMARKS.keys()).index("Nifty 500")
-                                        if "Nifty 500" in BENCHMARKS else 0))
+                                 index=(list(BENCHMARKS.keys()).index("NIFTY 50")
+                                        if "NIFTY 50" in BENCHMARKS else 0))
 
     # 3) Load / Refresh
     load_click = st.button("Load / Refresh")
@@ -291,18 +317,27 @@ table_slot = st.empty()
 if load_click or "last_df" not in st.session_state:
     try:
         bench_symbol = resolve_benchmark_symbol(benchmark_key)
-        dfu = pd.read_csv(csv_map[indices])
+        csv_path = csv_map[indices]
+        dfu = pd.read_csv(csv_path)
+
         cols = {c.strip().lower(): c for c in dfu.columns}
+        for req in ("symbol", "company name", "industry"):
+            if req not in cols:
+                raise ValueError(f"{csv_path.name} must include columns: Symbol, Company Name, Industry")
+
         dfu = dfu[[cols["symbol"], cols["company name"], cols["industry"]]].copy()
         dfu.columns = ["Symbol", "Name", "Industry"]
 
         table_df = build_table(dfu, bench_symbol, period_key, timeframe)
         st.session_state["last_df"] = table_df.copy()
         st.session_state["meta"] = {
-            "indices": indices, "bench_key": benchmark_key, "bench_symbol": bench_symbol,
+            "indices": indices, "csv": csv_path.name,
+            "bench_key": benchmark_key, "bench_symbol": bench_symbol,
             "timeframe": timeframe, "period": period_key
         }
-        info.write(f"Rows: **{len(table_df)}** • Benchmark symbol: `{bench_symbol}` • {timeframe} • {period_key}")
+        info.write(
+            f"Rows: **{len(table_df)}** • CSV: `{csv_path.name}` • Benchmark: `{benchmark_key}` ({bench_symbol}) • {timeframe} • {period_key}"
+        )
     except Exception as e:
         info.error(f"Error: {e}")
         st.stop()
