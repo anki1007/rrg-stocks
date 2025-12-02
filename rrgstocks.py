@@ -25,7 +25,7 @@ DEFAULT_PERIOD = "1Y"         # Period default
 APPLY_SAVED_STATE = False     # Set True if you want to restore last session
 
 # ================== User CSV Folder ===================
-CSV_DIR  = r"D:\RRG\ticker"                          # folder to scan
+CSV_DIR = os.environ.get("RRG_CSV_DIR", "./ticker")
 DEFAULT_CSV_BASENAME = "nifty200.csv"                # default selection
 CSV_PATH = os.path.join(CSV_DIR, DEFAULT_CSV_BASENAME)
 
