@@ -8,7 +8,7 @@ import yfinance as yf
 import streamlit as st
 
 # =============== EXACT UI FEEL ===============
-st.set_page_config(page_title="Momentum Screener", layout="wide")
+st.set_page_config(page_title="Nifty Total Market Momentum", layout="wide")
 # No title/caption—keep the canvas clean like the Tkinter window.
 # Add minimal CSS to mimic fonts, sticky header, and compact spacing.
 st.markdown("""
