@@ -27,7 +27,6 @@ GITHUB_TICKER_DIR = "ticker"
 RAW_BASE = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/{GITHUB_BRANCH}/{GITHUB_TICKER_DIR}/"
 
 # -------------------- Matplotlib ------------------
-# Larger, crisper fonts for readability
 mpl.rcParams['figure.dpi'] = 120
 mpl.rcParams['axes.grid'] = False
 mpl.rcParams['axes.edgecolor'] = '#222'
@@ -49,17 +48,24 @@ st.markdown("""
 .block-container { padding-top: 1.0rem; }
 
 /* Global text bump for readability */
-html, body, [data-testid="stSidebar"], [data-testid="stMarkdownContainer"] {
-  font-size: 16px;
-}
+html, body, [data-testid="stSidebar"], [data-testid="stMarkdownContainer"] { font-size: 16px; }
+
+/* Fix low-contrast headings/labels */
+h1, h2, h3, h4, h5, h6, strong, b { color:#0f172a !important; }
+[data-testid="stMarkdownContainer"] h3 { font-weight: 800; }
+[data-testid="stSlider"] label, label span, .st-cq { color:#0f172a !important; }
 
 /* Ranking list */
 .rrg-rank { font-weight: 700; line-height: 1.25; font-size: 1.05rem; white-space: pre; }
 .rrg-rank .row { display: flex; gap: 8px; align-items: baseline; margin: 2px 0; }
 .rrg-rank .name { color: #0b57d0; }
 
-/* Table */
-.rrg-wrap { max-height: 65vh; overflow: auto; border: 1px solid #e5e5e5; border-radius: 6px; }
+/* Scrollable table wrapper with sticky header */
+.rrg-wrap {
+  max-height: calc(100vh - 260px);  /* keeps table within screen; tweak this if needed */
+  overflow: auto;
+  border: 1px solid #e5e5e5; border-radius: 6px;
+}
 .rrg-table { width: 100%; border-collapse: collapse; font-family: 'Segoe UI', -apple-system, Arial, sans-serif; }
 .rrg-table th, .rrg-table td { border-bottom: 1px solid #ececec; padding: 10px 10px; font-size: 15px; }
 .rrg-table th {
@@ -68,6 +74,10 @@ html, body, [data-testid="stSidebar"], [data-testid="stMarkdownContainer"] {
 }
 .rrg-row { transition: background .12s ease; }
 .rrg-name a { color: #0b57d0; text-decoration: underline; }
+
+/* Make scrollbars visible on WebKit (Chrome/Edge) */
+.rrg-wrap::-webkit-scrollbar { height: 12px; width: 12px; }
+.rrg-wrap::-webkit-scrollbar-thumb { background:#c7ccd6; border-radius: 8px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -330,7 +340,7 @@ rank_modes = ["RRG Power (dist)","RS-Ratio","RS-Momentum","Price %Δ (tail)","Mo
 rank_mode = st.sidebar.selectbox("Rank by", rank_modes, index=0)
 tail_len = st.sidebar.slider("Trail Length", 1, 20, DEFAULT_TAIL, 1)
 
-# Optional: label toggle to avoid dense chart (default OFF)
+# Optional: label toggle (default OFF to avoid clutter)
 show_labels = st.sidebar.toggle("Show labels on chart", value=False)
 label_top_n = st.sidebar.slider("Label top N by distance", 3, 30, 12, 1, disabled=not show_labels)
 
@@ -414,7 +424,6 @@ with plot_col:
     if "visible_set" not in st.session_state:
         st.session_state.visible_set = set(tickers)
 
-    # Pre-compute distance for optional labeling
     def dist_last(t):
         rr_last=rs_ratio_map[t].iloc[end_idx]; mm_last=rs_mom_map[t].iloc[end_idx]
         return float(np.hypot(rr_last-100.0, mm_last-100.0))
@@ -433,7 +442,6 @@ with plot_col:
         sizes=[22]*(len(rr)-1)+[76]
         ax.scatter(rr.values, mm.values, s=sizes, linewidths=0.6,
                    facecolor=SYMBOL_COLORS[t], edgecolor="#333333")
-        # Hide labels by default to avoid density; show only if toggled
         if show_labels and t in label_allow_set:
             rr_last, mm_last = rr.values[-1], mm.values[-1]
             ax.annotate(f"{t}", (rr_last, mm_last), fontsize=11, color=SYMBOL_COLORS[t],
@@ -468,7 +476,6 @@ with rank_col:
     if not perf:
         st.write("—")
     else:
-        # Ranking now shows COMPANY NAME (not the symbol)
         rows_html=[]
         for i,(sym,_m) in enumerate(perf[:22], start=1):
             rr=float(rs_ratio_map[sym].iloc[end_idx]); mm=float(rs_mom_map[sym].iloc[end_idx])
@@ -500,7 +507,6 @@ def make_table_html(rows):
         )
     return f'<div class="rrg-wrap"><table class="rrg-table">{th}{"".join(tr)}</table></div>'
 
-# For the rank number in table, keep RS-Ratio ordering (unchanged logic)
 rank_dict = {sym:i for i,(sym,_m) in enumerate(sorted(
     [(t, rs_ratio_map[t].iloc[end_idx]) for t in tickers if t in st.session_state.visible_set],
     key=lambda x:x[1], reverse=True), start=1)}
@@ -522,8 +528,9 @@ for t in tickers:
         "bg": bg, "fg": fg, "tv": tv
     })
 
-st.markdown("### Table")
-st.markdown(make_table_html(rows), unsafe_allow_html=True)
+# Collapsible + scrollable table
+with st.expander("Table", expanded=True):
+    st.markdown(make_table_html(rows), unsafe_allow_html=True)
 
 # -------------------- Downloads ----------------------
 def export_ranks_csv(perf_sorted):
