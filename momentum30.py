@@ -57,7 +57,7 @@ BENCHMARKS: Dict[str, List[str]] = {
     "Nifty Mid Smallcap 400": ["^NIFTYMIDSML400.NS", "^NIFTYMIDSMALLCAP400.NS", "^NSEI"],
     "Nifty Total Market": ["^NIFTYTOTALMKT.NS", "^NIFTYTOTMKT", "^NSEI"],
 }
-DEFAULT_PERIODS = {"1Y": "1y", "2Y": "2y", "5Y": "5y"}
+DEFAULT_PERIODS = {"1Y": "1y", "2Y": "2y", "3Y": "3y"}
 RS_LOOKBACK_DAYS = 252
 JDK_WINDOW = 21
 
@@ -351,3 +351,4 @@ if "last_df" in st.session_state:
         file_name=f"{st.session_state['meta']['indices'].replace(' ','_').lower()}_{st.session_state['meta']['timeframe'].lower()}_{st.session_state['meta']['period'].lower()}_momentum.csv",
         mime="text/csv"
     )
+
