@@ -62,7 +62,7 @@ h1, h2, h3, h4, h5, h6, strong, b { color:#0f172a !important; }
 
 /* Scrollable table wrapper with sticky header */
 .rrg-wrap {
-  max-height: calc(100vh - 260px);  /* keeps table within screen; tweak this if needed */
+  max-height: calc(100vh - 260px);
   overflow: auto;
   border: 1px solid #e5e5e5; border-radius: 6px;
 }
@@ -132,7 +132,7 @@ def load_universe_from_github_csv(basename: str):
     sel["Industry"]=sel["Industry"].astype(str).str.strip()
     sel = sel[sel["Symbol"]!=""].drop_duplicates(subset=["Symbol"])
     universe = sel["Symbol"].tolist()
-    meta = {r["Symbol"]:{"name":r["Company Name"] or r["Symbol"], "industry":r["Industry"] or "-"} for _,r in sel.iterrows()}
+    meta = {r["Symbol"]:{ "name":r["Company Name"] or r["Symbol"], "industry":r["Industry"] or "-" } for _,r in sel.iterrows()}
     return universe, meta
 
 # -------------------- Config & utils ----------------
@@ -390,7 +390,13 @@ if st.session_state.playing:
             nxt = idx_len - 1
             st.session_state.playing = False
     st.session_state.end_idx = nxt
-    st.autorefresh(interval=speed_ms, key="rrg_auto_refresh")
+
+    # advance to next frame after a delay, then rerun
+    time.sleep(speed_ms / 1000.0)
+    try:
+        st.rerun()               # Streamlit ≥ 1.30
+    except AttributeError:
+        st.experimental_rerun()  # Older Streamlit fallback
 
 end_idx = st.slider("Date", min_value=DEFAULT_TAIL, max_value=idx_len-1,
                     value=st.session_state.end_idx, step=1, key="end_idx",
@@ -495,14 +501,16 @@ def make_table_html(rows):
     tr = []
     for r in rows:
         bg = r["bg"]; fg = r["fg"]
+        price_val = "-" if pd.isna(r["price"]) else f'{r["price"]:.2f}'
+        chg_val = "-" if pd.isna(r["chg"]) else f'{r["chg"]:.2f}'
         tr.append(
             f'<tr class="rrg-row" style="background:{bg}; color:{fg}">'
             f'<td>{r["rank"]}</td>'
             f'<td class="rrg-name"><a href="{r["tv"]}" target="_blank">{r["name"]}</a></td>'
             f'<td>{r["status"]}</td>'
             f'<td>{r["industry"]}</td>'
-            f'<td>{("-" if pd.isna(r["price"]) else f"{r["price"]:.2f}")}</td>'
-            f'<td>{("-" if pd.isna(r["chg"]) else f"{r["chg"]:.2f}")}</td>'
+            f'<td>{price_val}</td>'
+            f'<td>{chg_val}</td>'
             f'</tr>'
         )
     return f'<div class="rrg-wrap"><table class="rrg-table">{th}{"".join(tr)}</table></div>'
@@ -553,9 +561,12 @@ perf=[]
 for t in tickers:
     if t not in st.session_state.visible_set: continue
     rr_last=rs_ratio_map[t].iloc[end_idx]; mm_last=rs_mom_map[t].iloc[end_idx]
-    if rank_mode=="RRG Power (dist)": metric=float(np.hypot(rr_last-100.0, mm_last-100.0))
-    elif rank_mode=="RS-Ratio": metric=float(rr_last)
-    elif rank_mode=="RS-Momentum": metric=float(mm_last)
+    if rank_mode=="RRG Power (dist)":
+        metric=float(np.hypot(rr_last-100.0, mm_last-100.0))
+    elif rank_mode=="RS-Ratio":
+        metric=float(rr_last)
+    elif rank_mode=="RS-Momentum":
+        metric=float(mm_last)
     elif rank_mode=="Price %Δ (tail)":
         px=tickers_data[t].reindex(idx).dropna()
         metric=float((px.iloc[end_idx]/px.iloc[start_idx]-1)*100.0) if len(px.iloc[start_idx:end_idx+1])>=2 else float("-inf")
