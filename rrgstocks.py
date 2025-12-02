@@ -1,4 +1,3 @@
-# app.py — Streamlit RRG with Play/Pause animation (UI matched to your Tk layout)
 import os, json, time, pathlib, logging, functools, calendar, io
 import datetime as _dt
 import email.utils as _eutils
