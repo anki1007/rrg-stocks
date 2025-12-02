@@ -1,3 +1,11 @@
+# app.py — Relative Rotation Graph (RRG) — Streamlit
+# - Pulls universes from your GitHub /ticker folder
+# - Enforces closed bars in IST (Daily 18:00 IST, W-FRI, Month-end)
+# - JdK RS-Ratio / RS-Momentum with your window & tail controls
+# - Chart + Ranking + Scrollable, colored, link-enabled table
+# - Play/Pause animation with speed & loop
+# - CSV exports
+
 import os, json, time, pathlib, logging, functools, calendar, io
 import datetime as _dt
 import email.utils as _eutils
