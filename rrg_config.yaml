@@ -1,0 +1,32 @@
+benchmark_choices:
+- ^CRSLDX
+- ^CNX200
+- ^NSEI
+- ^NIFTY_TOTAL_MKT.NS
+cache_dir: cache
+default_benchmark: ^CRSLDX
+default_tail: 8
+interval: 1wk
+tickers:
+- ^CNXAUTO
+- ^CNXFMCG
+- ^CNXIT
+- ^NSEBANK
+- ^CNXPHARMA
+- ^CNXENERGY
+- ^CNXREALTY
+- ^CNXINFRA
+- ^CNXPSUBANK
+- ^NSMIDCP
+- ^NSEMDCP50
+- ^CNXCONSUM
+- ^CNXCMDT
+- ^CNXMEDIA
+- ^CNXSERVICE
+- ^CNXMETAL
+- ^CNXPSE
+- NIFTY_CPSE.NS
+- NIFTY_FIN_SERVICE.NS
+- NIFTYMIDCAP150.NS
+ui_default_period: 1Y
+window: 14
