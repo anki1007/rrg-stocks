@@ -44,7 +44,7 @@ mpl.rcParams["font.size"] = 13
 mpl.rcParams["font.sans-serif"] = ["Inter", "Segoe UI", "DejaVu Sans", "Arial"]
 mpl.rcParams["axes.grid"] = False
 mpl.rcParams["axes.edgecolor"] = "#222"
-mpl.rcParams["axes.labelcolor"] = "#111"
+mpl.rcParams["axes.labelcolor"] = "#111"]
 mpl.rcParams["xtick.color"] = "#333"
 mpl.rcParams["ytick.color"] = "#333"
 
@@ -317,7 +317,7 @@ st.sidebar.header("RRG — Controls")
 bench_label = st.sidebar.selectbox("Benchmark", list(BENCH_CHOICES.keys()), index=0)
 interval_label = st.sidebar.selectbox("Strength vs (TF)", TF_LABELS, index=TF_LABELS.index(DEFAULT_TF))
 interval = TF_TO_INTERVAL[interval_label]
-default_period_for_tf = {"1d": "1Y", "1wk": "1Y", "1mo": "5Y"}[interval]
+default_period_for_tf = {"1d": "1Y", "1wk": "1Y", "1mo": "10Y"}[interval]
 period_label = st.sidebar.selectbox("Period", list(PERIOD_MAP.keys()), index=list(PERIOD_MAP.keys()).index(default_period_for_tf))
 period = PERIOD_MAP[period_label]
 rank_modes = ["RRG Power (dist)", "RS-Ratio", "RS-Momentum", "Price %Δ (tail)", "Momentum Slope (tail)"]
@@ -383,6 +383,32 @@ date_str = format_bar_date(idx[end_idx], interval)
 
 st.markdown(f"**Relative Rotation Graph (RRG) — {bench_label} — {period_label} — {interval_label} — {CSV_BASENAME} — {date_str}**")
 
+# ---------- Unified ranking value (1 = strongest) ----------
+def ranking_value(t: str) -> float:
+    rr_last = rs_ratio_map[t].iloc[end_idx]
+    mm_last = rs_mom_map[t].iloc[end_idx]
+
+    if rank_mode == "RRG Power (dist)":
+        return float(np.hypot(rr_last - 100.0, mm_last - 100.0))
+    if rank_mode == "RS-Ratio":
+        return float(rr_last)
+    if rank_mode == "RS-Momentum":
+        return float(mm_last)
+    if rank_mode == "Price %Δ (tail)":
+        px = tickers_data[t].reindex(idx).dropna()
+        return float((px.iloc[end_idx] / px.iloc[start_idx] - 1) * 100.0) if len(px.iloc[start_idx:end_idx+1]) >= 2 else float("-inf")
+    if rank_mode == "Momentum Slope (tail)":
+        series = rs_mom_map[t].iloc[start_idx:end_idx+1].dropna()
+        if len(series) >= 2:
+            x = np.arange(len(series)); A = np.vstack([x, np.ones(len(x))]).T
+            return float(np.linalg.lstsq(A, series.values, rcond=None)[0][0])
+        return float("-inf")
+    return float("-inf")
+
+# Precompute perf (strongest → weakest)
+perf = [(t, ranking_value(t)) for t in tickers if t in st.session_state.visible_set]
+perf.sort(key=lambda x: x[1], reverse=True)
+
 # ---------- Plot + Ranking ----------
 plot_col, rank_col = st.columns([4.5, 1.8], gap="medium")
 
@@ -413,9 +439,9 @@ with plot_col:
         return float(np.hypot(rr_last - 100.0, mm_last - 100.0))
 
     allow_labels = set()
-    if show_labels:
-        allow_labels = {t for t, _ in sorted([(t, dist_last(t)) for t in tickers],
-                                             key=lambda x: x[1], reverse=True)[:label_top_n]}
+    # (labeling independent of ranking; still by distance)
+    allow_labels = {t for t, _ in sorted([(t, dist_last(t)) for t in tickers],
+                                         key=lambda x: x[1], reverse=True)[:label_top_n]} if show_labels else set()
 
     for t in tickers:
         if t not in st.session_state.visible_set:
@@ -437,34 +463,6 @@ with plot_col:
 
 with rank_col:
     st.markdown("### Ranking")
-
-    def compute_rank_metric(t: str) -> float:
-        rr_last = rs_ratio_map[t].iloc[end_idx]
-        mm_last = rs_mom_map[t].iloc[end_idx]
-        if rank_mode == "RRG Power (dist)":
-            return float(np.hypot(rr_last - 100.0, mm_last - 100.0))
-        if rank_mode == "RS-Ratio":
-            return float(rr_last)
-        if rank_mode == "RS-Momentum":
-            return float(mm_last)
-        if rank_mode == "Price %Δ (tail)":
-            px = tickers_data[t].reindex(idx).dropna()
-            return float((px.iloc[end_idx] / px.iloc[start_idx] - 1) * 100.0) if len(px.iloc[start_idx:end_idx+1]) >= 2 else float("-inf")
-        if rank_mode == "Momentum Slope (tail)":
-            series = rs_mom_map[t].iloc[start_idx:end_idx+1].dropna()
-            if len(series) >= 2:
-                x = np.arange(len(series)); A = np.vstack([x, np.ones(len(x))]).T
-                return float(np.linalg.lstsq(A, series.values, rcond=None)[0][0])
-            return float("-inf")
-        return float("-inf")
-
-    perf = []
-    for t in tickers:
-        if t not in st.session_state.visible_set:
-            continue
-        perf.append((t, compute_rank_metric(t)))
-    perf.sort(key=lambda x: x[1], reverse=True)
-
     if perf:
         rows_html = []
         for i, (sym, _) in enumerate(perf[:22], start=1):
@@ -501,15 +499,8 @@ def make_table_html(rows):
         )
     return f"<div class='rrg-wrap'><table class='rrg-table'>{th}{''.join(tr)}</table></div>"
 
-# rank by RS-Ratio for the SL.No column (stable)
-rank_dict = {
-    sym: i
-    for i, (sym, _) in enumerate(
-        sorted([(t, rs_ratio_map[t].iloc[end_idx]) for t in tickers if t in st.session_state.visible_set],
-               key=lambda x: x[1], reverse=True),
-        start=1,
-    )
-}
+# SL.No uses the same ranking (perf) → 1 strongest, …, N weakest
+rank_dict = {sym: i for i, (sym, _) in enumerate(perf, start=1)}
 
 rows = []
 for t in tickers:
@@ -524,15 +515,13 @@ for t in tickers:
     price = float(px.iloc[end_idx]) if end_idx < len(px) else np.nan
     chg = ((px.iloc[end_idx] / px.iloc[start_idx] - 1) * 100.0) if (end_idx < len(px) and start_idx < len(px)) else np.nan
     tv = tv_link_for_symbol(t, META)
-
-    # >>> FIXED: use `chg` (not `ch`) <<<
     rows.append({
         "rank": rank_dict.get(t, ""),
         "name": META.get(t, {}).get("name", t),
         "status": status,
         "industry": META.get(t, {}).get("industry", "-"),
         "price": price,
-        "chg": chg,          # <-- correct key/value
+        "chg": chg,
         "bg": bg,
         "fg": fg,
         "tv": tv,
@@ -558,29 +547,10 @@ def export_table_csv(rows_):
     } for r in rows_])
     buf=io.StringIO(); df.to_csv(buf, index=False); return buf.getvalue().encode()
 
-# recompute perf for download using chosen rank mode
-perf_dl=[]
-for t in tickers:
-    if t not in st.session_state.visible_set: continue
-    rr_last=rs_ratio_map[t].iloc[end_idx]; mm_last=rs_mom_map[t].iloc[end_idx]
-    if rank_mode=="RRG Power (dist)":
-        metric=float(np.hypot(rr_last-100.0, mm_last-100.0))
-    elif rank_mode=="RS-Ratio":
-        metric=float(rr_last)
-    elif rank_mode=="RS-Momentum":
-        metric=float(mm_last)
-    elif rank_mode=="Price %Δ (tail)":
-        px=tickers_data[t].reindex(idx).dropna()
-        metric=float((px.iloc[end_idx]/px.iloc[start_idx]-1)*100.0) if len(px.iloc[start_idx:end_idx+1])>=2 else float("-inf")
-    else:
-        series=rs_mom_map[t].iloc[start_idx:end_idx+1].dropna()
-        metric=float(np.linalg.lstsq(np.vstack([np.arange(len(series)), np.ones(len(series))]).T, series.values, rcond=None)[0][0]) if len(series)>=2 else float("-inf")
-    perf_dl.append((t, metric))
-perf_dl.sort(key=lambda x:x[1], reverse=True)
-
+# Use the same perf (strongest → weakest) for download
 c1, c2 = st.columns(2)
 with c1:
-    st.download_button("Download Ranks CSV", data=export_ranks_csv(perf_dl),
+    st.download_button("Download Ranks CSV", data=export_ranks_csv(perf),
                        file_name=f"ranks_{date_str}.csv", mime="text/csv", use_container_width=True)
 with c2:
     st.download_button("Download Table CSV", data=export_table_csv(rows),
