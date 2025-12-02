@@ -428,6 +428,8 @@ plot_col, rank_col = st.columns([4.5, 1.8], gap="medium")
 
 with plot_col:
     fig, ax = plt.subplots(1, 1, figsize=(10.6, 6.8))
+    ax.set_facecolor("#F5F5DC")        # inner plot background
+    fig.patch.set_facecolor("#F5F5DC") # outer figure background
     ax.set_title("Relative Rotation Graph (RRG)", fontsize=15, pad=10)
     ax.set_xlabel("JdK RS-Ratio", fontsize=14)
     ax.set_ylabel("JdK RS-Momentum", fontsize=14)
