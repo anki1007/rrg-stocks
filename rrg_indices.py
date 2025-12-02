@@ -8,19 +8,18 @@ from typing import Dict, List, Tuple
 import numpy as np
 import pandas as pd
 import yfinance as yf
-import requests  # kept for future use if needed
 import streamlit as st
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.colors import to_hex
 
-# ---------- Config ----------
+# -------------------- Config --------------------
 GITHUB_USER = "anki1007"
 GITHUB_REPO = "rrg-stocks"
 GITHUB_BRANCH = "main"
 GITHUB_TICKER_DIR = "ticker"
-CSV_BASENAME = "niftyindices.csv"  # your CSV
+CSV_BASENAME = "niftyindices.csv"  # <— your CSV path under /ticker
 RAW_BASE = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/{GITHUB_BRANCH}/{GITHUB_TICKER_DIR}/"
 
 DEFAULT_TF = "Weekly"
@@ -38,9 +37,9 @@ NET_TIME_MAX_AGE = 300
 CACHE_DIR = pathlib.Path("cache")
 CACHE_DIR.mkdir(exist_ok=True)
 
-# ---------- Matplotlib ----------
+# -------------------- Matplotlib --------------------
 mpl.rcParams["figure.dpi"] = 120
-mpl.rcParams["font.size"] = 13
+mpl.rcParams["font.size"] = 15
 mpl.rcParams["font.sans-serif"] = ["Inter", "Segoe UI", "DejaVu Sans", "Arial"]
 mpl.rcParams["axes.grid"] = False
 mpl.rcParams["axes.edgecolor"] = "#222"
@@ -50,8 +49,8 @@ mpl.rcParams["ytick.color"] = "#333"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 
-# ---------- Streamlit page ----------
-st.set_page_config(page_title="Relative Rotation Graph (RRG)", layout="wide")
+# -------------------- Streamlit Page --------------------
+st.set_page_config(page_title="Relative Rotation Graphs – Indices", layout="wide")
 st.markdown(
     """
 <style>
@@ -63,14 +62,20 @@ html, body, [data-testid="stSidebar"], [data-testid="stMarkdownContainer"] { fon
 h1, h2, h3, h4, h5, h6, strong, b { color:#0f172a !important; }
 [data-testid="stMarkdownContainer"] h3 { font-weight: 800; }
 [data-testid="stSlider"] label, label span { color:#0f172a !important; }
+
+/* Ranking list */
 .rrg-rank { font-weight: 700; line-height: 1.25; font-size: 1.05rem; white-space: pre; }
 .rrg-rank .row { display: flex; gap: 8px; align-items: baseline; margin: 2px 0; }
 .rrg-rank .name { color: #0b57d0; }
+
+/* Scrollable table wrapper with sticky header */
 .rrg-wrap { max-height: calc(100vh - 260px); overflow: auto; border: 1px solid #e5e5e5; border-radius: 6px; }
 .rrg-table { width: 100%; border-collapse: collapse; font-family: 'Segoe UI', -apple-system, Arial, sans-serif; }
 .rrg-table th, .rrg-table td { border-bottom: 1px solid #ececec; padding: 10px 10px; font-size: 15px; }
 .rrg-table th { position: sticky; top: 0; z-index: 2; text-align: left; background: #eef2f7; color: #0f172a; font-weight: 800; letter-spacing: .2px; }
 .rrg-name a { color: #0b57d0; text-decoration: underline; }
+
+/* WebKit scrollbars */
 .rrg-wrap::-webkit-scrollbar { height: 12px; width: 12px; }
 .rrg-wrap::-webkit-scrollbar-thumb { background:#c7ccd6; border-radius: 8px; }
 </style>
@@ -78,7 +83,7 @@ h1, h2, h3, h4, h5, h6, strong, b { color:#0f172a !important; }
     unsafe_allow_html=True,
 )
 
-# ---------- Helpers ----------
+# -------------------- Helpers --------------------
 def _normalize_cols(cols: List[str]) -> Dict[str, str]:
     return {c: c.strip().lower().replace(" ", "").replace("_", "") for c in cols}
 
@@ -86,7 +91,7 @@ def _to_yahoo_symbol(raw_sym: str) -> str:
     s = str(raw_sym).strip().upper()
     if s.endswith(".NS") or s.startswith("^"):
         return s
-    return "^" + s  # treat as index
+    return "^" + s  # map index codes like CNXIT -> ^CNXIT
 
 @st.cache_data(ttl=600)
 def load_universe_from_github_csv(basename: str):
@@ -133,7 +138,7 @@ def pick_close(df, symbol: str) -> pd.Series:
 def display_symbol(sym: str) -> str:
     return sym[:-3] if sym.upper().endswith(".NS") else sym.lstrip("^")
 
-def tv_link_for_symbol(yahoo_sym: str, META: dict) -> str:
+def tv_link_for_symbol(yahoo_sym: str) -> str:
     if yahoo_sym.endswith(".NS"):
         return f"https://www.tradingview.com/chart/?symbol={quote('NSE:'+display_symbol(yahoo_sym).replace('-','_'), safe='')}"
     return f"https://www.tradingview.com/chart/?symbol={quote(display_symbol(yahoo_sym), safe='')}"
@@ -176,7 +181,7 @@ def status_bg_color(x, y):
     m = get_status(x, y)
     return {"Lagging":"#e06a6a","Leading":"#3fa46a","Improving":"#5d86d1","Weakening":"#e2d06b"}.get(m,"#aaaaaa")
 
-# ---------- IST closed-bar checks ----------
+# -------------------- IST closed-bar checks --------------------
 def _utc_now_from_network(timeout=2.5) -> pd.Timestamp:
     try:
         import ntplib
@@ -241,7 +246,7 @@ def _is_bar_complete_for_timestamp(last_ts, interval, now=None):
         return False
     return False
 
-# ---------- Cache / download ----------
+# -------------------- Cache / Download --------------------
 def _cache_path(symbol, period, interval):
     safe = symbol.replace("^","").replace(".","_")
     return CACHE_DIR / f"{safe}_{period}_{interval}.parquet"
@@ -312,12 +317,12 @@ def symbol_color_map(symbols):
     tab = plt.get_cmap("tab20").colors
     return {s: to_hex(tab[i % len(tab)], keep_alpha=False) for i, s in enumerate(symbols)}
 
-# ---------- Controls ----------
+# -------------------- Controls --------------------
 st.sidebar.header("RRG — Controls")
 bench_label = st.sidebar.selectbox("Benchmark", list(BENCH_CHOICES.keys()), index=0)
 interval_label = st.sidebar.selectbox("Strength vs (TF)", TF_LABELS, index=TF_LABELS.index(DEFAULT_TF))
 interval = TF_TO_INTERVAL[interval_label]
-default_period_for_tf = {"1d": "1Y", "1wk": "1Y", "1mo": "10Y"}[interval]
+default_period_for_tf = {"1d": "1Y", "1wk": "1Y", "1mo": "5Y"}[interval]
 period_label = st.sidebar.selectbox("Period", list(PERIOD_MAP.keys()), index=list(PERIOD_MAP.keys()).index(default_period_for_tf))
 period = PERIOD_MAP[period_label]
 rank_modes = ["RRG Power (dist)", "RS-Ratio", "RS-Momentum", "Price %Δ (tail)", "Momentum Slope (tail)"]
@@ -325,13 +330,14 @@ rank_mode = st.sidebar.selectbox("Rank by", rank_modes, index=0)
 tail_len = st.sidebar.slider("Trail Length", 1, 20, DEFAULT_TAIL, 1)
 show_labels = st.sidebar.toggle("Show labels on chart", value=False)
 label_top_n = st.sidebar.slider("Label top N by distance", 3, 30, 12, 1, disabled=not show_labels)
+
 if "playing" not in st.session_state:
     st.session_state.playing = False
 st.sidebar.toggle("Play / Pause", value=st.session_state.playing, key="playing")
 speed_ms = st.sidebar.slider("Speed (ms/frame)", 150, 1500, 300, 50)
 looping = st.sidebar.checkbox("Loop", value=True)
 
-# ---------- Data build ----------
+# -------------------- Data Build --------------------
 UNIVERSE, META = load_universe_from_github_csv(CSV_BASENAME)
 bench_symbol = BENCH_CHOICES[bench_label]
 benchmark_data, tickers_data = download_block_with_benchmark(UNIVERSE, bench_symbol, period, interval)
@@ -366,7 +372,7 @@ SYMBOL_COLORS = symbol_color_map(tickers)
 idx = bench_idx
 idx_len = len(idx)
 
-# ---------- Date index + animation ----------
+# -------------------- Date index + Animation --------------------
 if "end_idx" not in st.session_state:
     st.session_state.end_idx = idx_len - 1
 st.session_state.end_idx = min(max(st.session_state.end_idx, DEFAULT_TAIL), idx_len - 1)
@@ -385,15 +391,13 @@ end_idx = st.slider("Date", min_value=DEFAULT_TAIL, max_value=idx_len - 1,
 start_idx = max(end_idx - tail_len, 0)
 date_str = format_bar_date(idx[end_idx], interval)
 
-# ---------- Title ----------
+# -------- Title (as requested) --------
 st.markdown(f"### Relative Rotation Graphs – Indices – {date_str}")
 
-
-# ---------- Unified ranking value (1 = strongest) ----------
+# -------------------- Ranking Metric (1 = strongest) --------------------
 def ranking_value(t: str) -> float:
     rr_last = rs_ratio_map[t].iloc[end_idx]
     mm_last = rs_mom_map[t].iloc[end_idx]
-
     if rank_mode == "RRG Power (dist)":
         return float(np.hypot(rr_last - 100.0, mm_last - 100.0))
     if rank_mode == "RS-Ratio":
@@ -415,7 +419,7 @@ def ranking_value(t: str) -> float:
 perf = [(t, ranking_value(t)) for t in tickers if t in st.session_state.visible_set]
 perf.sort(key=lambda x: x[1], reverse=True)
 
-# ---------- Plot + Ranking ----------
+# -------------------- Plot + Ranking --------------------
 plot_col, rank_col = st.columns([4.5, 1.8], gap="medium")
 
 with plot_col:
@@ -433,8 +437,7 @@ with plot_col:
     ax.text(104, 105, "Leading", fontsize=13, weight="bold", ha="right")
     ax.text(104, 95, "Weakening", fontsize=13, weight="bold", ha="right")
     ax.text(95, 95, "Lagging", fontsize=13, weight="bold")
-    ax.set_xlim(94, 106)
-    ax.set_ylim(94, 106)
+    ax.set_xlim(94, 106); ax.set_ylim(94, 106)
 
     def dist_last(t):
         rr_last = rs_ratio_map[t].iloc[end_idx]
@@ -480,12 +483,14 @@ with rank_col:
     else:
         st.write("—")
 
-# ---------- Table ----------
+# -------------------- Table --------------------
 def make_table_html(rows):
-    headers = ["#", "Name", "Status", "Industry", "Price", "Change %"]
+    headers = ["Ranking", "Name", "Status", "Industry", "RS-Ratio", "RS-Momentum", "Price", "Change %"]
     th = "<tr>" + "".join([f"<th>{h}</th>" for h in headers]) + "</tr>"
     tr = []
     for r in rows:
+        rr_txt  = "-" if pd.isna(r["rs_ratio"]) else f"{r['rs_ratio']:.2f}"
+        mm_txt  = "-" if pd.isna(r["rs_mom"])  else f"{r['rs_mom']:.2f}"
         price_txt = "-" if pd.isna(r["price"]) else f"{r['price']:.2f}"
         chg_txt   = "-" if pd.isna(r["chg"])   else f"{r['chg']:.2f}"
         tr.append(
@@ -494,13 +499,15 @@ def make_table_html(rows):
             f"<td class='rrg-name'><a href='{r['tv']}' target='_blank'>{r['name']}</a></td>" +
             f"<td>{r['status']}</td>" +
             f"<td>{r['industry']}</td>" +
+            f"<td>{rr_txt}</td>" +
+            f"<td>{mm_txt}</td>" +
             f"<td>{price_txt}</td>" +
             f"<td>{chg_txt}</td>" +
             "</tr>"
         )
     return f"<div class='rrg-wrap'><table class='rrg-table'>{th}{''.join(tr)}</table></div>"
 
-# SL.No uses the same ranking (perf) → 1 strongest, …, N weakest
+# Ranking number for first column
 rank_dict = {sym: i for i, (sym, _) in enumerate(perf, start=1)}
 
 rows = []
@@ -515,23 +522,24 @@ for t in tickers:
     px = tickers_data[t].reindex(idx).dropna()
     price = float(px.iloc[end_idx]) if end_idx < len(px) else np.nan
     chg = ((px.iloc[end_idx] / px.iloc[start_idx] - 1) * 100.0) if (end_idx < len(px) and start_idx < len(px)) else np.nan
-    tv = tv_link_for_symbol(t, META)
     rows.append({
         "rank": rank_dict.get(t, ""),
         "name": META.get(t, {}).get("name", t),
         "status": status,
         "industry": META.get(t, {}).get("industry", "-"),
+        "rs_ratio": rr,
+        "rs_mom": mm,
         "price": price,
         "chg": chg,
         "bg": bg,
         "fg": fg,
-        "tv": tv,
+        "tv": tv_link_for_symbol(t),
     })
 
 with st.expander("Table", expanded=True):
     st.markdown(make_table_html(rows), unsafe_allow_html=True)
 
-# ---------- Downloads ----------
+# -------------------- Downloads --------------------
 def export_ranks_csv(perf_sorted):
     out=[]
     for t,_m in perf_sorted:
@@ -543,8 +551,14 @@ def export_ranks_csv(perf_sorted):
 
 def export_table_csv(rows_):
     df=pd.DataFrame([{
-        "name": r["name"], "industry": r["industry"], "status": r["status"],
-        "price": r["price"], "pct_change_tail": r["chg"]
+        "ranking": r["rank"],
+        "name": r["name"],
+        "industry": r["industry"],
+        "status": r["status"],
+        "rs_ratio": r["rs_ratio"],
+        "rs_momentum": r["rs_mom"],
+        "price": r["price"],
+        "pct_change_tail": r["chg"],
     } for r in rows_])
     buf=io.StringIO(); df.to_csv(buf, index=False); return buf.getvalue().encode()
 
