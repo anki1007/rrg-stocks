@@ -1,3 +1,5 @@
+# streamlit_app.py — Pure Streamlit Momentum Screener (web-ready)
+
 from pathlib import Path
 from typing import Dict, List
 
@@ -46,25 +48,22 @@ a.name-link:hover { text-decoration: underline; }
 """, unsafe_allow_html=True)
 
 # ---------------- Config ----------------
-# Use this benchmark map exactly; resolver will fall back to ^NSEI if a symbol is empty.
-BENCHMARKS: Dict[str, str] = {
-    "NIFTY 50": "^NSEI",
-    "Nifty 200": "^CNX200",
-    "Nifty 500": "^CRSLDX",
-    "Nifty Midcap 150": "^NIFTYMIDCAP150.NS",
-    "Nifty Smallcap 250": "^NIFTYSMLCAP250.NS",
+# Six benchmark options you requested; resolver will pick the first symbol that works else fall back to ^NSEI.
+BENCHMARKS: Dict[str, List[str]] = {
+    "Nifty 50": ["^NSEI"],
+    "Nifty 200": ["^CNX200", "^NSE200", "^NSEI"],
+    "Nifty 500": ["^CRSLDX", "^CNX500", "^NSE500", "^NSEI"],
+    "Nifty Midcap 150": ["^NIFTYMIDCAP150.NS", "^NSEI"],
+    "Nifty Mid Smallcap 400": ["^NIFTYMIDSML400.NS", "^NIFTYMIDSMALLCAP400.NS", "^NSEI"],
+    "Nifty Total Market": ["^NIFTYTOTALMKT.NS", "^NIFTYTOTMKT", "^NSEI"],
 }
-
 DEFAULT_PERIODS = {"1Y": "1y", "2Y": "2y", "5Y": "5y"}
 RS_LOOKBACK_DAYS = 252
 JDK_WINDOW = 21
 
 # ---------------- CSV discovery (repo /ticker) ----------------
 def discover_universe_csvs() -> Dict[str, Path]:
-    """
-    Build Indices Universe from ./ticker/*.csv (exclude niftyindices.csv).
-    Keys are pretty labels, values are absolute Paths.
-    """
+    """Build Indices Universe from ./ticker/*.csv (exclude niftyindices.csv)."""
     root = Path(__file__).resolve().parent
     tdir = root / "ticker"
     out: Dict[str, Path] = {}
@@ -157,16 +156,16 @@ def yf_download_cached(tickers: List[str], period: str, interval: str = "1d"):
                        group_by="ticker", progress=False, threads=True)
 
 def resolve_benchmark_symbol(label: str) -> str:
-    """
-    Use your mapping, probe briefly; if empty, fall back to ^NSEI so the app keeps working.
-    """
-    sym = BENCHMARKS.get(label, "^NSEI")
-    try:
-        probe = yf.download(sym, period="3mo", interval="1d", progress=False, auto_adjust=True)
-        s = _pick_close(probe, sym).dropna()
-        return sym if not s.empty else "^NSEI"
-    except Exception:
-        return "^NSEI"
+    """Pick the first working Yahoo symbol from the list; else fall back to ^NSEI."""
+    for sym in BENCHMARKS.get(label, ["^NSEI"]):
+        try:
+            probe = yf.download(sym, period="3mo", interval="1d", progress=False, auto_adjust=True)
+            s = _pick_close(probe, sym).dropna()
+            if not s.empty:
+                return sym
+        except Exception:
+            pass
+    return "^NSEI"
 
 def resample_weekly(series: pd.Series) -> pd.Series:
     return series.resample("W-FRI").last().dropna()
@@ -286,15 +285,15 @@ if not csv_map:
 with st.sidebar:
     st.markdown("### Momentum Screener Controls")
 
-    # 1) Indices Universe
+    # 1) Indices Universe (from ./ticker, excluding niftyindices.csv)
     indices = st.selectbox("Indices Universe", list(csv_map.keys()),
                            index=(list(csv_map.keys()).index("Nifty 200")
                                   if "Nifty 200" in csv_map else 0))
 
-    # 2) Benchmark
+    # 2) Benchmark (six options)
     benchmark_key = st.selectbox("Benchmark", list(BENCHMARKS.keys()),
-                                 index=(list(BENCHMARKS.keys()).index("NIFTY 50")
-                                        if "NIFTY 500" in BENCHMARKS else 0))
+                                 index=(list(BENCHMARKS.keys()).index("Nifty 500")
+                                        if "Nifty 500" in BENCHMARKS else 0))
 
     # 3) Load / Refresh
     load_click = st.button("Load / Refresh")
@@ -305,7 +304,7 @@ with st.sidebar:
     # 5) Period
     period_key = st.selectbox("Period", list(DEFAULT_PERIODS.keys()), index=0)
 
-    # 6) Export CSV placeholder (filled after load)
+    # 6) Export CSV (filled after load)
     export_csv_btn = st.empty()
 
 info = st.empty()
@@ -344,7 +343,7 @@ if "last_df" in st.session_state:
     table_df = st.session_state["last_df"]
     render_table(table_df)
 
-    # Export CSV (sidebar button)
+    # Export CSV (sidebar)
     export_df = table_df.drop(columns=["Symbol", "__rowclass"]).copy()
     export_csv_btn.download_button(
         "Export CSV",
@@ -352,5 +351,3 @@ if "last_df" in st.session_state:
         file_name=f"{st.session_state['meta']['indices'].replace(' ','_').lower()}_{st.session_state['meta']['timeframe'].lower()}_{st.session_state['meta']['period'].lower()}_momentum.csv",
         mime="text/csv"
     )
-
-
