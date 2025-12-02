@@ -1,11 +1,3 @@
-# app.py — Relative Rotation Graph (RRG) — Streamlit
-# - Pulls universes from your GitHub /ticker folder
-# - Enforces closed bars in IST (Daily 18:00 IST, W-FRI, Month-end)
-# - JdK RS-Ratio / RS-Momentum with your window & tail controls
-# - Chart + Ranking + Scrollable, colored, link-enabled table
-# - Play/Pause animation with speed & loop
-# - CSV exports
-
 import os, json, time, pathlib, logging, functools, calendar, io
 import datetime as _dt
 import email.utils as _eutils
@@ -32,6 +24,7 @@ GITHUB_USER = "anki1007"
 GITHUB_REPO = "rrg-stocks"
 GITHUB_BRANCH = "main"
 GITHUB_TICKER_DIR = "ticker"
+CSV_BASENAME = "niftyindices.csv"   # <<<<<< your file
 RAW_BASE = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/{GITHUB_BRANCH}/{GITHUB_TICKER_DIR}/"
 
 # -------------------- Matplotlib ------------------
@@ -55,73 +48,38 @@ st.markdown("""
 [data-testid="stHeader"] { background: #ffffff00; }
 .block-container { padding-top: 1.0rem; }
 
-/* Global text bump for readability */
 html, body, [data-testid="stSidebar"], [data-testid="stMarkdownContainer"] { font-size: 16px; }
 
-/* Fix low-contrast headings/labels */
 h1, h2, h3, h4, h5, h6, strong, b { color:#0f172a !important; }
 [data-testid="stMarkdownContainer"] h3 { font-weight: 800; }
 [data-testid="stSlider"] label, label span, .st-cq { color:#0f172a !important; }
 
-/* Ranking list */
 .rrg-rank { font-weight: 700; line-height: 1.25; font-size: 1.05rem; white-space: pre; }
 .rrg-rank .row { display: flex; gap: 8px; align-items: baseline; margin: 2px 0; }
 .rrg-rank .name { color: #0b57d0; }
 
-/* Scrollable table wrapper with sticky header */
-.rrg-wrap {
-  max-height: calc(100vh - 260px);
-  overflow: auto;
-  border: 1px solid #e5e5e5; border-radius: 6px;
-}
+.rrg-wrap { max-height: calc(100vh - 260px); overflow: auto; border: 1px solid #e5e5e5; border-radius: 6px; }
 .rrg-table { width: 100%; border-collapse: collapse; font-family: 'Segoe UI', -apple-system, Arial, sans-serif; }
 .rrg-table th, .rrg-table td { border-bottom: 1px solid #ececec; padding: 10px 10px; font-size: 15px; }
-.rrg-table th {
-  position: sticky; top: 0; z-index: 2;
-  text-align: left; background: #eef2f7; color: #0f172a; font-weight: 800; letter-spacing: .2px;
-}
+.rrg-table th { position: sticky; top: 0; z-index: 2; text-align: left; background: #eef2f7; color: #0f172a; font-weight: 800; letter-spacing: .2px; }
 .rrg-row { transition: background .12s ease; }
 .rrg-name a { color: #0b57d0; text-decoration: underline; }
 
-/* WebKit scrollbars (Chrome/Edge) */
 .rrg-wrap::-webkit-scrollbar { height: 12px; width: 12px; }
 .rrg-wrap::-webkit-scrollbar-thumb { background:#c7ccd6; border-radius: 8px; }
 </style>
 """, unsafe_allow_html=True)
 
-# -------------------- GitHub helpers --------------
-@st.cache_data(ttl=600)
-def list_csv_files_from_github(user: str, repo: str, branch: str, folder: str) -> List[str]:
-    url = f"https://api.github.com/repos/{user}/{repo}/contents/{folder}?ref={branch}"
-    r = requests.get(url, timeout=15)
-    r.raise_for_status()
-    items = r.json()
-    files = [it["name"] for it in items if it.get("type") == "file" and it["name"].lower().endswith(".csv")]
-    files.sort()
-    return files
-
-_FRIENDLY = {
-    "nifty50.csv":"Nifty 50","nifty200.csv":"Nifty 200","nifty500.csv":"Nifty 500",
-    "niftymidcap150.csv":"Nifty Midcap 150","niftysmallcap250.csv":"Nifty Smallcap 250",
-    "niftymidsmallcap400.csv":"Nifty MidSmallcap 400","niftytotalmarket.csv":"Nifty Total Market",
-}
-def friendly_name_from_file(b: str) -> str:
-    b2=b.lower()
-    if b2 in _FRIENDLY: return _FRIENDLY[b2]
-    core=os.path.splitext(b)[0].replace("_"," ").replace("-"," ")
-    out=""
-    for ch in core:
-        out += (" "+ch) if (ch.isdigit() and out and (out[-1]!=" " and not out[-1].isdigit())) else ch
-    return out.title()
-
-def build_name_maps_from_github():
-    files = list_csv_files_from_github(GITHUB_USER, GITHUB_REPO, GITHUB_BRANCH, GITHUB_TICKER_DIR)
-    name_map = {friendly_name_from_file(f): f for f in files}
-    return name_map, sorted(name_map.keys())
-
 # -------------------- Universe CSV -----------------
 def _normalize_cols(cols: List[str]) -> Dict[str, str]:
     return {c: c.strip().lower().replace(" ","").replace("_","") for c in cols}
+
+def _to_yahoo_symbol(raw_sym: str) -> str:
+    s = str(raw_sym).strip().upper()
+    if s.endswith(".NS") or s.startswith("^"):
+        return s
+    # For index-like codes (CNX..., NSEBANK, NSMIDCP, etc.) add caret for Yahoo
+    return "^" + s
 
 @st.cache_data(ttl=600)
 def load_universe_from_github_csv(basename: str):
@@ -135,14 +93,27 @@ def load_universe_from_github_csv(basename: str):
     if ind_col is None:
         ind_col = "Industry"
         df[ind_col] = "-"
+
     sel = df[[sym_col, name_col, ind_col]].copy()
     sel.columns = ["Symbol","Company Name","Industry"]
     sel["Symbol"]=sel["Symbol"].astype(str).str.strip()
     sel["Company Name"]=sel["Company Name"].astype(str).str.strip()
     sel["Industry"]=sel["Industry"].astype(str).str.strip()
     sel = sel[sel["Symbol"]!=""].drop_duplicates(subset=["Symbol"])
-    universe = sel["Symbol"].tolist()
-    meta = {r["Symbol"]:{"name":r["Company Name"] or r["Symbol"], "industry":r["Industry"] or "-"} for _,r in sel.iterrows()}
+
+    # Convert to Yahoo symbols (add caret if needed)
+    sel["Yahoo"] = sel["Symbol"].apply(_to_yahoo_symbol)
+
+    universe = sel["Yahoo"].tolist()
+    meta = {
+        row["Yahoo"]:{
+            "name": (row["Company Name"] or row["Yahoo"]),
+            "industry": (row["Industry"] or "-"),
+            "raw_symbol": row["Symbol"],
+            "is_equity": row["Yahoo"].endswith(".NS")
+        }
+        for _,row in sel.iterrows()
+    }
     return universe, meta
 
 # -------------------- Config & utils ----------------
@@ -165,10 +136,20 @@ def pick_close(df, symbol: str) -> pd.Series:
     return pd.Series(dtype=float)
 
 def display_symbol(sym: str) -> str:
-    return sym[:-3] if sym.upper().endswith(".NS") else sym
+    return sym[:-3] if sym.upper().endswith(".NS") else sym.lstrip("^")
 
 def safe_long_name(symbol: str, META: dict) -> str:
     return META.get(symbol,{}).get("name") or symbol
+
+def tv_link_for_symbol(yahoo_sym: str, META: dict) -> str:
+    """TradingView link: NSE:<equity> for .NS, otherwise raw index code (without caret)."""
+    info = META.get(yahoo_sym, {})
+    raw = info.get("raw_symbol", display_symbol(yahoo_sym))
+    if yahoo_sym.endswith(".NS"):
+        return f"https://www.tradingview.com/chart/?symbol={quote('NSE:'+display_symbol(yahoo_sym).replace('-','_'), safe='')}"
+    # Index-like
+    tv_code = display_symbol(yahoo_sym)  # drop leading ^
+    return f"https://www.tradingview.com/chart/?symbol={quote(tv_code, safe='')}"
 
 def format_bar_date(ts: pd.Timestamp, interval: str) -> str:
     ts = pd.Timestamp(ts)
@@ -212,7 +193,6 @@ def status_bg_color(x,y):
 IST_TZ="Asia/Kolkata"; BAR_CUTOFF_HOUR=18; NET_TIME_MAX_AGE=300
 
 def _utc_now_from_network(timeout=2.5) -> pd.Timestamp:
-    # Try NTP
     try:
         import ntplib
         c=ntplib.NTPClient()
@@ -223,7 +203,6 @@ def _utc_now_from_network(timeout=2.5) -> pd.Timestamp:
             except Exception: continue
     except Exception:
         pass
-    # Fallback to HTTP Date
     for url in ("https://www.google.com/generate_204","https://www.cloudflare.com","https://www.nseindia.com","https://www.bseindia.com"):
         try:
             req=_urlreq.Request(url, method="HEAD")
@@ -335,14 +314,6 @@ def symbol_color_map(symbols):
 # -------------------- Controls (left) ----------------
 st.sidebar.header("RRG — Controls")
 
-NAME_MAP, DISPLAY_LIST = build_name_maps_from_github()
-if not DISPLAY_LIST:
-    st.error("No CSVs found in GitHub /ticker.")
-    st.stop()
-
-csv_disp = st.sidebar.selectbox("Indices", DISPLAY_LIST, index=(DISPLAY_LIST.index("Nifty 200") if "Nifty 200" in DISPLAY_LIST else 0))
-csv_basename = NAME_MAP[csv_disp]
-
 bench_label = st.sidebar.selectbox("Benchmark", list(BENCH_CHOICES.keys()), index=list(BENCH_CHOICES.keys()).index("Nifty 500"))
 interval_label = st.sidebar.selectbox("Strength vs (TF)", TF_LABELS, index=TF_LABELS.index(DEFAULT_TF))
 interval = TF_TO_INTERVAL[interval_label]
@@ -355,18 +326,16 @@ rank_modes = ["RRG Power (dist)","RS-Ratio","RS-Momentum","Price %Δ (tail)","Mo
 rank_mode = st.sidebar.selectbox("Rank by", rank_modes, index=0)
 tail_len = st.sidebar.slider("Trail Length", 1, 20, DEFAULT_TAIL, 1)
 
-# Optional: label toggle (default OFF to avoid clutter)
 show_labels = st.sidebar.toggle("Show labels on chart", value=False)
 label_top_n = st.sidebar.slider("Label top N by distance", 3, 30, 12, 1, disabled=not show_labels)
 
-# ---------- Playback controls ----------
 if "playing" not in st.session_state: st.session_state.playing = False
 play_toggle = st.sidebar.toggle("Play / Pause", value=st.session_state.playing, key="playing")
 speed_ms = st.sidebar.slider("Speed (ms/frame)", 150, 1500, 300, 50)
 looping = st.sidebar.checkbox("Loop", value=True)
 
 # -------------------- Data build ---------------------
-UNIVERSE, META = load_universe_from_github_csv(csv_basename)
+UNIVERSE, META = load_universe_from_github_csv(CSV_BASENAME)
 bench_symbol = BENCH_CHOICES[bench_label]
 benchmark_data, tickers_data = download_block_with_benchmark(UNIVERSE, bench_symbol, period, interval)
 if benchmark_data is None or benchmark_data.empty:
@@ -415,7 +384,7 @@ start_idx = max(end_idx - tail_len, 0)
 date_str = format_bar_date(idx[end_idx], interval)
 
 # -------------------- Title -------------------------
-st.markdown(f"**Relative Rotation Graph (RRG) — {bench_label} — {period_label} — {interval_label} — {csv_disp} — {date_str}**")
+st.markdown(f"**Relative Rotation Graph (RRG) — {bench_label} — {period_label} — {interval_label} — niftyindices.csv — {date_str}**")
 
 # -------------------- Layout: Plot + Ranking ----------
 plot_col, rank_col = st.columns([4.5, 1.8], gap="medium")
@@ -539,10 +508,10 @@ for t in tickers:
     px=tickers_data[t].reindex(idx).dropna()
     price=float(px.iloc[end_idx]) if end_idx < len(px) else np.nan
     chg=((px.iloc[end_idx]/px.iloc[start_idx]-1)*100.0) if (end_idx < len(px) and start_idx < len(px)) else np.nan
-    tv=f"https://www.tradingview.com/chart/?symbol={quote('NSE:'+display_symbol(t).replace('-','_'), safe='')}"
+    tv = tv_link_for_symbol(t, META)
     rows.append({
         "rank": rank_dict.get(t, ""), "name": safe_long_name(t, META), "status": status,
-        "industry": META.get(t,{}).get("industry","-"), "price": price, "chg": chg,
+        "industry": META.get(t,{}).get("industry","-"), "price": price, "chg": ch,
         "bg": bg, "fg": fg, "tv": tv
     })
 
