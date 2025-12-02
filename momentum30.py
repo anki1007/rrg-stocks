@@ -7,57 +7,63 @@ import pandas as pd
 import yfinance as yf
 import streamlit as st
 
-# =============== EXACT UI FEEL ===============
+# -------------------- PAGE / CSS --------------------
 st.set_page_config(page_title="Nifty Total Market Momentum", layout="wide")
-# No title/caption—keep the canvas clean like the Tkinter window.
-# Add minimal CSS to mimic fonts, sticky header, and compact spacing.
+
+# Minimal CSS to mirror your Tkinter layout and ensure colors are visible (even in dark mode)
 st.markdown("""
 <style>
-/* overall font like Tkinter example */
 html, body, [class^="css"]  {
   font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
   font-size: 14px;
 }
-/* tighten default block spacing */
-section.main > div { padding-top: 8px; }
 .block-container { padding-top: 8px; padding-bottom: 8px; }
-/* toolbar buttons */
+
+/* toolbar look */
+div.stSelectbox label, div.stButton>button p { font-weight: 600; }
+div.stSelectbox>div>div { font-size: 14px; }
 div.stButton>button {
   padding: 6px 14px;
   border-radius: 6px;
 }
-.stSelectbox, .stTextInput { font-size: 14px; }
+
+/* table surface – force white so colors pop in dark theme */
 .table-wrap {
   max-height: 78vh;
   overflow: auto;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
+  background: #ffffff;
 }
 .table-wrap table {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
+  background: #ffffff;
 }
-.table-wrap th {
+.table-wrap thead th {
   position: sticky; top: 0;
-  background: #ececec;
+  background: #ececec !important;
+  color: #111827;
   padding: 8px 10px;
   font-weight: 700;
   border-bottom: 2px solid #cbd5e1;
   white-space: nowrap;
 }
-.table-wrap td {
+.table-wrap tbody td {
   padding: 6px 10px;
   border-bottom: 1px solid #e5e7eb;
   white-space: nowrap;
+  color: #0f172a;
+  background-clip: padding-box;
 }
-a.name-link { text-decoration: none; }
+a.name-link { text-decoration: none; color: inherit; }
 a.name-link:hover { text-decoration: underline; }
 </style>
 """, unsafe_allow_html=True)
 
-# ================== CONFIG ==================
-# Benchmarks with alias candidates (first working symbol wins)
+# -------------------- CONFIG --------------------
+# Benchmarks with alias candidates (first working symbol is used)
 BENCHMARKS: Dict[str, list] = {
     "NIFTY 50": ["^NSEI"],
     "Nifty 200": ["^CNX200", "^NSE200", "^NSEI"],
@@ -70,7 +76,7 @@ MOMENTUM_YEARS = 2
 RS_LOOKBACK_DAYS = 252
 JDK_WINDOW = 21
 
-# ================== CSV DISCOVERY ==================
+# -------------------- CSV DISCOVERY --------------------
 def discover_universe_csvs() -> Dict[str, Path]:
     root = Path(__file__).resolve().parent
     ticker_dir = root / "ticker"
@@ -91,7 +97,7 @@ def discover_universe_csvs() -> Dict[str, Path]:
             files[key] = p
     return files
 
-# ================== HELPERS ==================
+# -------------------- HELPERS --------------------
 def tv_symbol_from_yf(symbol: str) -> str:
     s = symbol.strip().upper()
     return "NSE:" + s[:-3] if s.endswith(".NS") else "NSE:" + s
@@ -257,12 +263,6 @@ def build_table_dataframe(benchmark_symbol: str, universe_df: pd.DataFrame) -> p
     ]
     return df[order]
 
-def bg_for_serial(sno: int) -> str:
-    if sno <= 30: return "#dff5df"   # light green
-    if sno <= 60: return "#fff6b3"   # light yellow
-    if sno <= 90: return "#dfe9ff"   # light blue
-    return "#f7d6d6"                 # light red
-
 def df_to_html_table(df: pd.DataFrame) -> str:
     headers = [
         "S.No", "Name", "Industry",
@@ -272,39 +272,44 @@ def df_to_html_table(df: pd.DataFrame) -> str:
         "RS-Ratio", "RS-Momentum", "Performance",
         "Final_Rank", "Position"
     ]
+
+    def row_color(sno: int) -> str:
+        if sno <= 30: return "#dff5df"   # green
+        if sno <= 60: return "#fff6b3"   # yellow
+        if sno <= 90: return "#dfe9ff"   # blue
+        return "#f7d6d6"                 # red
+
     rows_html = []
     for _, r in df.iterrows():
         sno = int(r["S.No"])
-        bg = bg_for_serial(sno)
+        bg = row_color(sno)
         name = str(r["Name"])
         sym = str(r["Symbol"]).strip()
         url = tradingview_chart_url(sym) if sym else "#"
+
         vals = [
             str(sno),
             f'<a class="name-link" href="{url}" target="_blank">{name}</a>',
             str(r["Industry"]),
-            f'{r["Return_6M"]:.1f}',
-            f'{r["Rank_6M"]:.0f}',
-            f'{r["Return_3M"]:.1f}',
-            f'{r["Rank_3M"]:.0f}',
-            f'{r["Return_1M"]:.1f}',
-            f'{r["Rank_1M"]:.0f}',
-            f'{r["RS-Ratio"]:.2f}',
-            f'{r["RS-Momentum"]:.2f}',
-            str(r["Performance"]),
-            f'{r["Final_Rank"]:.0f}',
-            f'{r["Position"]:.0f}',
+            f'{r["Return_6M"]:.1f}', f'{r["Rank_6M"]:.0f}',
+            f'{r["Return_3M"]:.1f}', f'{r["Rank_3M"]:.0f}',
+            f'{r["Return_1M"]:.1f}', f'{r["Rank_1M"]:.0f}',
+            f'{r["RS-Ratio"]:.2f}', f'{r["RS-Momentum"]:.2f}',
+            str(r["Performance"]), f'{r["Final_Rank"]:.0f}', f'{r["Position"]:.0f}',
         ]
+
         tds = "".join(
-            f'<td style="text-align:{ "left" if i in (1,2) else "center"};">{v}</td>'
+            f'<td style="text-align:{ "left" if i in (1,2) else "center"}; '
+            f'background:{bg}; color:#0f172a;">{v}</td>'
             for i, v in enumerate(vals)
         )
-        rows_html.append(f'<tr style="background:{bg};">{tds}</tr>')
+        rows_html.append(f"<tr>{tds}</tr>")
 
     ths = "".join(
         f'<th style="text-align:{ "left" if h in ("Name","Industry") else "center"};">{h}</th>'
         for h in headers
     )
+
     return f"""
     <div class="table-wrap">
       <table>
@@ -314,15 +319,16 @@ def df_to_html_table(df: pd.DataFrame) -> str:
     </div>
     """
 
-# ================== UI (Toolbar + Table) ==================
+# -------------------- UI (top toolbar + table) --------------------
 csv_map = discover_universe_csvs()
 if not csv_map:
     st.error("No CSVs found under ./ticker/*.csv")
     st.stop()
 
-toolbar_cols = st.columns([1.1, 1.1, 0.8, 0.8, 6])  # spacing like Tkinter top bar
+toolbar_cols = st.columns([1.1, 1.1, 0.9, 0.9, 6])
 with toolbar_cols[0]:
-    bench_key = st.selectbox("Benchmark:", list(BENCHMARKS.keys()), index=list(BENCHMARKS.keys()).index("Nifty 500") if "Nifty 500" in BENCHMARKS else 0)
+    bench_key = st.selectbox("Benchmark:", list(BENCHMARKS.keys()),
+                             index=list(BENCHMARKS.keys()).index("Nifty 500") if "Nifty 500" in BENCHMARKS else 0)
 with toolbar_cols[1]:
     options = list(csv_map.keys())
     default_idx = options.index("Nifty 200") if "Nifty 200" in options else 0
@@ -343,6 +349,7 @@ if load_click or "last_df" not in st.session_state:
         cols = {c.strip().lower(): c for c in uni_df.columns}
         uni_df = uni_df[[cols["symbol"], cols["company name"], cols["industry"]]].copy()
         uni_df.columns = ["Symbol", "Name", "Industry"]
+
         df = build_table_dataframe(bench_symbol, uni_df)
         st.session_state["last_df"] = df.copy()
         st.session_state["meta"] = {"bench_key": bench_key, "bench_symbol": bench_symbol, "uni_key": uni_key}
