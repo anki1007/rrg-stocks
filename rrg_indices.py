@@ -8,7 +8,7 @@ from typing import Dict, List, Tuple
 import numpy as np
 import pandas as pd
 import yfinance as yf
-import requests
+import requests  # kept for future use if needed
 import streamlit as st
 
 import matplotlib as mpl
@@ -20,7 +20,7 @@ GITHUB_USER = "anki1007"
 GITHUB_REPO = "rrg-stocks"
 GITHUB_BRANCH = "main"
 GITHUB_TICKER_DIR = "ticker"
-CSV_BASENAME = "niftyindices.csv"  # <— your CSV
+CSV_BASENAME = "niftyindices.csv"  # your CSV
 RAW_BASE = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/{GITHUB_BRANCH}/{GITHUB_TICKER_DIR}/"
 
 DEFAULT_TF = "Weekly"
@@ -40,7 +40,7 @@ CACHE_DIR.mkdir(exist_ok=True)
 
 # ---------- Matplotlib ----------
 mpl.rcParams["figure.dpi"] = 120
-mpl.rcParams["font.size"] = 15
+mpl.rcParams["font.size"] = 13
 mpl.rcParams["font.sans-serif"] = ["Inter", "Segoe UI", "DejaVu Sans", "Arial"]
 mpl.rcParams["axes.grid"] = False
 mpl.rcParams["axes.edgecolor"] = "#222"
@@ -358,6 +358,10 @@ if not tickers:
     st.warning("After alignment, no symbols have enough coverage. Try a longer period.")
     st.stop()
 
+# Initialize visible set BEFORE ranking/perf is computed
+if "visible_set" not in st.session_state:
+    st.session_state.visible_set = set(tickers)
+
 SYMBOL_COLORS = symbol_color_map(tickers)
 idx = bench_idx
 idx_len = len(idx)
@@ -430,16 +434,11 @@ with plot_col:
     ax.set_xlim(94, 106)
     ax.set_ylim(94, 106)
 
-    if "visible_set" not in st.session_state:
-        st.session_state.visible_set = set(tickers)
-
     def dist_last(t):
         rr_last = rs_ratio_map[t].iloc[end_idx]
         mm_last = rs_mom_map[t].iloc[end_idx]
         return float(np.hypot(rr_last - 100.0, mm_last - 100.0))
 
-    allow_labels = set()
-    # (labeling independent of ranking; still by distance)
     allow_labels = {t for t, _ in sorted([(t, dist_last(t)) for t in tickers],
                                          key=lambda x: x[1], reverse=True)[:label_top_n]} if show_labels else set()
 
@@ -547,7 +546,6 @@ def export_table_csv(rows_):
     } for r in rows_])
     buf=io.StringIO(); df.to_csv(buf, index=False); return buf.getvalue().encode()
 
-# Use the same perf (strongest → weakest) for download
 c1, c2 = st.columns(2)
 with c1:
     st.download_button("Download Ranks CSV", data=export_ranks_csv(perf),
