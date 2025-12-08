@@ -5,10 +5,8 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
-import io
 import warnings
 warnings.filterwarnings('ignore')
-
 
 # ============================================================================
 # PAGE CONFIG
@@ -21,6 +19,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Bloomberg Terminal-inspired themes
 THEMES = {
     "Dark": {
         "bg_color": "#161614",
@@ -60,17 +59,49 @@ THEMES = {
     }
 }
 
-# Index configuration
+# Index configuration - Maps to CSV files in same directory
 INDEX_CONFIG = {
-    "Nifty 50": {"symbol": "NSEI", "csv_name": "nifty50.csv", "description": "Top 50 Large Cap Stocks", "count": 50},
-    "Nifty 100": {"symbol": "^CNX100", "csv_name": "nifty100.csv", "description": "Top 100 Large Cap Stocks", "count": 100},
-    "Nifty 200": {"symbol": "^CNX200", "csv_name": "nifty200.csv", "description": "Top 200 Large Cap and Mid Cap Sstocks", "count": 200},
-    "Nifty 500": {"symbol": "^CRSLDX", "csv_name": "nifty500.csv", "description": "Nifty 500 - Broad Market Index", "count": 500},
-    "Nifty Total Market": {"symbol": "^NIFTY_TOTAL_MKT.NS", "csv_name": "niftytotalmarket.csv", "description": "Nifty Total Index", "count": 750},
-    "Nifty Midcap 150": {"symbol": "^NIFTYMIDCAP150.NS", "csv_name": "niftymidcap150.csv", "description": "Mid Cap 150 Stocks", "count": 150},
-    "Nifty Smallcap 250": {"symbol": "^NIFTYSMLCAP250.NS", "csv_name": "niftysmallcap250.csv", "description": "Small Cap 250 Stocks", "count": 250},
-    "Nifty Mid Smallcap 400": {"symbol": "^NIFTYMIDSML400.NS", "csv_name": "niftymidsmallcap400.csv", "description": "Mid-Small Cap 400 Stocks", "count": 400},
-    }
+    "Nifty 50": {
+        "csv_name": "nifty50.csv",
+        "description": "Top 50 Large Cap Stocks",
+        "count": 50
+    },
+    "Nifty 100": {
+        "csv_name": "nifty100.csv",
+        "description": "Top 100 Large Cap Stocks",
+        "count": 100
+    },
+    "Nifty 200": {
+        "csv_name": "nifty200.csv",
+        "description": "Top 200 Large Cap and Mid Cap Stocks",
+        "count": 200
+    },
+    "Nifty 500": {
+        "csv_name": "nifty500.csv",
+        "description": "Nifty 500 - Broad Market Index",
+        "count": 500
+    },
+    "Nifty Total Market": {
+        "csv_name": "niftytotalmarket.csv",
+        "description": "Nifty Total Market Index",
+        "count": 750
+    },
+    "Nifty Midcap 150": {
+        "csv_name": "niftymidcap150.csv",
+        "description": "Mid Cap 150 Stocks",
+        "count": 150
+    },
+    "Nifty Smallcap 250": {
+        "csv_name": "niftysmallcap250.csv",
+        "description": "Small Cap 250 Stocks",
+        "count": 250
+    },
+    "Nifty Mid-Smallcap 400": {
+        "csv_name": "niftymidsmallcap400.csv",
+        "description": "Mid-Small Cap 400 Stocks",
+        "count": 400
+    },
+}
 
 # ============================================================================
 # SIDEBAR
@@ -84,22 +115,24 @@ with st.sidebar:
     
     st.divider()
     
-    lookback_days = st.slider("📅 Historical Data (Days)", min_value=365, max_value=365*10, value=365*5, step=365)
+    lookback_days = st.slider("📅 Historical Data (Years)", min_value=1, max_value=10, value=5, step=1)
+    lookback_days = lookback_days * 365
+    
     max_workers = st.slider("⚡ Data Fetch Threads", min_value=5, max_value=20, value=10)
     
     st.divider()
     
     st.markdown("### 🎨 ACTIVE THEME COLORS")
     col1, col2, col3, col4 = st.columns(4)
+    
     with col1:
-        st.markdown(f"**EMA 20**  \n<span style='color:{theme['ema_colors']['20']}'>●●●●●</span>", unsafe_allow_html=True)
+        st.markdown(f"**EMA 20**")
     with col2:
-        st.markdown(f"**EMA 50**  \n<span style='color:{theme['ema_colors']['50']}'>●●●●●</span>", unsafe_allow_html=True)
+        st.markdown(f"**EMA 50**")
     with col3:
-        st.markdown(f"**EMA 100**  \n<span style='color:{theme['ema_colors']['100']}'>●●●●●</span>", unsafe_allow_html=True)
+        st.markdown(f"**EMA 100**")
     with col4:
-        st.markdown(f"**EMA 200**  \n<span style='color:{theme['ema_colors']['200']}'>●●●●●</span>", unsafe_allow_html=True)
-
+        st.markdown(f"**EMA 200**")
 
 # ============================================================================
 # LOAD TICKERS FROM CSV
@@ -109,6 +142,7 @@ def load_tickers_from_csv(csv_filename):
     """Load tickers from CSV file"""
     try:
         df = pd.read_csv(csv_filename)
+        
         # Try different column names
         symbol_col = None
         for col_name in ['Symbol', 'SYMBOL', 'Ticker', 'ticker', 'symbol']:
@@ -117,17 +151,15 @@ def load_tickers_from_csv(csv_filename):
                 break
         
         if symbol_col is None:
-            st.error(f"❌ Could not find Symbol column in {csv_filename}")
-            return []
+            return None, f"Could not find Symbol column in {csv_filename}"
         
         tickers = sorted(df[symbol_col].unique().tolist())
-        return tickers
+        return tickers, None
+        
     except FileNotFoundError:
-        st.warning(f"⚠️ File not found: {csv_filename}")
-        return []
+        return None, f"File not found: {csv_filename}"
     except Exception as e:
-        st.error(f"❌ Error loading {csv_filename}: {e}")
-        return []
+        return None, f"Error loading {csv_filename}: {str(e)}"
 
 
 # ============================================================================
@@ -209,7 +241,6 @@ class MarketBreadthAnalyzer:
         status_text.empty()
         
         if not all_results:
-            st.error("❌ No valid data obtained. Try different tickers or period.")
             return None
         
         breadth_data = {}
@@ -265,7 +296,7 @@ def main():
     index_info = INDEX_CONFIG[selected_index]
     
     with col2:
-        st.metric(label="📈 Symbol", value=index_info['symbol'])
+        st.metric(label="📊 Index", value=selected_index)
     
     with col3:
         st.metric(label="📍 Stocks", value=index_info['count'])
@@ -274,13 +305,16 @@ def main():
     st.divider()
     
     # Load tickers from CSV
-    selected_tickers = load_tickers_from_csv(index_info['csv_name'])
+    selected_tickers, error = load_tickers_from_csv(index_info['csv_name'])
+    
+    if error:
+        st.error(f"❌ {error}")
+        st.stop()
     
     if selected_tickers:
-        st.success(f"✅ Loaded {len(selected_tickers)} {selected_index} tickers")
+        st.success(f"✅ Loaded {len(selected_tickers)} {selected_index} tickers from CSV")
     else:
-        st.error(f"❌ Could not load tickers from {index_info['csv_name']}")
-        st.info("📥 Download CSV files from: https://github.com/anki1007/rrg-stocks/tree/main/ticker")
+        st.error("❌ No tickers found in CSV file")
         st.stop()
     
     # Analysis options
@@ -322,7 +356,7 @@ def main():
             st.success(f"✅ Using {len(selected_tickers)} custom tickers")
     
     # Analyze Button
-    if st.button("🚀 ANALYZE MARKET BREADTH", use_container_width=True, type="primary"):
+    if st.button("🚀 ANALYZE MARKET BREADTH", width="stretch", type="primary"):
         analyzer = MarketBreadthAnalyzer(lookback_days, max_workers, theme)
         breadth_data = analyzer.calculate_breadth(selected_tickers)
         
@@ -496,7 +530,7 @@ def main():
                     csv,
                     f"breadth_ema{period}_{st.session_state.get('selected_index', 'custom').replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.csv",
                     "text/csv",
-                    use_container_width=True
+                    width="stretch"
                 )
         
         # =====================================================================
