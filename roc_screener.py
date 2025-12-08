@@ -1,444 +1,604 @@
+# Streamlit Momentum & ROC Screener - Bloomberg Style Dashboard
+# ============================================================================
+# Interactive Stock Screener with Advanced Filtering & Visualization
+# ============================================================================
+
 import streamlit as st
 import pandas as pd
-import yfinance as yf
 import numpy as np
-from datetime import datetime, timedelta
+import yfinance as yf
 import plotly.graph_objects as go
 import plotly.express as px
-from io import StringIO
-import os
+from datetime import datetime, timedelta
+import warnings
+warnings.filterwarnings('ignore')
 
-# Page Config
+# ============================================================================
+# PAGE CONFIGURATION
+# ============================================================================
 st.set_page_config(
-    page_title="Stock Momentum Screener",
-    page_icon="📊",
+    page_title="Momentum Stock Screener",
+    page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS
+# ============================================================================
+# CUSTOM THEME - Bloomberg Style
+# ============================================================================
 st.markdown("""
 <style>
-    .stMetric {
-        background-color: #f0f2f6;
-        padding: 10px;
-        border-radius: 5px;
+    /* Main background */
+    .main {
+        background: linear-gradient(135deg, #0f1419 0%, #1a1f2e 100%);
     }
-    .main-header {
-        color: #1f77b4;
-        text-align: center;
-        margin-bottom: 30px;
+    
+    /* Sidebar styling */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #1a1f2e 0%, #252d3d 100%);
     }
-    .sidebar-box {
-        background-color: #f9f9f9;
-        padding: 15px;
+    
+    /* Headers */
+    h1, h2, h3 {
+        color: #1DB954 !important;
+        font-weight: 700;
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+    }
+    
+    /* Text colors */
+    p, span, label {
+        color: #e8e8e8 !important;
+    }
+    
+    /* Input fields */
+    .stTextInput input, .stSelectbox select, .stSlider input {
+        background-color: #2a3142 !important;
+        color: #1DB954 !important;
+        border: 1px solid #1DB954 !important;
+    }
+    
+    /* Buttons */
+    .stButton > button {
+        background: linear-gradient(90deg, #1DB954 0%, #1ed760 100%);
+        color: #000 !important;
+        font-weight: 600;
+        border: none !important;
         border-radius: 8px;
-        border-left: 4px solid #1f77b4;
+        padding: 10px 24px;
+        transition: all 0.3s ease;
+    }
+    
+    .stButton > button:hover {
+        transform: scale(1.05);
+        box-shadow: 0 0 20px rgba(29, 185, 84, 0.6);
+    }
+    
+    /* Metric cards */
+    .metric-card {
+        background: linear-gradient(135deg, #1e2935 0%, #2a3547 100%);
+        border-left: 4px solid #1DB954;
+        padding: 16px;
+        border-radius: 8px;
+        margin: 10px 0;
+    }
+    
+    /* Data frames */
+    .stDataFrame {
+        background-color: #1e2935 !important;
+    }
+    
+    /* Positive values - green */
+    .positive {
+        color: #1DB954 !important;
+        font-weight: 600;
+    }
+    
+    /* Negative values - red */
+    .negative {
+        color: #E74C3C !important;
+        font-weight: 600;
+    }
+    
+    /* Expander styling */
+    .streamlit-expanderHeader {
+        background-color: #2a3547 !important;
+        border: 1px solid #1DB954 !important;
+    }
+    
+    /* Tab styling */
+    .stTabs [data-baseweb="tab-list"] button {
+        background-color: #2a3142 !important;
+        color: #1DB954 !important;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background-color: #1DB954 !important;
+        color: #000 !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Title
-st.markdown("<h1 class='main-header'>📊 Nifty Momentum Screener</h1>", unsafe_allow_html=True)
-st.markdown("*CSV-Based Stock Analysis | Real-Time Filtering | Interactive Charts*")
-st.divider()
+# ============================================================================
+# CONFIGURATION CLASS
+# ============================================================================
+class ScreenerConfig:
+    """Configuration for momentum screener"""
+    
+    TICKERS = [
+        'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'BHARTIARTL.NS', 'ICICIBANK.NS',
+        'SBIN.NS', 'INFY.NS', 'LICI.NS', 'HINDUNILVR.NS', 'ITC.NS', 'LT.NS',
+        'BAJFINANCE.NS', 'MARUTI.NS', 'HCLTECH.NS', 'ADANIENT.NS', 'AXISBANK.NS',
+        'SUNPHARMA.NS', 'TATAMOTORS.NS', 'MM.NS', 'NTPC.NS', 'KOTAKBANK.NS',
+        'ONGC.NS', 'HAL.NS', 'DMART.NS', 'TITAN.NS', 'ULTRACEMCO.NS', 'ADANIPORTS.NS',
+        'ADANIPOWER.NS', 'ADANIGREEN.NS', 'COALINDIA.NS', 'POWERGRID.NS', 'ASIANPAINT.NS',
+        'BAJAJ-AUTO.NS', 'WIPRO.NS', 'BAJAJFINSV.NS', 'SIEMENS.NS', 'NESTLEIND.NS',
+        'IOC.NS', 'IRFC.NS', 'JIOFIN.NS', 'TATASTEEL.NS', 'JSWSTEEL.NS', 'DLF.NS',
+        'BEL.NS', 'VBL.NS', 'TRENT.NS', 'VEDL.NS'
+    ]
+    
+    # Filter ranges
+    MIN_1Y_RETURN = 0.065
+    PEAK_RATIO = 0.80
+    MIN_UPDAYS_PCT = 0.20
+    
+    # Data lookback
+    LOOKBACK_DAYS = 730
+    LOOKBACK_52W = 252
+    LOOKBACK_6M = 126
+    LOOKBACK_3M = 63
+    LOOKBACK_1M = 21
 
 # ============================================================================
-# SIDEBAR CONFIGURATION
+# SCREENER CLASS
 # ============================================================================
-st.sidebar.markdown("### ⚙️ Configuration")
-
-# Stock Universe Selection
-st.sidebar.markdown("#### 📁 Stock Universe")
-universe_choice = st.sidebar.radio(
-    "Select stock source:",
-    ["Use Default File", "Upload CSV"],
-    horizontal=False,
-    key="universe_choice"
-)
-
-tickers = []
-
-if universe_choice == "Use Default File":
-    if os.path.exists("niftytotalmarket.csv"):
-        try:
-            df_tickers = pd.read_csv("niftytotalmarket.csv")
-            # Handle different column names
-            symbol_col = None
-            for col in df_tickers.columns:
-                if col.lower() in ['symbol', 'ticker', 'stock']:
-                    symbol_col = col
-                    break
-
-            if symbol_col is None:
-                symbol_col = df_tickers.columns[0]
-
-            tickers = df_tickers[symbol_col].str.strip().tolist()
-            tickers = [t for t in tickers if t and str(t).upper() != 'SYMBOL']
-
-            st.sidebar.success(f"✅ Loaded {len(tickers)} tickers")
-
-            if st.sidebar.checkbox("Preview tickers", value=False):
-                st.sidebar.write(tickers[:20])
-                if len(tickers) > 20:
-                    st.sidebar.write(f"... and {len(tickers)-20} more")
-        except Exception as e:
-            st.sidebar.error(f"Error loading CSV: {str(e)}")
-    else:
-        st.sidebar.warning("niftytotalmarket.csv not found in folder")
-else:
-    uploaded_file = st.sidebar.file_uploader("Upload CSV file", type=['csv'])
-    if uploaded_file is not None:
-        try:
-            df_tickers = pd.read_csv(uploaded_file)
-            symbol_col = df_tickers.columns[0]
-            tickers = df_tickers[symbol_col].str.strip().tolist()
-            tickers = [t for t in tickers if t and str(t).upper() != 'SYMBOL']
-            st.sidebar.success(f"✅ Loaded {len(tickers)} tickers")
-        except Exception as e:
-            st.sidebar.error(f"Error loading CSV: {str(e)}")
-
-if not tickers:
-    st.error("❌ No tickers loaded. Please check your CSV file.")
-    st.stop()
-
-# Filter Thresholds
-st.sidebar.markdown("#### 🎯 Filter Thresholds")
-
-min_return = st.sidebar.slider(
-    "1-Year Return (%)",
-    min_value=-100,
-    max_value=100,
-    value=0,
-    step=5,
-    help="Minimum 1-year return threshold"
-)
-
-peak_proximity = st.sidebar.slider(
-    "Peak Proximity (%)",
-    min_value=0,
-    max_value=100,
-    value=50,
-    step=5,
-    help="How close stock is to its 52-week high (lower = oversold)"
-)
-
-updays_ratio = st.sidebar.slider(
-    "Up-Days Ratio (%)",
-    min_value=0,
-    max_value=100,
-    value=0,
-    step=5,
-    help="Percentage of days with positive returns"
-)
-
-# Display Options
-st.sidebar.markdown("#### 📊 Display Options")
-
-top_n = st.sidebar.slider(
-    "Top Stocks to Show",
-    min_value=5,
-    max_value=50,
-    value=15,
-    step=5
-)
-
-sort_by = st.sidebar.selectbox(
-    "Sort By",
-    ["Rank_Final", "Return_1Y", "Peak_Ratio", "Volatility"],
-    help="Column to sort results by"
-)
-
-show_debug = st.sidebar.checkbox("Show Debug Info", value=False)
-
-# ============================================================================
-# DATA FETCHING & SCREENING
-# ============================================================================
-
-@st.cache_data(ttl=1800)
-def fetch_stock_data(ticker, period="1y"):
-    """Fetch stock data for a single ticker"""
-    try:
-        # Add .NS suffix if not present
-        if not ticker.endswith('.NS'):
-            ticker_with_suffix = ticker + '.NS'
-        else:
-            ticker_with_suffix = ticker
-
-        data = yf.download(ticker_with_suffix, period=period, progress=False)
-        return data
-    except Exception as e:
-        if show_debug:
-            st.write(f"Error fetching {ticker}: {str(e)}")
-        return None
-
-def calculate_metrics(data, ticker):
-    """Calculate metrics from OHLCV data"""
-    try:
-        if data is None or data.empty or len(data) < 10:
-            return None
-
-        # Price metrics
-        current_price = data['Close'].iloc[-1]
-
-        # 1-year return
-        year_ago_price = data['Close'].iloc[0]
-        return_1y = ((current_price - year_ago_price) / year_ago_price) * 100
-
-        # 6-month return
-        six_months_ago = min(126, len(data) - 1)
-        return_6m = ((current_price - data['Close'].iloc[-six_months_ago]) / data['Close'].iloc[-six_months_ago]) * 100
-
-        # 3-month return
-        three_months_ago = min(63, len(data) - 1)
-        return_3m = ((current_price - data['Close'].iloc[-three_months_ago]) / data['Close'].iloc[-three_months_ago]) * 100
-
-        # 1-month return
-        one_month_ago = min(21, len(data) - 1)
-        return_1m = ((current_price - data['Close'].iloc[-one_month_ago]) / data['Close'].iloc[-one_month_ago]) * 100
-
-        # Peak metrics
-        peak_52w = data['Close'].tail(252).max()
-        peak_ratio = ((current_price - data['Close'].min()) / (peak_52w - data['Close'].min())) * 100 if peak_52w != data['Close'].min() else 0
-
-        # Up days ratio
-        daily_returns = data['Close'].pct_change()
-        up_days = (daily_returns > 0).sum()
-        updays_ratio_calc = (up_days / len(daily_returns)) * 100
-
-        # Volatility
-        volatility = daily_returns.std() * np.sqrt(252) * 100
-
-        return {
-            'Ticker': ticker,
-            'Price': round(current_price, 2),
-            'Return_1Y': round(return_1y, 2),
-            'Return_6M': round(return_6m, 2),
-            'Return_3M': round(return_3m, 2),
-            'Return_1M': round(return_1m, 2),
-            'Peak_Ratio': round(peak_ratio, 2),
-            'UpDays_Ratio': round(updays_ratio_calc, 2),
-            'Volatility': round(volatility, 2),
-            'Last_Update': datetime.now()
-        }
-    except Exception as e:
-        if show_debug:
-            st.write(f"Error calculating metrics for {ticker}: {str(e)}")
-        return None
-
-def apply_filters(results_df):
-    """Apply user-defined filters"""
-    filtered = results_df.copy()
-
-    # Filter by 1-year return
-    filtered = filtered[filtered['Return_1Y'] >= min_return]
-
-    # Filter by peak proximity
-    filtered = filtered[filtered['Peak_Ratio'] >= peak_proximity]
-
-    # Filter by up-days ratio
-    filtered = filtered[filtered['UpDays_Ratio'] >= updays_ratio]
-
-    return filtered
-
-def calculate_rank(df):
-    """Calculate composite rank"""
-    df_rank = df.copy()
-
-    # Normalize metrics (0-100 scale)
-    df_rank['Rank_Return'] = ((df_rank['Return_1Y'] - df_rank['Return_1Y'].min()) / 
-                               (df_rank['Return_1Y'].max() - df_rank['Return_1Y'].min() + 0.001)) * 100
-    df_rank['Rank_Peak'] = ((df_rank['Peak_Ratio'] - df_rank['Peak_Ratio'].min()) / 
-                             (df_rank['Peak_Ratio'].max() - df_rank['Peak_Ratio'].min() + 0.001)) * 100
-    df_rank['Rank_UpDays'] = ((df_rank['UpDays_Ratio'] - df_rank['UpDays_Ratio'].min()) / 
-                               (df_rank['UpDays_Ratio'].max() - df_rank['UpDays_Ratio'].min() + 0.001)) * 100
-
-    # Inverse rank for volatility (lower is better)
-    df_rank['Rank_Volatility'] = ((df_rank['Volatility'].max() - df_rank['Volatility']) / 
-                                   (df_rank['Volatility'].max() - df_rank['Volatility'].min() + 0.001)) * 100
-
-    # Composite rank (equal weights)
-    df_rank['Rank_Final'] = (df_rank['Rank_Return'] + df_rank['Rank_Peak'] + 
-                             df_rank['Rank_UpDays'] + df_rank['Rank_Volatility']) / 4
-
-    return df_rank
-
-# Run Screener Button
-if st.sidebar.button("🔍 RUN SCREENER", type="primary", use_container_width=True):
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-
+@st.cache_data(ttl=3600)
+def fetch_screener_data(tickers, min_return, peak_ratio, updays_pct):
+    """Fetch and screen stock data"""
+    
     results = []
-
-    for i, ticker in enumerate(tickers):
-        status_text.text(f"Screening {i+1}/{len(tickers)}: {ticker}")
-        progress = (i + 1) / len(tickers)
-        progress_bar.progress(progress)
-
-        data = fetch_stock_data(ticker)
-        metrics = calculate_metrics(data, ticker)
-
-        if metrics is not None:
-            results.append(metrics)
-
-    status_text.text("Calculating ranks...")
-
-    if results:
-        df_results = pd.DataFrame(results)
-        df_ranked = calculate_rank(df_results)
-        df_filtered = apply_filters(df_ranked)
-
-        # Sort and get top N
-        df_final = df_filtered.sort_values(by=sort_by, ascending=False).head(top_n).reset_index(drop=True)
-        df_final['Position'] = range(1, len(df_final) + 1)
-
-        # Store in session state
-        st.session_state.df_results = df_results
-        st.session_state.df_ranked = df_ranked
-        st.session_state.df_filtered = df_filtered
-        st.session_state.df_final = df_final
-
-        status_text.success(f"✅ Screening complete! Found {len(df_final)} stocks")
-        progress_bar.empty()
-    else:
-        st.error("❌ No data retrieved. Check ticker symbols and internet connection.")
-        status_text.empty()
-        progress_bar.empty()
+    failed = []
+    
+    for ticker in tickers:
+        try:
+            end_date = datetime.today()
+            start_date = end_date - timedelta(days=ScreenerConfig.LOOKBACK_DAYS)
+            
+            # Fetch data
+            df = yf.download(ticker, start=start_date, end=end_date, progress=False)
+            
+            if df.empty or len(df) < ScreenerConfig.LOOKBACK_6M:
+                failed.append(ticker)
+                continue
+            
+            close = df['Close']
+            
+            # Calculate metrics
+            ema100 = close.ewm(span=100).mean()
+            ema200 = close.ewm(span=200).mean()
+            
+            ret_1y = (close.iloc[-1] / close.iloc[-252] - 1) if len(close) >= 252 else np.nan
+            ret_6m = (close.iloc[-1] / close.iloc[-126] - 1) if len(close) >= 126 else np.nan
+            ret_3m = (close.iloc[-1] / close.iloc[-63] - 1) if len(close) >= 63 else np.nan
+            ret_1m = (close.iloc[-1] / close.iloc[-21] - 1) if len(close) >= 21 else np.nan
+            
+            high_52w = close.iloc[-252:].max() if len(close) >= 252 else close.max()
+            peak_ratio_val = close.iloc[-1] / high_52w
+            
+            pct_change = close.pct_change()
+            up_days_6m = (pct_change.iloc[-126:] > 0).sum() if len(pct_change) >= 126 else 0
+            updays_pct_val = up_days_6m / min(126, len(pct_change))
+            
+            # Apply filters
+            if (close.iloc[-1] > ema100.iloc[-1] and 
+                ema100.iloc[-1] > ema200.iloc[-1] and
+                ret_1y >= min_return and
+                peak_ratio_val >= peak_ratio and
+                updays_pct_val >= updays_pct):
+                
+                results.append({
+                    'Ticker': ticker,
+                    'Price': round(close.iloc[-1], 2),
+                    'Return_6M': round(ret_6m * 100, 2),
+                    'Return_3M': round(ret_3m * 100, 2),
+                    'Return_1M': round(ret_1m * 100, 2),
+                    'EMA100': round(ema100.iloc[-1], 2),
+                    'EMA200': round(ema200.iloc[-1], 2),
+                    'Peak_Ratio': round(peak_ratio_val * 100, 2),
+                    'UpDays_Pct': round(updays_pct_val * 100, 2),
+                    'Volatility': round(close.pct_change().std() * np.sqrt(252) * 100, 2)
+                })
+        
+        except Exception as e:
+            failed.append(ticker)
+    
+    # Create DataFrame and rank
+    df_results = pd.DataFrame(results)
+    
+    if len(df_results) > 0:
+        df_results['Rank_6M'] = df_results['Return_6M'].rank(ascending=False)
+        df_results['Rank_3M'] = df_results['Return_3M'].rank(ascending=False)
+        df_results['Rank_1M'] = df_results['Return_1M'].rank(ascending=False)
+        df_results['Rank_Final'] = (df_results['Rank_6M'] + 
+                                     df_results['Rank_3M'] + 
+                                     df_results['Rank_1M'])
+        
+        df_results = df_results.sort_values('Rank_Final').reset_index(drop=True)
+        df_results['Position'] = range(1, len(df_results) + 1)
+    
+    return df_results, len(results), len(failed)
 
 # ============================================================================
-# RESULTS DISPLAY
+# MAIN APP
 # ============================================================================
-
-if 'df_final' in st.session_state:
-    df_final = st.session_state.df_final
-    df_filtered = st.session_state.df_filtered
-    df_ranked = st.session_state.df_ranked
-
-    st.success(f"✅ {len(df_final)} stocks matched filters")
-    st.divider()
-
-    # Create tabs
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 Rankings", "📈 Charts", "⚡ Stats", "🐛 Debug"])
-
-    # TAB 1: RANKINGS
-    with tab1:
-        st.subheader("Top Momentum Stocks")
-
-        display_cols = ['Position', 'Ticker', 'Price', 'Return_1Y', 'Return_6M', 
-                       'Return_3M', 'Return_1M', 'Peak_Ratio', 'Volatility']
-
-        df_display = df_final[display_cols].copy()
-        df_display.columns = ['#', 'Ticker', 'Price', '1Y%', '6M%', '3M%', '1M%', 'Peak%', 'Vol%']
-
-        st.dataframe(
-            df_display,
+def main():
+    # Title
+    col1, col2 = st.columns([0.7, 0.3])
+    with col1:
+        st.title("📈 Momentum Stock Screener")
+        st.markdown("**Bloomberg-Style Interactive Dashboard for Indian Markets**")
+    
+    with col2:
+        st.metric("Last Updated", datetime.now().strftime("%H:%M IST"))
+    
+    st.markdown("---")
+    
+    # ========================================================================
+    # SIDEBAR CONTROLS
+    # ========================================================================
+    with st.sidebar:
+        st.header("⚙️ Screening Parameters")
+        
+        # Filters
+        st.subheader("Filter Thresholds")
+        
+        min_1y_ret = st.slider(
+            "Minimum 1-Year Return (%)",
+            min_value=0.0,
+            max_value=50.0,
+            value=6.5,
+            step=1.0,
+            help="Minimum annual return filter"
+        )
+        
+        peak_ratio = st.slider(
+            "Peak Proximity (%)",
+            min_value=50.0,
+            max_value=100.0,
+            value=80.0,
+            step=5.0,
+            help="Distance from 52-week high (80% = near peak)"
+        )
+        
+        updays_pct = st.slider(
+            "Up-Days Ratio (%)",
+            min_value=5.0,
+            max_value=50.0,
+            value=20.0,
+            step=2.0,
+            help="Minimum % of up-days in last 6 months"
+        )
+        
+        st.markdown("---")
+        
+        # Display options
+        st.subheader("Display Options")
+        
+        top_n = st.slider(
+            "Number of Top Stocks",
+            min_value=5,
+            max_value=50,
+            value=15,
+            step=5
+        )
+        
+        sort_by = st.selectbox(
+            "Sort By",
+            options=["Rank_Final", "Return_6M", "Return_3M", "Return_1M", "Volatility"],
+            help="Column to sort results by"
+        )
+        
+        st.markdown("---")
+        
+        # Run button
+        run_screener = st.button(
+            "🔍 Run Screener",
             use_container_width=True,
-            hide_index=True,
-            column_config={
-                '#': st.column_config.NumberColumn(width=50),
-                'Ticker': st.column_config.TextColumn(width=80),
-                'Price': st.column_config.NumberColumn(width=80),
-                '1Y%': st.column_config.NumberColumn(format="%.2f %%"),
-                '6M%': st.column_config.NumberColumn(format="%.2f %%"),
-                '3M%': st.column_config.NumberColumn(format="%.2f %%"),
-                '1M%': st.column_config.NumberColumn(format="%.2f %%"),
-                'Peak%': st.column_config.NumberColumn(format="%.2f %%"),
-                'Vol%': st.column_config.NumberColumn(format="%.2f %%"),
-            }
+            key="run_btn"
         )
-
-        # Download button
-        csv = df_final.to_csv(index=False)
-        st.download_button(
-            label="📥 Download Results CSV",
-            data=csv,
-            file_name=f"screener_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-            mime="text/csv",
-            use_container_width=True
+    
+    # ========================================================================
+    # MAIN CONTENT
+    # ========================================================================
+    if run_screener:
+        # Progress bar
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        status_text.text("Fetching data and screening stocks...")
+        progress_bar.progress(50)
+        
+        # Run screening
+        df_results, passed, failed = fetch_screener_data(
+            ScreenerConfig.TICKERS,
+            min_1y_ret / 100,
+            peak_ratio / 100,
+            updays_pct / 100
         )
-
-    # TAB 2: CHARTS
-    with tab2:
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.subheader("Top 10 by 1-Year Return")
-            df_top10 = df_final.nlargest(10, 'Return_1Y')
-
-            fig = px.bar(df_top10, x='Ticker', y='Return_1Y',
-                        title="1-Year Returns (%)",
-                        color='Return_1Y',
-                        color_continuous_scale='RdYlGn',
-                        height=400)
-            fig.update_layout(showlegend=False, hovermode='x unified')
-            st.plotly_chart(fig, use_container_width=True)
-
-        with col2:
-            st.subheader("Risk-Return Profile")
-
-            fig = px.scatter(df_filtered, x='Volatility', y='Return_1Y',
-                           title="Volatility vs Returns",
-                           hover_data=['Ticker', 'Price'],
-                           size='Peak_Ratio',
-                           color='Peak_Ratio',
-                           color_continuous_scale='Viridis',
-                           height=400)
-            fig.update_layout(hovermode='closest')
-            st.plotly_chart(fig, use_container_width=True)
-
-    # TAB 3: STATS
-    with tab3:
+        
+        progress_bar.progress(100)
+        status_text.text("✅ Screening complete!")
+        
+        if len(df_results) == 0:
+            st.error("❌ No stocks passed the selected filters. Try adjusting parameters.")
+            return
+        
+        # Summary metrics
         col1, col2, col3, col4 = st.columns(4)
-
+        
         with col1:
-            st.metric("Avg 1Y Return", f"{df_filtered['Return_1Y'].mean():.2f}%")
+            st.metric(
+                "Stocks Passed",
+                f"{passed}",
+                f"+{passed - failed}",
+                delta_color="normal"
+            )
+        
         with col2:
-            st.metric("Avg Volatility", f"{df_filtered['Volatility'].mean():.2f}%")
+            st.metric(
+                "Avg Return (6M)",
+                f"{df_results['Return_6M'].mean():.1f}%",
+                delta_color="normal"
+            )
+        
         with col3:
-            st.metric("Avg Peak Ratio", f"{df_filtered['Peak_Ratio'].mean():.2f}%")
+            st.metric(
+                "Avg Volatility",
+                f"{df_results['Volatility'].mean():.1f}%",
+                delta_color="inverse"
+            )
+        
         with col4:
-            st.metric("Total Screened", len(df_ranked))
-
-        st.divider()
-
-        col1, col2 = st.columns(2)
-
+            st.metric(
+                "Success Rate",
+                f"{(passed/(passed+failed)*100):.1f}%",
+                delta_color="normal"
+            )
+        
+        st.markdown("---")
+        
+        # Tabs for different views
+        tab1, tab2, tab3, tab4 = st.tabs([
+            "📊 Rankings",
+            "📈 Charts",
+            "🔍 Details",
+            "⚡ Quick Stats"
+        ])
+        
+        # ====================================================================
+        # TAB 1: RANKINGS
+        # ====================================================================
+        with tab1:
+            df_display = df_results.head(top_n)[
+                ['Position', 'Ticker', 'Price', 'Return_6M', 'Return_3M', 
+                 'Return_1M', 'Peak_Ratio', 'Volatility', 'Rank_Final']
+            ].copy()
+            
+            # Style DataFrame
+            def highlight_returns(val):
+                if isinstance(val, float):
+                    if val > 0:
+                        return 'color: #1DB954; font-weight: 600'
+                    elif val < 0:
+                        return 'color: #E74C3C; font-weight: 600'
+                return ''
+            
+            styled_df = df_display.style.applymap(highlight_returns)
+            
+            st.dataframe(
+                styled_df,
+                use_container_width=True,
+                height=400
+            )
+            
+            # Download button
+            csv = df_results.to_csv(index=False)
+            st.download_button(
+                label="📥 Download Results (CSV)",
+                data=csv,
+                file_name=f"momentum_screening_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv"
+            )
+        
+        # ====================================================================
+        # TAB 2: CHARTS
+        # ====================================================================
+        with tab2:
+            col1, col2 = st.columns(2)
+            
+            # Returns comparison
+            with col1:
+                fig_returns = go.Figure()
+                
+                top_tickers = df_results.head(10)
+                
+                fig_returns.add_trace(go.Bar(
+                    name='6M Return',
+                    x=top_tickers['Ticker'],
+                    y=top_tickers['Return_6M'],
+                    marker_color='#1DB954'
+                ))
+                
+                fig_returns.add_trace(go.Bar(
+                    name='3M Return',
+                    x=top_tickers['Ticker'],
+                    y=top_tickers['Return_3M'],
+                    marker_color='#1ed760'
+                ))
+                
+                fig_returns.update_layout(
+                    title="Returns Comparison (Top 10)",
+                    xaxis_title="Ticker",
+                    yaxis_title="Return (%)",
+                    barmode='group',
+                    template='plotly_dark',
+                    hovermode='x unified'
+                )
+                
+                st.plotly_chart(fig_returns, use_container_width=True)
+            
+            # Volatility vs Return
+            with col2:
+                fig_scatter = go.Figure()
+                
+                fig_scatter.add_trace(go.Scatter(
+                    x=df_results['Volatility'],
+                    y=df_results['Return_6M'],
+                    mode='markers+text',
+                    text=df_results['Ticker'],
+                    textposition='top center',
+                    marker=dict(
+                        size=10,
+                        color=df_results['Return_6M'],
+                        colorscale='Greens',
+                        showscale=True
+                    ),
+                    textfont=dict(size=8)
+                ))
+                
+                fig_scatter.update_layout(
+                    title="Risk-Return Profile",
+                    xaxis_title="Volatility (%)",
+                    yaxis_title="6M Return (%)",
+                    template='plotly_dark',
+                    hovermode='closest'
+                )
+                
+                st.plotly_chart(fig_scatter, use_container_width=True)
+            
+            # Distribution
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                fig_dist = px.histogram(
+                    df_results,
+                    x='Return_6M',
+                    nbins=20,
+                    title="6M Return Distribution",
+                    color_discrete_sequence=['#1DB954']
+                )
+                fig_dist.update_layout(template='plotly_dark')
+                st.plotly_chart(fig_dist, use_container_width=True)
+            
+            with col2:
+                fig_vol = px.box(
+                    df_results,
+                    y='Volatility',
+                    title="Volatility Distribution",
+                    color_discrete_sequence=['#1DB954']
+                )
+                fig_vol.update_layout(template='plotly_dark')
+                st.plotly_chart(fig_vol, use_container_width=True)
+        
+        # ====================================================================
+        # TAB 3: DETAILS
+        # ====================================================================
+        with tab3:
+            selected_ticker = st.selectbox(
+                "Select Ticker for Details",
+                options=df_results['Ticker'].head(20)
+            )
+            
+            ticker_data = df_results[df_results['Ticker'] == selected_ticker].iloc[0]
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.markdown(f"### {selected_ticker}")
+                st.metric("Current Price", f"₹ {ticker_data['Price']}")
+                st.metric("Position", f"#{ticker_data['Position']:.0f}")
+            
+            with col2:
+                st.metric("6M Return", f"{ticker_data['Return_6M']:.1f}%")
+                st.metric("3M Return", f"{ticker_data['Return_3M']:.1f}%")
+                st.metric("1M Return", f"{ticker_data['Return_1M']:.1f}%")
+            
+            with col3:
+                st.metric("Final Rank Score", f"{ticker_data['Rank_Final']:.0f}")
+                st.metric("Peak Ratio", f"{ticker_data['Peak_Ratio']:.1f}%")
+                st.metric("Volatility", f"{ticker_data['Volatility']:.1f}%")
+            
+            # EMA levels
+            st.subheader("EMA Levels")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.metric("EMA 100", f"₹ {ticker_data['EMA100']:.2f}")
+            
+            with col2:
+                st.metric("EMA 200", f"₹ {ticker_data['EMA200']:.2f}")
+        
+        # ====================================================================
+        # TAB 4: QUICK STATS
+        # ====================================================================
+        with tab4:
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.subheader("Statistical Summary")
+                st.write(df_results[['Return_6M', 'Return_3M', 'Volatility']].describe())
+            
+            with col2:
+                st.subheader("Correlation Matrix")
+                corr_cols = ['Return_6M', 'Return_3M', 'Return_1M', 'Volatility', 'Peak_Ratio']
+                corr_matrix = df_results[corr_cols].corr()
+                
+                fig_corr = px.imshow(
+                    corr_matrix,
+                    color_continuous_scale='RdYlGn',
+                    zmin=-1, zmax=1,
+                    title="Correlation Matrix"
+                )
+                fig_corr.update_layout(template='plotly_dark')
+                st.plotly_chart(fig_corr, use_container_width=True)
+        
+        st.markdown("---")
+        
+        # Footer info
+        col1, col2, col3 = st.columns(3)
+        
         with col1:
-            st.write("**Return Distribution**")
-            fig = px.histogram(df_filtered, x='Return_1Y', nbins=20, height=300)
-            st.plotly_chart(fig, use_container_width=True)
-
+            st.info(f"✅ Passed: {passed} / Total: {passed + failed}")
+        
         with col2:
-            st.write("**Volatility Distribution**")
-            fig = px.histogram(df_filtered, x='Volatility', nbins=20, height=300)
-            st.plotly_chart(fig, use_container_width=True)
+            st.warning(f"📊 Displayed: Top {top_n} of {len(df_results)}")
+        
+        with col3:
+            st.success(f"🔄 Updated: {datetime.now().strftime('%d-%b-%Y %H:%M:%S IST')}")
+    
+    else:
+        # Initial instruction screen
+        st.info(
+            """
+            ### 🚀 Getting Started
+            
+            1. **Adjust Filters** in the left sidebar to customize your screening criteria
+            2. **Click "Run Screener"** to identify top-performing stocks
+            3. **Analyze Results** using multiple views (Rankings, Charts, Details)
+            4. **Download Data** for further analysis
+            
+            ### 📊 Available Filters
+            - **Minimum 1-Year Return**: Select stocks with at least X% annual return
+            - **Peak Proximity**: Filter stocks near their 52-week highs
+            - **Up-Days Ratio**: Select stocks with consistent upward bias
+            
+            ### 🎯 Use Cases
+            - **Intraday Trading**: Use top 5-10 stocks at market close
+            - **Swing Trading**: Use top 10-15 stocks with volume confirmation
+            - **Portfolio Selection**: Use top 20 stocks across sectors
+            
+            **Status**: Ready for screening | Last updated: {datetime.now().strftime('%H:%M IST')}
+            """
+        )
 
-    # TAB 4: DEBUG
-    with tab4:
-        if show_debug:
-            st.subheader("Debug Information")
-
-            st.write(f"**Total Stocks Screened:** {len(df_ranked)}")
-            st.write(f"**After Filters:** {len(df_filtered)}")
-            st.write(f"**Displayed:** {len(df_final)}")
-
-            st.divider()
-            st.write("**Filter Settings:**")
-            st.code(f"""
-Return Filter: >= {min_return}%
-Peak Ratio Filter: >= {peak_proximity}%
-Up-Days Filter: >= {updays_ratio}%
-            """)
-
-            st.divider()
-            st.write("**Sample Raw Data:**")
-            st.dataframe(df_ranked.head(20), use_container_width=True)
-        else:
-            st.info("Enable 'Show Debug Info' in sidebar to see debug details")
-
-st.divider()
-st.markdown("""
----
-**📊 Nifty Momentum Screener v1.0**
-CSV-Based | Real-Time Filtering | Interactive Analytics
-""")
+if __name__ == "__main__":
+    main()
