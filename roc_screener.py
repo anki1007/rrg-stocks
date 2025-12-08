@@ -1,8 +1,3 @@
-# Streamlit Momentum & ROC Screener - Bloomberg Style Dashboard
-# ============================================================================
-# Interactive Stock Screener with Advanced Filtering & Visualization
-# ============================================================================
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -24,7 +19,7 @@ st.set_page_config(
 )
 
 # ============================================================================
-# CUSTOM THEME - Bloomberg Style
+# CUSTOM THEME
 # ============================================================================
 st.markdown("""
 <style>
@@ -138,7 +133,7 @@ class ScreenerConfig:
     
     # Filter ranges
     MIN_1Y_RETURN = 0.065
-    PEAK_RATIO = 0.80
+    PEAK_RATIO = 0.75
     MIN_UPDAYS_PCT = 0.20
     
     # Data lookback
@@ -234,8 +229,8 @@ def main():
     # Title
     col1, col2 = st.columns([0.7, 0.3])
     with col1:
-        st.title("📈 Momentum Stock Screener")
-        st.markdown("**Bloomberg-Style Interactive Dashboard for Indian Markets**")
+        st.title("📈 ROC Screener")
+       
     
     with col2:
         st.metric("Last Updated", datetime.now().strftime("%H:%M IST"))
@@ -262,9 +257,9 @@ def main():
         
         peak_ratio = st.slider(
             "Peak Proximity (%)",
-            min_value=50.0,
+            min_value=30.0,
             max_value=100.0,
-            value=80.0,
+            value=75.0,
             step=5.0,
             help="Distance from 52-week high (80% = near peak)"
         )
@@ -293,7 +288,7 @@ def main():
         
         sort_by = st.selectbox(
             "Sort By",
-            options=["Rank_Final", "Return_6M", "Return_3M", "Return_1M", "Volatility"],
+            options=["Rank Final", "Return 6M", "Return 3M", "Return 1M", "Volatility"],
             help="Column to sort results by"
         )
         
