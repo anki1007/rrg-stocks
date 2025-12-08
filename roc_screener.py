@@ -1,3 +1,8 @@
+# Streamlit Momentum & ROC Screener - Bloomberg Style Dashboard
+# ============================================================================
+# Interactive Stock Screener with Advanced Filtering & Visualization
+# ============================================================================
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -15,14 +20,14 @@ warnings.filterwarnings('ignore')
 # PAGE CONFIGURATION
 # ============================================================================
 st.set_page_config(
-    page_title="ROC Screener",
+    page_title="Momentum Stock Screener",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # ============================================================================
-# CUSTOM THEME
+# CUSTOM THEME - Bloomberg Style
 # ============================================================================
 st.markdown("""
 <style>
@@ -78,8 +83,8 @@ st.markdown("""
 # ============================================================================
 
 @st.cache_data
-def get_available_csv_files(ticker_folder="tickers"):
-    """Get list of available CSV files in tickers folder"""
+def get_available_csv_files(ticker_folder="ticker"):
+    """Get list of available CSV files in ticker folder"""
     try:
         ticker_path = Path(ticker_folder)
         if ticker_path.exists():
@@ -91,21 +96,21 @@ def get_available_csv_files(ticker_folder="tickers"):
 
 
 @st.cache_data
-def load_tickers_from_csv(csv_filename, ticker_folder="tickers"):
+def load_tickers_from_csv(csv_filename, ticker_folder="ticker"):
     """Load tickers from selected CSV file"""
     try:
         csv_path = Path(ticker_folder) / f"{csv_filename}.csv"
         if csv_path.exists():
             df = pd.read_csv(csv_path)
-            # Try common column names
-            if 'symbol' in df.columns:
-                return df['symbol'].dropna().unique().tolist()
-            elif 'ticker' in df.columns:
-                return df['ticker'].dropna().unique().tolist()
-            elif 'Symbol' in df.columns:
-                return df['Symbol'].dropna().unique().tolist()
-            elif 'Ticker' in df.columns:
-                return df['Ticker'].dropna().unique().tolist()
+            # Try common column names (case-insensitive)
+            columns_lower = [col.lower() for col in df.columns]
+            
+            if 'symbol' in columns_lower:
+                idx = columns_lower.index('symbol')
+                return df[df.columns[idx]].dropna().unique().tolist()
+            elif 'ticker' in columns_lower:
+                idx = columns_lower.index('ticker')
+                return df[df.columns[idx]].dropna().unique().tolist()
             elif len(df.columns) > 0:
                 # Use first column if common names not found
                 return df.iloc[:, 0].dropna().unique().tolist()
@@ -119,7 +124,7 @@ def load_tickers_from_csv(csv_filename, ticker_folder="tickers"):
 # ============================================================================
 
 class ScreenerConfig:
-    """Configuration for ROC Screener"""
+    """Configuration for momentum screener"""
     
     # Filter ranges
     MIN_1Y_RETURN = 0.065
@@ -226,7 +231,7 @@ def main():
     col1, col2 = st.columns([0.7, 0.3])
     
     with col1:
-        st.title("📈 ROC Screener")
+        st.title("📈 Momentum Stock Screener")
         st.markdown("**Bloomberg-Style Interactive Dashboard for Indian Markets**")
     
     with col2:
@@ -248,7 +253,7 @@ def main():
         # ====== CSV SELECTION ======
         st.subheader("📁 Select Index")
         
-        available_csvs = get_available_csv_files("tickers")
+        available_csvs = get_available_csv_files("ticker")
         
         if available_csvs:
             selected_csv = st.selectbox(
@@ -259,7 +264,7 @@ def main():
             )
             
             # Load tickers from selected CSV
-            tickers = load_tickers_from_csv(selected_csv, "tickers")
+            tickers = load_tickers_from_csv(selected_csv, "ticker")
             
             if tickers:
                 st.success(f"✅ Loaded {len(tickers)} symbols from {selected_csv}")
@@ -267,8 +272,8 @@ def main():
                 st.error(f"⚠️ No symbols found in {selected_csv}")
                 tickers = []
         else:
-            st.error("❌ No CSV files found in 'tickers' folder")
-            st.info("📌 **Setup Instructions:**\n1. Create a folder named `tickers` in your project\n2. Add CSV files with symbol column (symbol, ticker, Symbol, or Ticker)\n3. Restart the app")
+            st.error("❌ No CSV files found in 'ticker' folder")
+            st.info("📌 **Setup Instructions:**\n1. Create a folder named `ticker` in your project\n2. Add CSV files with Symbol column\n3. Restart the app")
             tickers = []
         
         st.markdown("---")
@@ -439,7 +444,7 @@ def main():
             st.download_button(
                 label="📥 Download Results (CSV)",
                 data=csv,
-                file_name=f"ROC_screening_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                file_name=f"momentum_screening_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                 mime="text/csv"
             )
         
