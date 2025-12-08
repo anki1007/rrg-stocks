@@ -1,7 +1,3 @@
-# Market Breadth Terminal - Historical Regime Analysis
-## For Comparing 5Y vs 10Y Breadth with All-Time Lows
-
-```python
 import streamlit as st
 import pandas as pd
 import yfinance as yf
@@ -67,10 +63,10 @@ INDEX_CONFIG = {
 # ============================================================================
 
 with st.sidebar:
-    st.markdown("### ⚙️ SETTINGS")
-    selected_theme = st.selectbox("🎨 Theme", list(THEMES.keys()), index=0)
+    st.markdown("### Settings")
+    selected_theme = st.selectbox("Theme", list(THEMES.keys()), index=0)
     theme = THEMES[selected_theme]
-    max_workers = st.slider("⚡ Data Fetch Threads", min_value=5, max_value=20, value=10)
+    max_workers = st.slider("Data Fetch Threads", min_value=5, max_value=20, value=10)
 
 # ============================================================================
 # LOAD TICKERS FROM CSV
@@ -100,7 +96,7 @@ def load_tickers_from_csv(csv_filename):
 class HistoricalBreadthAnalyzer:
     def __init__(self, max_workers, theme):
         self.max_workers = max_workers
-        self.ema_period = 50  # Main EMA for regime analysis
+        self.ema_period = 50
         self.theme = theme
     
     def get_stock_data(self, ticker, start_date, end_date, max_retries=1):
@@ -161,7 +157,7 @@ class HistoricalBreadthAnalyzer:
                 completed += 1
                 progress = completed / len(tickers)
                 progress_bar.progress(progress)
-                status_text.text(f"📊 Fetched: {completed}/{len(tickers)}")
+                status_text.text(f"Fetched: {completed}/{len(tickers)}")
         
         progress_bar.empty()
         status_text.empty()
@@ -192,31 +188,31 @@ class HistoricalBreadthAnalyzer:
 # ============================================================================
 
 def main():
-    st.markdown("## 📊 HISTORICAL BREADTH REGIME ANALYSIS")
+    st.markdown("## Historical Breadth Regime Analysis")
     st.markdown("*Compare 5-year vs 10-year breadth patterns | Track all-time lows since 2000*")
     st.divider()
     
     # Index selection
     col1, col2 = st.columns([2, 1])
     with col1:
-        selected_index = st.selectbox("📊 Select Index", list(INDEX_CONFIG.keys()), index=0)
+        selected_index = st.selectbox("Select Index", list(INDEX_CONFIG.keys()), index=0)
     with col2:
-        st.metric("📊 Index", selected_index)
+        st.metric("Index", selected_index)
     
-    st.info(f"ℹ️ {INDEX_CONFIG[selected_index]['description']}")
+    st.info(f"Info: {INDEX_CONFIG[selected_index]['description']}")
     st.divider()
     
     # Load tickers
     selected_tickers, error = load_tickers_from_csv(INDEX_CONFIG[selected_index]['csv_name'])
     
     if error:
-        st.error(f"❌ {error}")
+        st.error(f"Error: {error}")
         st.stop()
     
     if selected_tickers:
-        st.success(f"✅ Loaded {len(selected_tickers)} tickers")
+        st.success(f"Loaded {len(selected_tickers)} tickers")
     else:
-        st.error("❌ No tickers found")
+        st.error("No tickers found")
         st.stop()
     
     st.divider()
@@ -232,23 +228,23 @@ def main():
     # =====================================================================
     
     with tab1:
-        st.markdown("### 📈 5-Year vs 10-Year Breadth Comparison")
+        st.markdown("### 5-Year vs 10-Year Breadth Comparison")
         
-        if st.button("🚀 FETCH 5Y & 10Y DATA", key="fetch_5y_10y", type="primary", use_container_width=True):
+        if st.button("FETCH 5Y & 10Y DATA", key="fetch_5y_10y", type="primary", use_container_width=True):
             analyzer = HistoricalBreadthAnalyzer(max_workers, theme)
             
             today = datetime.now()
             start_5y = today - timedelta(days=365*5)
             start_10y = today - timedelta(days=365*10)
             
-            with st.spinner("📊 Fetching 5-year data..."):
+            with st.spinner("Fetching 5-year data..."):
                 breadth_5y = analyzer.calculate_breadth(selected_tickers, start_5y, today)
             
-            with st.spinner("📊 Fetching 10-year data..."):
+            with st.spinner("Fetching 10-year data..."):
                 breadth_10y = analyzer.calculate_breadth(selected_tickers, start_10y, today)
             
             if breadth_5y and breadth_10y:
-                st.success("✅ Data fetched successfully")
+                st.success("Data fetched successfully")
                 st.session_state['breadth_5y'] = breadth_5y
                 st.session_state['breadth_10y'] = breadth_10y
                 st.session_state['selected_index'] = selected_index
@@ -319,7 +315,7 @@ def main():
             st.plotly_chart(fig, use_container_width=True)
             
             # Statistics
-            st.markdown("#### 📊 STATISTICS COMPARISON")
+            st.markdown("#### STATISTICS COMPARISON")
             
             col1, col2, col3, col4, col5 = st.columns(5)
             
@@ -352,19 +348,19 @@ def main():
     # =====================================================================
     
     with tab2:
-        st.markdown("### 🔍 All-Time Lowest Breadth Levels (2000-2025)")
+        st.markdown("### All-Time Lowest Breadth Levels (2000-2025)")
         
-        if st.button("🚀 FETCH ALL-TIME DATA (2000-2025)", key="fetch_alltime", type="primary", use_container_width=True):
+        if st.button("FETCH ALL-TIME DATA (2000-2025)", key="fetch_alltime", type="primary", use_container_width=True):
             analyzer = HistoricalBreadthAnalyzer(max_workers, theme)
             
             start_date = datetime(2000, 1, 1)
             today = datetime.now()
             
-            with st.spinner("📊 Fetching 25-year data (this takes a while)..."):
+            with st.spinner("Fetching 25-year data (this takes a while)..."):
                 breadth_alltime = analyzer.calculate_breadth(selected_tickers, start_date, today)
             
             if breadth_alltime:
-                st.success("✅ All-time data fetched")
+                st.success("All-time data fetched")
                 st.session_state['breadth_alltime'] = breadth_alltime
         
         # Display all-time data
@@ -407,7 +403,7 @@ def main():
             st.plotly_chart(fig, use_container_width=True)
             
             # Find lowest breadth periods
-            st.markdown("#### 📉 LOWEST BREADTH PERIODS")
+            st.markdown("#### LOWEST BREADTH PERIODS")
             
             # Get lowest 20 breadth days
             lowest_breadth = breadth_alltime['percent'].nsmallest(20)
@@ -425,7 +421,7 @@ def main():
             # Download lowest breadth data
             csv = df_lowest.to_csv(index=False)
             st.download_button(
-                "⬇️ Download Lowest Breadth Data (CSV)",
+                "Download Lowest Breadth Data (CSV)",
                 csv,
                 f"lowest_breadth_2000_2025_{datetime.now().strftime('%Y%m%d')}.csv",
                 "text/csv"
@@ -436,7 +432,7 @@ def main():
     # =====================================================================
     
     with tab3:
-        st.markdown("### 📋 DETAILED BREADTH TABLE")
+        st.markdown("### DETAILED BREADTH TABLE")
         
         if 'breadth_5y' in st.session_state:
             breadth_5y = st.session_state['breadth_5y']
@@ -446,7 +442,7 @@ def main():
                 'Breadth %': breadth_5y['percent'].values.round(2),
                 'Stocks Above': breadth_5y['count'].values.astype(int),
                 'Total Stocks': [breadth_5y['total']] * len(breadth_5y['percent']),
-                'Regime': ['🟢 Strong' if x >= 70 else '🟡 Bullish' if x >= 50 else '🟠 Bearish' if x >= 30 else '🔴 Weak' 
+                'Regime': ['Strong' if x >= 70 else 'Bullish' if x >= 50 else 'Bearish' if x >= 30 else 'Weak' 
                           for x in breadth_5y['percent'].values]
             })
             
@@ -455,7 +451,7 @@ def main():
             # Download
             csv = df_table.to_csv(index=False)
             st.download_button(
-                "⬇️ Download 5Y Detailed Data (CSV)",
+                "Download 5Y Detailed Data (CSV)",
                 csv,
                 f"breadth_5y_detailed_{datetime.now().strftime('%Y%m%d')}.csv",
                 "text/csv"
@@ -463,25 +459,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-```
-
----
-
-## **KEY FEATURES**
-
-✅ **5-Year vs 10-Year side-by-side comparison**  
-✅ **All-time lowest breadth since 2000** with dates and years  
-✅ **Statistical metrics** (current, avg, high, low, std dev)  
-✅ **Downloadable CSV exports**  
-✅ **Detailed table view** of all breadth data  
-✅ **Optimized with caching** for faster reruns  
-
----
-
-## **HOW TO USE**
-
-1. **Tab 1:** See 5Y vs 10Y patterns side-by-side
-2. **Tab 2:** Find historical lowest breadth points (for regime context)
-3. **Tab 3:** Export detailed daily breadth data for your analysis
-
-This is purely **historical regime analysis** - no intraday, no trading signals. Just data.
