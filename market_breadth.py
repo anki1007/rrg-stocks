@@ -135,7 +135,7 @@ with st.sidebar:
 def fetch_nse_tickers():
     """Fetch ticker list from GitHub"""
     try:
-        url = "https://raw.githubusercontent.com/anki1007/rrg-stocks/main/ticker/niftytotalmarket.csv"
+        url = "https://raw.githubusercontent.com/anki1007/rrg-stocks/main/ticker/"
         df = pd.read_csv(url)
         tickers = sorted(df['Symbol'].tolist())
         st.success(f"✅ Loaded {len(tickers)} tickers from GitHub")
