@@ -1,13 +1,3 @@
-"""
-Market Breadth Terminal v3 - Complete Streamlit App
-Bloomberg Terminal-style NSE Market Breadth Analysis
-Default: Nifty 50 (NSEI) | Dropdown: 6 Indices | Auto-load tickers from CSV
-
-Install: pip install streamlit pandas yfinance plotly
-Run: streamlit run market_breadth_terminal.py
-CSV Files: Place all 6 CSVs in same folder as this app
-"""
-
 import streamlit as st
 import pandas as pd
 import yfinance as yf
@@ -31,9 +21,8 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Bloomberg Terminal-inspired themes
 THEMES = {
-    "Bloomberg Dark": {
+    "Dark": {
         "bg_color": "#161614",
         "text_color": "#FFD700",
         "grid_color": "#2a2a2a",
@@ -73,13 +62,15 @@ THEMES = {
 
 # Index configuration
 INDEX_CONFIG = {
-    "Nifty 50 (NSEI)": {"symbol": "NSEI", "csv_name": "nifty50.csv", "description": "Top 50 large-cap stocks", "count": 50},
-    "Nifty 100": {"symbol": "^NSEI", "csv_name": "nifty100.csv", "description": "Top 100 large-cap stocks", "count": 100},
-    "Nifty 200": {"symbol": "^NIFTY200", "csv_name": "nifty200.csv", "description": "Top 200 large-cap and mid-cap stocks", "count": 200},
-    "Nifty Midcap 150": {"symbol": "^NIFTYMIDCAP150", "csv_name": "niftymidcap150.csv", "description": "Mid-cap 150 stocks", "count": 150},
-    "Nifty 500": {"symbol": "^NIFTY500", "csv_name": "nifty500.csv", "description": "Nifty 500 - Broad market index", "count": 500},
-    "Nifty Smallcap 250": {"symbol": "^NIFTYSMLCAP250", "csv_name": "niftysmallcap250.csv", "description": "Small-cap 250 stocks", "count": 250},
-}
+    "Nifty 50": {"symbol": "NSEI", "csv_name": "nifty50.csv", "description": "Top 50 Large Cap Stocks", "count": 50},
+    "Nifty 100": {"symbol": "^CNX100", "csv_name": "nifty100.csv", "description": "Top 100 Large Cap Stocks", "count": 100},
+    "Nifty 200": {"symbol": "^CNX200", "csv_name": "nifty200.csv", "description": "Top 200 Large Cap and Mid Cap Sstocks", "count": 200},
+    "Nifty 500": {"symbol": "^CRSLDX", "csv_name": "nifty500.csv", "description": "Nifty 500 - Broad Market Index", "count": 500},
+    "Nifty Total Market": {"symbol": "^NIFTY_TOTAL_MKT.NS", "csv_name": "niftytotalmarket.csv", "description": "Nifty Total Index", "count": 750},
+    "Nifty Midcap 150": {"symbol": "^NIFTYMIDCAP150.NS", "csv_name": "niftymidcap150.csv", "description": "Mid Cap 150 Stocks", "count": 150},
+    "Nifty Smallcap 250": {"symbol": "^NIFTYSMLCAP250.NS", "csv_name": "niftysmallcap250.csv", "description": "Small Cap 250 Stocks", "count": 250},
+    "Nifty Mid Smallcap 400": {"symbol": "^NIFTYMIDSML400.NS", "csv_name": "niftymidsmallcap400.csv", "description": "Mid-Small Cap 400 Stocks", "count": 400},
+    }
 
 # ============================================================================
 # SIDEBAR
