@@ -62,12 +62,12 @@ THEMES = {
 # Index configuration - Maps to CSV files in same directory
 INDEX_CONFIG = {
     "Nifty 50": {
-        "csv_name": "nifty50.csv",
+        "csv_name": "ticker/nifty50.csv",
         "description": "Top 50 Large Cap Stocks",
         "count": 50
     },
     "Nifty 100": {
-        "csv_name": "nifty100.csv",
+        "csv_name": "ticker/nifty100.csv",
         "description": "Top 100 Large Cap Stocks",
         "count": 100
     },
