@@ -6,11 +6,14 @@ from plotly.subplots import make_subplots
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 import warnings
+import time
+import random
+
 warnings.filterwarnings('ignore')
 
 st.set_page_config(
     page_title="Historical Breadth Regime Analysis",
-    page_icon="📊",
+    page_icon="chart",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -57,7 +60,8 @@ with st.sidebar:
     st.markdown("### Settings")
     selected_theme = st.selectbox("Theme", list(THEMES.keys()), index=0)
     theme = THEMES[selected_theme]
-    max_workers = st.slider("Data Fetch Threads", min_value=5, max_value=20, value=10)
+    max_workers = st.slider("Data Fetch Threads", min_value=1, max_value=5, value=2)
+    request_delay = st.slider("Delay Between Requests (seconds)", min_value=0.1, max_value=2.0, value=0.5, step=0.1)
 
 @st.cache_data(ttl=3600)
 def load_tickers_from_csv(csv_filename):
@@ -76,27 +80,48 @@ def load_tickers_from_csv(csv_filename):
         return None, f"Error: {str(e)}"
 
 class HistoricalBreadthAnalyzer:
-    def __init__(self, max_workers, theme):
+    def __init__(self, max_workers, theme, request_delay=0.5):
         self.max_workers = max_workers
         self.ema_period = 50
         self.theme = theme
+        self.request_delay = request_delay
+        self.failed_tickers = []
     
-    def get_stock_data(self, ticker, start_date, end_date, max_retries=1):
+    def get_stock_data(self, ticker, start_date, end_date, max_retries=3):
         for attempt in range(max_retries):
             try:
+                time.sleep(self.request_delay + random.uniform(0, 0.3))
+                
                 hist = yf.download(
                     ticker,
                     start=start_date,
                     end=end_date,
                     progress=False,
-                    timeout=5
+                    timeout=15
                 )
-                if hist.empty or len(hist) < 100:
+                
+                if hist.empty or len(hist) < 50:
                     return None
+                
                 return hist['Close'].dropna()
-            except:
+            
+            except Exception as e:
+                error_str = str(e).lower()
+                
+                if 'rate limit' in error_str or '429' in error_str:
+                    wait_time = (attempt + 1) * 2 + random.uniform(0, 1)
+                    time.sleep(wait_time)
+                    continue
+                
+                if 'timeout' in error_str or 'connection' in error_str:
+                    if attempt < max_retries - 1:
+                        time.sleep(2 ** attempt)
+                        continue
+                
                 if attempt == max_retries - 1:
+                    self.failed_tickers.append(ticker)
                     return None
+        
         return None
     
     @staticmethod
@@ -105,7 +130,7 @@ class HistoricalBreadthAnalyzer:
     
     def analyze_ticker(self, ticker, start_date, end_date):
         data = self.get_stock_data(ticker, start_date, end_date)
-        if data is None or len(data) < 100:
+        if data is None or len(data) < 50:
             return None
         
         ema = self.calculate_ema(data, self.ema_period)
@@ -119,26 +144,31 @@ class HistoricalBreadthAnalyzer:
         
         all_results = {}
         completed = 0
+        self.failed_tickers = []
         
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            futures = [executor.submit(self.analyze_ticker, ticker, start_date, end_date) 
-                      for ticker in tickers]
+            futures = {executor.submit(self.analyze_ticker, ticker, start_date, end_date): ticker 
+                      for ticker in tickers}
             
-            for idx, future in enumerate(futures):
+            for future in futures:
                 try:
-                    result = future.result(timeout=10)
+                    result = future.result(timeout=60)
+                    ticker = futures[future]
                     if result is not None:
-                        all_results[tickers[idx]] = result
-                except:
+                        all_results[ticker] = result
+                except Exception:
                     pass
                 
                 completed += 1
                 progress = completed / len(tickers)
                 progress_bar.progress(progress)
-                status_text.text(f"Fetched: {completed}/{len(tickers)}")
+                status_text.text(f"Fetched: {completed}/{len(tickers)} | Failed: {len(self.failed_tickers)}")
         
         progress_bar.empty()
         status_text.empty()
+        
+        if len(all_results) < len(tickers) * 0.3:
+            st.warning(f"Only {len(all_results)} out of {len(tickers)} tickers loaded. Network may be rate-limited.")
         
         if not all_results:
             return None
@@ -157,7 +187,8 @@ class HistoricalBreadthAnalyzer:
         return {
             'percent': breadth_percent,
             'count': breadth_count,
-            'total': len(all_results)
+            'total': len(all_results),
+            'failed': len(self.failed_tickers)
         }
 
 def main():
@@ -194,7 +225,7 @@ def main():
         st.markdown("### 5-Year vs 10-Year Breadth Comparison")
         
         if st.button("FETCH 5Y & 10Y DATA", key="fetch_5y_10y", type="primary", use_container_width=True):
-            analyzer = HistoricalBreadthAnalyzer(max_workers, theme)
+            analyzer = HistoricalBreadthAnalyzer(max_workers, theme, request_delay)
             
             today = datetime.now()
             start_5y = today - timedelta(days=365*5)
@@ -303,7 +334,7 @@ def main():
         st.markdown("### All-Time Lowest Breadth Levels (2000-2025)")
         
         if st.button("FETCH ALL-TIME DATA (2000-2025)", key="fetch_alltime", type="primary", use_container_width=True):
-            analyzer = HistoricalBreadthAnalyzer(max_workers, theme)
+            analyzer = HistoricalBreadthAnalyzer(max_workers, theme, request_delay)
             
             start_date = datetime(2000, 1, 1)
             today = datetime.now()
