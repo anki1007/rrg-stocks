@@ -1,8 +1,3 @@
-# Streamlit Momentum & ROC Screener - Bloomberg Style Dashboard
-# ============================================================================
-# Interactive Stock Screener with Advanced Filtering & Visualization
-# ============================================================================
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -11,20 +6,23 @@ import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime, timedelta
 import warnings
+import os
+from pathlib import Path
+
 warnings.filterwarnings('ignore')
 
 # ============================================================================
 # PAGE CONFIGURATION
 # ============================================================================
 st.set_page_config(
-    page_title="Momentum Stock Screener",
+    page_title="ROC Screener",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # ============================================================================
-# CUSTOM THEME - Bloomberg Style
+# CUSTOM THEME
 # ============================================================================
 st.markdown("""
 <style>
@@ -50,91 +48,78 @@ st.markdown("""
         color: #e8e8e8 !important;
     }
     
-    /* Input fields */
-    .stTextInput input, .stSelectbox select, .stSlider input {
-        background-color: #2a3142 !important;
-        color: #1DB954 !important;
-        border: 1px solid #1DB954 !important;
+    /* Metric cards */
+    .metric-card {
+        background: rgba(29, 185, 84, 0.1);
+        border-left: 4px solid #1DB954;
+        padding: 15px;
+        border-radius: 8px;
     }
     
-    /* Buttons */
+    /* Button styling */
     .stButton > button {
         background: linear-gradient(90deg, #1DB954 0%, #1ed760 100%);
-        color: #000 !important;
-        font-weight: 600;
-        border: none !important;
+        color: white !important;
+        border: none;
         border-radius: 8px;
-        padding: 10px 24px;
-        transition: all 0.3s ease;
+        font-weight: 600;
+        padding: 10px 20px;
     }
     
     .stButton > button:hover {
-        transform: scale(1.05);
-        box-shadow: 0 0 20px rgba(29, 185, 84, 0.6);
-    }
-    
-    /* Metric cards */
-    .metric-card {
-        background: linear-gradient(135deg, #1e2935 0%, #2a3547 100%);
-        border-left: 4px solid #1DB954;
-        padding: 16px;
-        border-radius: 8px;
-        margin: 10px 0;
-    }
-    
-    /* Data frames */
-    .stDataFrame {
-        background-color: #1e2935 !important;
-    }
-    
-    /* Positive values - green */
-    .positive {
-        color: #1DB954 !important;
-        font-weight: 600;
-    }
-    
-    /* Negative values - red */
-    .negative {
-        color: #E74C3C !important;
-        font-weight: 600;
-    }
-    
-    /* Expander styling */
-    .streamlit-expanderHeader {
-        background-color: #2a3547 !important;
-        border: 1px solid #1DB954 !important;
-    }
-    
-    /* Tab styling */
-    .stTabs [data-baseweb="tab-list"] button {
-        background-color: #2a3142 !important;
-        color: #1DB954 !important;
-    }
-    
-    .stTabs [aria-selected="true"] {
-        background-color: #1DB954 !important;
-        color: #000 !important;
+        background: linear-gradient(90deg, #1ed760 0%, #1DB954 100%);
+        transform: scale(1.02);
     }
 </style>
 """, unsafe_allow_html=True)
 
 # ============================================================================
+# UTILITY FUNCTIONS - Load CSV Files
+# ============================================================================
+
+@st.cache_data
+def get_available_csv_files(ticker_folder="tickers"):
+    """Get list of available CSV files in tickers folder"""
+    try:
+        ticker_path = Path(ticker_folder)
+        if ticker_path.exists():
+            csv_files = sorted([f.stem for f in ticker_path.glob("*.csv")])
+            return csv_files if csv_files else []
+    except Exception as e:
+        pass
+    return []
+
+
+@st.cache_data
+def load_tickers_from_csv(csv_filename, ticker_folder="tickers"):
+    """Load tickers from selected CSV file"""
+    try:
+        csv_path = Path(ticker_folder) / f"{csv_filename}.csv"
+        if csv_path.exists():
+            df = pd.read_csv(csv_path)
+            # Try common column names
+            if 'symbol' in df.columns:
+                return df['symbol'].dropna().unique().tolist()
+            elif 'ticker' in df.columns:
+                return df['ticker'].dropna().unique().tolist()
+            elif 'Symbol' in df.columns:
+                return df['Symbol'].dropna().unique().tolist()
+            elif 'Ticker' in df.columns:
+                return df['Ticker'].dropna().unique().tolist()
+            elif len(df.columns) > 0:
+                # Use first column if common names not found
+                return df.iloc[:, 0].dropna().unique().tolist()
+    except Exception as e:
+        pass
+    return []
+
+
+# ============================================================================
 # CONFIGURATION CLASS
 # ============================================================================
+
 class ScreenerConfig:
-    """Configuration for momentum screener"""
-    
-    TICKERS = [
-        'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'BHARTIARTL.NS', 'ICICIBANK.NS',
-        'SBIN.NS', 'INFY.NS', 'LICI.NS', 'HINDUNILVR.NS', 'ITC.NS', 'LT.NS',
-        'BAJFINANCE.NS', 'MARUTI.NS', 'HCLTECH.NS', 'ADANIENT.NS', 'AXISBANK.NS',
-        'SUNPHARMA.NS', 'TATAMOTORS.NS', 'MM.NS', 'NTPC.NS', 'KOTAKBANK.NS',
-        'ONGC.NS', 'HAL.NS', 'DMART.NS', 'TITAN.NS', 'ULTRACEMCO.NS', 'ADANIPORTS.NS',
-        'ADANIPOWER.NS', 'ADANIGREEN.NS', 'COALINDIA.NS', 'POWERGRID.NS', 'ASIANPAINT.NS',
-        'BAJAJ-AUTO.NS', 'WIPRO.NS', 'BAJAJFINSV.NS', 'SIEMENS.NS', 'NESTLEIND.NS',
-        'IOC.NS', 'IRFC.NS', 'JIOFIN.NS', 'TATASTEEL.NS', 'JSWSTEEL.NS', 'DLF.NS',
-        'BEL.NS', 'VBL.NS', 'TRENT.NS', 'VEDL.NS'
-    ]
+    """Configuration for ROC Screener"""
     
     # Filter ranges
     MIN_1Y_RETURN = 0.065
@@ -148,13 +133,14 @@ class ScreenerConfig:
     LOOKBACK_3M = 63
     LOOKBACK_1M = 21
 
+
 # ============================================================================
 # SCREENER CLASS
 # ============================================================================
+
 @st.cache_data(ttl=3600)
 def fetch_screener_data(tickers, min_return, peak_ratio, updays_pct):
     """Fetch and screen stock data"""
-    
     results = []
     failed = []
     
@@ -189,7 +175,7 @@ def fetch_screener_data(tickers, min_return, peak_ratio, updays_pct):
             updays_pct_val = up_days_6m / min(126, len(pct_change))
             
             # Apply filters
-            if (close.iloc[-1] > ema100.iloc[-1] and 
+            if (close.iloc[-1] > ema100.iloc[-1] and
                 ema100.iloc[-1] > ema200.iloc[-1] and
                 ret_1y >= min_return and
                 peak_ratio_val >= peak_ratio and
@@ -218,37 +204,76 @@ def fetch_screener_data(tickers, min_return, peak_ratio, updays_pct):
         df_results['Rank_6M'] = df_results['Return_6M'].rank(ascending=False)
         df_results['Rank_3M'] = df_results['Return_3M'].rank(ascending=False)
         df_results['Rank_1M'] = df_results['Return_1M'].rank(ascending=False)
-        df_results['Rank_Final'] = (df_results['Rank_6M'] + 
-                                     df_results['Rank_3M'] + 
-                                     df_results['Rank_1M'])
-        
+        df_results['Rank_Final'] = (df_results['Rank_6M'] +
+                                    df_results['Rank_3M'] +
+                                    df_results['Rank_1M'])
         df_results = df_results.sort_values('Rank_Final').reset_index(drop=True)
         df_results['Position'] = range(1, len(df_results) + 1)
     
     return df_results, len(results), len(failed)
 
+
 # ============================================================================
 # MAIN APP
 # ============================================================================
+
 def main():
+    # Initialize session state for last update time
+    if 'last_scan_time' not in st.session_state:
+        st.session_state.last_scan_time = None
+    
     # Title
     col1, col2 = st.columns([0.7, 0.3])
+    
     with col1:
-        st.title("📈 Momentum Stock Screener")
+        st.title("📈 ROC Screener")
         st.markdown("**Bloomberg-Style Interactive Dashboard for Indian Markets**")
     
     with col2:
-        st.metric("Last Updated", datetime.now().strftime("%H:%M IST"))
+        # Display last scan time or current time
+        if st.session_state.last_scan_time:
+            st.metric("Last Updated", st.session_state.last_scan_time)
+        else:
+            st.metric("Last Updated", datetime.now().strftime("%H:%M IST"))
     
     st.markdown("---")
     
     # ========================================================================
     # SIDEBAR CONTROLS
     # ========================================================================
+    
     with st.sidebar:
         st.header("⚙️ Screening Parameters")
         
-        # Filters
+        # ====== CSV SELECTION ======
+        st.subheader("📁 Select Index")
+        
+        available_csvs = get_available_csv_files("tickers")
+        
+        if available_csvs:
+            selected_csv = st.selectbox(
+                "Choose CSV Index File",
+                options=available_csvs,
+                help="Select the index/watchlist to screen",
+                key="csv_select"
+            )
+            
+            # Load tickers from selected CSV
+            tickers = load_tickers_from_csv(selected_csv, "tickers")
+            
+            if tickers:
+                st.success(f"✅ Loaded {len(tickers)} symbols from {selected_csv}")
+            else:
+                st.error(f"⚠️ No symbols found in {selected_csv}")
+                tickers = []
+        else:
+            st.error("❌ No CSV files found in 'tickers' folder")
+            st.info("📌 **Setup Instructions:**\n1. Create a folder named `tickers` in your project\n2. Add CSV files with symbol column (symbol, ticker, Symbol, or Ticker)\n3. Restart the app")
+            tickers = []
+        
+        st.markdown("---")
+        
+        # ====== FILTER THRESHOLDS ======
         st.subheader("Filter Thresholds")
         
         min_1y_ret = st.slider(
@@ -280,7 +305,7 @@ def main():
         
         st.markdown("---")
         
-        # Display options
+        # ====== DISPLAY OPTIONS ======
         st.subheader("Display Options")
         
         top_n = st.slider(
@@ -303,23 +328,28 @@ def main():
         run_screener = st.button(
             "🔍 Run Screener",
             use_container_width=True,
-            key="run_btn"
+            key="run_btn",
+            disabled=(len(tickers) == 0)
         )
     
     # ========================================================================
     # MAIN CONTENT
     # ========================================================================
-    if run_screener:
+    
+    if run_screener and tickers:
+        # Update the scan time
+        scan_start = datetime.now()
+        st.session_state.last_scan_time = scan_start.strftime("%H:%M IST")
+        
         # Progress bar
         progress_bar = st.progress(0)
         status_text = st.empty()
-        
         status_text.text("Fetching data and screening stocks...")
         progress_bar.progress(50)
         
         # Run screening
         df_results, passed, failed = fetch_screener_data(
-            ScreenerConfig.TICKERS,
+            tickers,
             min_1y_ret / 100,
             peak_ratio / 100,
             updays_pct / 100
@@ -327,6 +357,9 @@ def main():
         
         progress_bar.progress(100)
         status_text.text("✅ Screening complete!")
+        
+        # Display status with last update time
+        st.markdown(f"**Status**: Ready for screening | Last updated: {st.session_state.last_scan_time}")
         
         if len(df_results) == 0:
             st.error("❌ No stocks passed the selected filters. Try adjusting parameters.")
@@ -377,9 +410,10 @@ def main():
         # ====================================================================
         # TAB 1: RANKINGS
         # ====================================================================
+        
         with tab1:
             df_display = df_results.head(top_n)[
-                ['Position', 'Ticker', 'Price', 'Return_6M', 'Return_3M', 
+                ['Position', 'Ticker', 'Price', 'Return_6M', 'Return_3M',
                  'Return_1M', 'Peak_Ratio', 'Volatility', 'Rank_Final']
             ].copy()
             
@@ -405,13 +439,14 @@ def main():
             st.download_button(
                 label="📥 Download Results (CSV)",
                 data=csv,
-                file_name=f"momentum_screening_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                file_name=f"ROC_screening_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                 mime="text/csv"
             )
         
         # ====================================================================
         # TAB 2: CHARTS
         # ====================================================================
+        
         with tab2:
             col1, col2 = st.columns(2)
             
@@ -486,6 +521,7 @@ def main():
                     title="6M Return Distribution",
                     color_discrete_sequence=['#1DB954']
                 )
+                
                 fig_dist.update_layout(template='plotly_dark')
                 st.plotly_chart(fig_dist, use_container_width=True)
             
@@ -496,12 +532,14 @@ def main():
                     title="Volatility Distribution",
                     color_discrete_sequence=['#1DB954']
                 )
+                
                 fig_vol.update_layout(template='plotly_dark')
                 st.plotly_chart(fig_vol, use_container_width=True)
         
         # ====================================================================
         # TAB 3: DETAILS
         # ====================================================================
+        
         with tab3:
             selected_ticker = st.selectbox(
                 "Select Ticker for Details",
@@ -529,6 +567,7 @@ def main():
             
             # EMA levels
             st.subheader("EMA Levels")
+            
             col1, col2 = st.columns(2)
             
             with col1:
@@ -540,6 +579,7 @@ def main():
         # ====================================================================
         # TAB 4: QUICK STATS
         # ====================================================================
+        
         with tab4:
             col1, col2 = st.columns(2)
             
@@ -549,6 +589,7 @@ def main():
             
             with col2:
                 st.subheader("Correlation Matrix")
+                
                 corr_cols = ['Return_6M', 'Return_3M', 'Return_1M', 'Volatility', 'Peak_Ratio']
                 corr_matrix = df_results[corr_cols].corr()
                 
@@ -558,6 +599,7 @@ def main():
                     zmin=-1, zmax=1,
                     title="Correlation Matrix"
                 )
+                
                 fig_corr.update_layout(template='plotly_dark')
                 st.plotly_chart(fig_corr, use_container_width=True)
         
@@ -582,23 +624,33 @@ def main():
             ### 🚀 Getting Started
             
             1. **Adjust Filters** in the left sidebar to customize your screening criteria
+            
             2. **Click "Run Screener"** to identify top-performing stocks
+            
             3. **Analyze Results** using multiple views (Rankings, Charts, Details)
+            
             4. **Download Data** for further analysis
             
             ### 📊 Available Filters
+            
             - **Minimum 1-Year Return**: Select stocks with at least X% annual return
+            
             - **Peak Proximity**: Filter stocks near their 52-week highs
+            
             - **Up-Days Ratio**: Select stocks with consistent upward bias
             
             ### 🎯 Use Cases
+            
             - **Intraday Trading**: Use top 5-10 stocks at market close
+            
             - **Swing Trading**: Use top 10-15 stocks with volume confirmation
+            
             - **Portfolio Selection**: Use top 20 stocks across sectors
             
             **Status**: Ready for screening | Last updated: {datetime.now().strftime('%H:%M IST')}
             """
         )
+
 
 if __name__ == "__main__":
     main()
