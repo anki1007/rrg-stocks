@@ -115,10 +115,10 @@ with st.sidebar:
     
     st.divider()
     
-    lookback_days = st.slider("📅 Historical Data (Years)", min_value=1, max_value=10, value=5, step=1)
+    lookback_days = st.slider("📅 Historical Data (Years)", min_value=1, max_value=25, value=10, step=1)
     lookback_days = lookback_days * 365
     
-    max_workers = st.slider("⚡ Data Fetch Threads", min_value=5, max_value=20, value=10)
+    max_workers = st.slider("⚡ Data Fetch Threads", min_value=5, max_value=30, value=10)
     
     st.divider()
     
