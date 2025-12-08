@@ -72,32 +72,32 @@ INDEX_CONFIG = {
         "count": 100
     },
     "Nifty 200": {
-        "csv_name": "nifty200.csv",
+        "csv_name": "ticker/nifty200.csv",
         "description": "Top 200 Large Cap and Mid Cap Stocks",
         "count": 200
     },
     "Nifty 500": {
-        "csv_name": "nifty500.csv",
+        "csv_name": "ticker/nifty500.csv",
         "description": "Nifty 500 - Broad Market Index",
         "count": 500
     },
     "Nifty Total Market": {
-        "csv_name": "niftytotalmarket.csv",
+        "csv_name": "ticker/niftytotalmarket.csv",
         "description": "Nifty Total Market Index",
         "count": 750
     },
     "Nifty Midcap 150": {
-        "csv_name": "niftymidcap150.csv",
+        "csv_name": "ticker/niftymidcap150.csv",
         "description": "Mid Cap 150 Stocks",
         "count": 150
     },
     "Nifty Smallcap 250": {
-        "csv_name": "niftysmallcap250.csv",
+        "csv_name": "ticker/niftysmallcap250.csv",
         "description": "Small Cap 250 Stocks",
         "count": 250
     },
     "Nifty Mid-Smallcap 400": {
-        "csv_name": "niftymidsmallcap400.csv",
+        "csv_name": "ticker/niftymidsmallcap400.csv",
         "description": "Mid-Small Cap 400 Stocks",
         "count": 400
     },
