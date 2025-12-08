@@ -1,3 +1,13 @@
+"""
+Market Breadth Terminal v3 - Complete Streamlit App
+Bloomberg Terminal-style NSE Market Breadth Analysis
+Default: Nifty 50 (NSEI) | Dropdown: 6 Indices | Auto-load tickers from CSV
+
+Install: pip install streamlit pandas yfinance plotly
+Run: streamlit run market_breadth_terminal.py
+CSV Files: Place all 6 CSVs in same folder as this app
+"""
+
 import streamlit as st
 import pandas as pd
 import yfinance as yf
@@ -5,13 +15,13 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
-import numpy as np
+import io
 import warnings
 warnings.filterwarnings('ignore')
 
 
 # ============================================================================
-# PAGE CONFIG & THEME SETUP
+# PAGE CONFIG
 # ============================================================================
 
 st.set_page_config(
@@ -27,12 +37,7 @@ THEMES = {
         "bg_color": "#161614",
         "text_color": "#FFD700",
         "grid_color": "#2a2a2a",
-        "ema_colors": {
-            "20": "#FF6B9D",
-            "50": "#4ECDC4",
-            "100": "#95E1D3",
-            "200": "#FF6348"
-        },
+        "ema_colors": {"20": "#FF6B9D", "50": "#4ECDC4", "100": "#95E1D3", "200": "#FF6348"},
         "up_color": "#00D084",
         "down_color": "#FF5E78",
         "neutral_color": "#FFD700"
@@ -41,12 +46,7 @@ THEMES = {
         "bg_color": "#0B0E11",
         "text_color": "#00FF41",
         "grid_color": "#1a1a1a",
-        "ema_colors": {
-            "20": "#39FF14",
-            "50": "#00FF41",
-            "100": "#0FFF50",
-            "200": "#3FFF00"
-        },
+        "ema_colors": {"20": "#39FF14", "50": "#00FF41", "100": "#0FFF50", "200": "#3FFF00"},
         "up_color": "#39FF14",
         "down_color": "#FF0000",
         "neutral_color": "#00FF41"
@@ -55,12 +55,7 @@ THEMES = {
         "bg_color": "#0a0015",
         "text_color": "#00D9FF",
         "grid_color": "#1a0033",
-        "ema_colors": {
-            "20": "#FF10F0",
-            "50": "#00D9FF",
-            "100": "#B537F2",
-            "200": "#FF006E"
-        },
+        "ema_colors": {"20": "#FF10F0", "50": "#00D9FF", "100": "#B537F2", "200": "#FF006E"},
         "up_color": "#00FF88",
         "down_color": "#FF0055",
         "neutral_color": "#00D9FF"
@@ -69,49 +64,37 @@ THEMES = {
         "bg_color": "#FFFFFF",
         "text_color": "#1F2937",
         "grid_color": "#E5E7EB",
-        "ema_colors": {
-            "20": "#EF4444",
-            "50": "#3B82F6",
-            "100": "#10B981",
-            "200": "#F59E0B"
-        },
+        "ema_colors": {"20": "#EF4444", "50": "#3B82F6", "100": "#10B981", "200": "#F59E0B"},
         "up_color": "#10B981",
         "down_color": "#EF4444",
         "neutral_color": "#6B7280"
     }
 }
 
+# Index configuration
+INDEX_CONFIG = {
+    "Nifty 50 (NSEI)": {"symbol": "NSEI", "csv_name": "nifty50.csv", "description": "Top 50 large-cap stocks", "count": 50},
+    "Nifty 100": {"symbol": "^NSEI", "csv_name": "nifty100.csv", "description": "Top 100 large-cap stocks", "count": 100},
+    "Nifty 200": {"symbol": "^NIFTY200", "csv_name": "nifty200.csv", "description": "Top 200 large-cap and mid-cap stocks", "count": 200},
+    "Nifty Midcap 150": {"symbol": "^NIFTYMIDCAP150", "csv_name": "niftymidcap150.csv", "description": "Mid-cap 150 stocks", "count": 150},
+    "Nifty 500": {"symbol": "^NIFTY500", "csv_name": "nifty500.csv", "description": "Nifty 500 - Broad market index", "count": 500},
+    "Nifty Smallcap 250": {"symbol": "^NIFTYSMLCAP250", "csv_name": "niftysmallcap250.csv", "description": "Small-cap 250 stocks", "count": 250},
+}
+
 # ============================================================================
-# SIDEBAR - THEME & SETTINGS
+# SIDEBAR
 # ============================================================================
 
 with st.sidebar:
     st.markdown("### ⚙️ TERMINAL SETTINGS")
     
-    selected_theme = st.selectbox(
-        "🎨 Select Theme",
-        list(THEMES.keys()),
-        index=0
-    )
-    
+    selected_theme = st.selectbox("🎨 Select Theme", list(THEMES.keys()), index=0)
     theme = THEMES[selected_theme]
     
     st.divider()
     
-    lookback_days = st.slider(
-        "📅 Historical Data (Days)",
-        min_value=365,
-        max_value=365*10,
-        value=365*5,
-        step=365
-    )
-    
-    max_workers = st.slider(
-        "⚡ Data Fetch Threads",
-        min_value=5,
-        max_value=20,
-        value=10
-    )
+    lookback_days = st.slider("📅 Historical Data (Days)", min_value=365, max_value=365*10, value=365*5, step=365)
+    max_workers = st.slider("⚡ Data Fetch Threads", min_value=5, max_value=20, value=10)
     
     st.divider()
     
@@ -128,51 +111,36 @@ with st.sidebar:
 
 
 # ============================================================================
-# FETCH TICKERS FROM GITHUB OR USE FALLBACK
+# LOAD TICKERS FROM CSV
 # ============================================================================
 
-@st.cache_data(ttl=3600)
-def fetch_nse_tickers():
-    """Fetch ticker list from GitHub"""
+def load_tickers_from_csv(csv_filename):
+    """Load tickers from CSV file"""
     try:
-        url = "https://raw.githubusercontent.com/anki1007/rrg-stocks/main/ticker/"
-        df = pd.read_csv(url)
-        tickers = sorted(df['Symbol'].tolist())
-        st.success(f"✅ Loaded {len(tickers)} tickers from GitHub")
+        df = pd.read_csv(csv_filename)
+        # Try different column names
+        symbol_col = None
+        for col_name in ['Symbol', 'SYMBOL', 'Ticker', 'ticker', 'symbol']:
+            if col_name in df.columns:
+                symbol_col = col_name
+                break
+        
+        if symbol_col is None:
+            st.error(f"❌ Could not find Symbol column in {csv_filename}")
+            return []
+        
+        tickers = sorted(df[symbol_col].unique().tolist())
         return tickers
+    except FileNotFoundError:
+        st.warning(f"⚠️ File not found: {csv_filename}")
+        return []
     except Exception as e:
-        st.warning("⚠️ Could not fetch from GitHub. Using Nifty 100 fallback...")
-        return get_fallback_tickers()
-
-
-def get_fallback_tickers():
-    """Nifty 100 fallback tickers"""
-    return [
-        'ABB.NS', 'ADANIENSOL.NS', 'ADANIENT.NS', 'ADANIGREEN.NS', 'ADANIPORTS.NS',
-        'ADANIPOWER.NS', 'ATGL.NS', 'AMBUJACEM.NS', 'APOLLOHOSP.NS', 'ASIANPAINT.NS',
-        'DMART.NS', 'AXISBANK.NS', 'BAJAJ-AUTO.NS', 'BAJFINANCE.NS', 'BAJAJFINSV.NS',
-        'BAJAJHLDNG.NS', 'BANKBARODA.NS', 'BEL.NS', 'BHEL.NS', 'BPCL.NS',
-        'BHARTIARTL.NS', 'BOSCHLTD.NS', 'BRITANNIA.NS', 'CANBK.NS', 'CHOLAFIN.NS',
-        'CIPLA.NS', 'COALINDIA.NS', 'DLF.NS', 'DABUR.NS', 'DIVISLAB.NS',
-        'DRREDDY.NS', 'EICHERMOT.NS', 'GAIL.NS', 'GODREJCP.NS', 'GRASIM.NS',
-        'HCLTECH.NS', 'HDFCBANK.NS', 'HDFCLIFE.NS', 'HAVELLS.NS', 'HEROMOTOCO.NS',
-        'HINDALCO.NS', 'HAL.NS', 'HINDUNILVR.NS', 'ICICIBANK.NS', 'ICICIGI.NS',
-        'ICICIPRULI.NS', 'ITC.NS', 'IOC.NS', 'IRCTC.NS', 'IRFC.NS',
-        'INDUSINDBK.NS', 'NAUKRI.NS', 'INFY.NS', 'INDIGO.NS', 'JSWENERGY.NS',
-        'JSWSTEEL.NS', 'JINDALSTEL.NS', 'JIOFIN.NS', 'KOTAKBANK.NS', 'LTIM.NS',
-        'LT.NS', 'LICI.NS', 'LODHA.NS', 'M&M.NS', 'MARUTI.NS', 'NHPC.NS',
-        'NTPC.NS', 'NESTLEIND.NS', 'ONGC.NS', 'PIDILITIND.NS', 'PFC.NS',
-        'POWERGRID.NS', 'PNB.NS', 'RECLTD.NS', 'RELIANCE.NS', 'SBILIFE.NS',
-        'MOTHERSON.NS', 'SHREECEM.NS', 'SHRIRAMFIN.NS', 'SIEMENS.NS', 'SBIN.NS',
-        'SUNPHARMA.NS', 'TVSMOTOR.NS', 'TCS.NS', 'TATACONSUM.NS', 'TATAMOTORS.NS',
-        'TATAPOWER.NS', 'TATASTEEL.NS', 'TECHM.NS', 'TITAN.NS', 'TORNTPHARM.NS',
-        'TRENT.NS', 'ULTRACEMCO.NS', 'UNIONBANK.NS', 'UNITDSPR.NS', 'VBL.NS',
-        'VEDL.NS', 'WIPRO.NS', 'ZOMATO.NS', 'ZYDUSLIFE.NS'
-    ]
+        st.error(f"❌ Error loading {csv_filename}: {e}")
+        return []
 
 
 # ============================================================================
-# MARKET BREADTH ANALYZER CLASS
+# MARKET BREADTH ANALYZER
 # ============================================================================
 
 class MarketBreadthAnalyzer:
@@ -195,7 +163,7 @@ class MarketBreadthAnalyzer:
                     return None
                 
                 return hist['Close'].dropna()
-            except Exception as e:
+            except:
                 if attempt == max_retries - 1:
                     return None
         return None
@@ -214,8 +182,6 @@ class MarketBreadthAnalyzer:
         results = {}
         for period in self.ema_periods:
             ema = self.calculate_ema(data, period)
-            
-            # Use vector comparison (much faster)
             start_idx = 199
             above = (data.iloc[start_idx:].values > ema.iloc[start_idx:].values).astype(int)
             common_index = data.index[start_idx:]
@@ -240,7 +206,7 @@ class MarketBreadthAnalyzer:
                     result = future.result(timeout=10)
                     if result is not None:
                         all_results[tickers[idx]] = result
-                except Exception:
+                except:
                     pass
                 
                 completed += 1
@@ -255,25 +221,20 @@ class MarketBreadthAnalyzer:
             st.error("❌ No valid data obtained. Try different tickers or period.")
             return None
         
-        # Aggregate results by EMA period
         breadth_data = {}
         for period in self.ema_periods:
-            # Collect all dates
             all_dates = set()
             for ticker_results in all_results.values():
                 all_dates.update(ticker_results[period].index)
             
             all_dates = sorted(list(all_dates))
-            
-            # Reindex and combine
             series_list = []
             for ticker, ticker_results in all_results.items():
                 series = ticker_results[period].reindex(all_dates, method='ffill')
                 series_list.append(series)
             
-            # Create DataFrame and calculate statistics
             df_combined = pd.concat(series_list, axis=1, ignore_index=True)
-            df_combined = df_combined.dropna()  # Remove rows with any NaN
+            df_combined = df_combined.dropna()
             
             breadth_data[period] = {
                 'percent': (df_combined.mean(axis=1) * 100).round(2),
@@ -299,31 +260,75 @@ def main():
     
     st.divider()
     
-    # Fetch available tickers
-    all_tickers = fetch_nse_tickers()
+    # Index selection
+    col1, col2, col3 = st.columns([2, 1, 1])
     
-    # User selections
+    with col1:
+        selected_index = st.selectbox(
+            "📊 Select Index",
+            list(INDEX_CONFIG.keys()),
+            index=0,
+            help="Choose which index to analyze"
+        )
+    
+    index_info = INDEX_CONFIG[selected_index]
+    
+    with col2:
+        st.metric(label="📈 Symbol", value=index_info['symbol'])
+    
+    with col3:
+        st.metric(label="📍 Stocks", value=index_info['count'])
+    
+    st.info(f"ℹ️ {index_info['description']}")
+    st.divider()
+    
+    # Load tickers from CSV
+    selected_tickers = load_tickers_from_csv(index_info['csv_name'])
+    
+    if selected_tickers:
+        st.success(f"✅ Loaded {len(selected_tickers)} {selected_index} tickers")
+    else:
+        st.error(f"❌ Could not load tickers from {index_info['csv_name']}")
+        st.info("📥 Download CSV files from: https://github.com/anki1007/rrg-stocks/tree/main/ticker")
+        st.stop()
+    
+    # Analysis options
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        selected_tickers = st.multiselect(
-            "🎯 Select Tickers",
-            all_tickers,
-            default=[],
-            max_selections=150,
-            help="Leave empty to analyze top 100 tickers"
-        )
-        
-        if not selected_tickers:
-            selected_tickers = all_tickers[:100]
-    
-    with col2:
         st.metric(label="📊 Selected", value=len(selected_tickers))
     
-    with col3:
+    with col2:
         st.metric(label="📅 Period", value=f"{lookback_days/365:.0f}Y")
     
+    with col3:
+        st.metric(label="⚡ Threads", value=max_workers)
+    
     st.divider()
+    
+    # Advanced options
+    with st.expander("🎛️ Advanced Options"):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            custom_tickers = st.text_area(
+                "🎯 Or paste custom tickers (comma-separated)",
+                height=100,
+                help="Example: HDFCBANK.NS, ICICIBANK.NS, KOTAKBANK.NS"
+            )
+        
+        with col2:
+            st.info("""
+            📌 **Custom Ticker Format:**
+            - One ticker per line or comma-separated
+            - Use .NS suffix (e.g., HDFCBANK.NS)
+            - Leave empty to use index tickers
+            """)
+        
+        if custom_tickers.strip():
+            custom_list = [t.strip() for t in custom_tickers.replace('\n', ',').split(',') if t.strip()]
+            selected_tickers = custom_list
+            st.success(f"✅ Using {len(selected_tickers)} custom tickers")
     
     # Analyze Button
     if st.button("🚀 ANALYZE MARKET BREADTH", use_container_width=True, type="primary"):
@@ -333,14 +338,15 @@ def main():
         if breadth_data:
             st.session_state['breadth_data'] = breadth_data
             st.session_state['selected_tickers'] = selected_tickers
+            st.session_state['selected_index'] = selected_index
     
     # Display Results
     if 'breadth_data' in st.session_state:
         breadth_data = st.session_state['breadth_data']
         
-        # ============================================================================
-        # METRICS ROW
-        # ============================================================================
+        # =====================================================================
+        # METRICS
+        # =====================================================================
         
         st.markdown("### 📊 CURRENT MARKET STATUS")
         
@@ -352,7 +358,6 @@ def main():
                 count = int(breadth_data[period]['count'].iloc[-1])
                 total = breadth_data[period]['total']
                 
-                # Determine signal color
                 if pct >= 70:
                     color = theme['up_color']
                     signal = "🟢 STRONG"
@@ -377,9 +382,9 @@ def main():
         
         st.divider()
         
-        # ============================================================================
-        # BREADTH CHART
-        # ============================================================================
+        # =====================================================================
+        # CHARTS
+        # =====================================================================
         
         st.markdown("### 📈 MARKET BREADTH EVOLUTION")
         
@@ -391,7 +396,7 @@ def main():
             subplot_titles=("Percentage of Stocks Above EMA", "Stock Count Above EMA")
         )
         
-        # Plot 1: Percentage lines
+        # Percentage lines
         for period in [20, 50, 100, 200]:
             data = breadth_data[period]['percent']
             fig.add_trace(
@@ -405,18 +410,12 @@ def main():
                 row=1, col=1
             )
         
-        # Add reference lines for percentage chart
-        fig.add_hline(y=70, line_dash="dash", line_color=theme['up_color'], 
-                     line_width=1.5, annotation_text="70% (Strong)", 
-                     annotation_position="right", row=1)
-        fig.add_hline(y=50, line_dash="dot", line_color=theme['neutral_color'], 
-                     line_width=1.5, annotation_text="50% (Neutral)", 
-                     annotation_position="right", row=1)
-        fig.add_hline(y=30, line_dash="dash", line_color=theme['down_color'], 
-                     line_width=1.5, annotation_text="30% (Weak)", 
-                     annotation_position="right", row=1)
+        # Reference lines
+        fig.add_hline(y=70, line_dash="dash", line_color=theme['up_color'], line_width=1.5, annotation_text="70% (Strong)", annotation_position="right", row=1)
+        fig.add_hline(y=50, line_dash="dot", line_color=theme['neutral_color'], line_width=1.5, annotation_text="50% (Neutral)", annotation_position="right", row=1)
+        fig.add_hline(y=30, line_dash="dash", line_color=theme['down_color'], line_width=1.5, annotation_text="30% (Weak)", annotation_position="right", row=1)
         
-        # Plot 2: Stacked area for count
+        # Count bars
         for idx, period in enumerate([20, 50, 100, 200]):
             data = breadth_data[period]['count']
             fig.add_trace(
@@ -432,56 +431,26 @@ def main():
             )
         
         # Update axes
-        fig.update_xaxes(
-            title_text="Date",
-            row=2, col=1,
-            gridcolor=theme['grid_color'],
-            showgrid=True
-        )
-        
-        fig.update_yaxes(
-            title_text="% of Stocks",
-            row=1, col=1,
-            gridcolor=theme['grid_color'],
-            range=[0, 100],
-            showgrid=True
-        )
-        
-        fig.update_yaxes(
-            title_text="Stock Count",
-            row=2, col=1,
-            gridcolor=theme['grid_color'],
-            showgrid=True
-        )
+        fig.update_xaxes(title_text="Date", row=2, col=1, gridcolor=theme['grid_color'], showgrid=True)
+        fig.update_yaxes(title_text="% of Stocks", row=1, col=1, gridcolor=theme['grid_color'], range=[0, 100], showgrid=True)
+        fig.update_yaxes(title_text="Stock Count", row=2, col=1, gridcolor=theme['grid_color'], showgrid=True)
         
         fig.update_layout(
             height=700,
             plot_bgcolor=theme['bg_color'],
             paper_bgcolor=theme['bg_color'],
-            font=dict(
-                color=theme['text_color'],
-                family="Courier New",
-                size=11
-            ),
+            font=dict(color=theme['text_color'], family="Courier New", size=11),
             hovermode='x unified',
             margin=dict(l=60, r=60, t=80, b=60),
             showlegend=True,
-            legend=dict(
-                bgcolor=f"rgba(0,0,0,0.5)",
-                bordercolor=theme['grid_color'],
-                borderwidth=1,
-                yanchor="top",
-                y=0.99,
-                xanchor="right",
-                x=0.99
-            )
+            legend=dict(bgcolor=f"rgba(0,0,0,0.5)", bordercolor=theme['grid_color'], borderwidth=1, yanchor="top", y=0.99, xanchor="right", x=0.99)
         )
         
         st.plotly_chart(fig, use_container_width=True)
         
-        # ============================================================================
+        # =====================================================================
         # DETAILED STATISTICS
-        # ============================================================================
+        # =====================================================================
         
         st.markdown("### 📋 DETAILED BREADTH ANALYSIS BY EMA")
         
@@ -513,14 +482,13 @@ def main():
                 
                 st.divider()
                 
-                # Time series data table
+                # Time series data
                 df_display = pd.DataFrame({
                     'Date': data['percent'].index,
                     'Percentage (%)': data['percent'].values,
                     'Count Above': data['count'].values.astype(int),
                     'Total': [data['total']] * len(data['percent']),
-                    'Signal': ['🟢 STRONG' if x >= 70 else '🟡 BULLISH' if x >= 50 else '🟠 BEARISH' if x >= 30 else '🔴 WEAK' 
-                              for x in data['percent'].values]
+                    'Signal': ['🟢 STRONG' if x >= 70 else '🟡 BULLISH' if x >= 50 else '🟠 BEARISH' if x >= 30 else '🔴 WEAK' for x in data['percent'].values]
                 })
                 
                 st.dataframe(
@@ -535,14 +503,14 @@ def main():
                 st.download_button(
                     f"⬇️ Download EMA {period} CSV",
                     csv,
-                    f"breadth_ema{period}_{datetime.now().strftime('%Y%m%d')}.csv",
+                    f"breadth_ema{period}_{st.session_state.get('selected_index', 'custom').replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.csv",
                     "text/csv",
                     use_container_width=True
                 )
         
-        # ============================================================================
+        # =====================================================================
         # INTERPRETATION GUIDE
-        # ============================================================================
+        # =====================================================================
         
         st.divider()
         st.markdown("### 📖 INTERPRETATION GUIDE")
@@ -575,8 +543,10 @@ def main():
             """)
         
         with col2:
-            st.markdown("""
-            **EMA Period Meanings:**
+            st.markdown(f"""
+            **Current Index: {st.session_state.get('selected_index', 'Nifty 50')}**
+            
+            📍 **EMA Period Meanings:**
             
             📍 **EMA 20** - Short-term momentum
             - Quick trend reversals
