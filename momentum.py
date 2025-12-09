@@ -307,5 +307,6 @@ with tab4:
                         st.metric("Peak Prox", f"{stock['peak_proximity']:.1f}%")
                         st.metric("Score", f"{stock['final_score']:.2f}")
         
-        st.caption("**Data Source:** GitHub CSV | **Auto-refresh:** Every hour | **Timezone:** IST")
+        st.caption("**Data Source:** Yahoo Finance | **Auto-refresh:** Every hour | **Timezone:** IST")
+
 
