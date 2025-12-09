@@ -12,7 +12,7 @@ warnings.filterwarnings('ignore')
 
 # Page Configuration
 st.set_page_config(
-    page_title="ROC Stock Screener",
+    page_title="ROC Screener",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -91,6 +91,12 @@ def load_index_data(index_name):
         "Nifty 50": f"{github_base}/nifty50.csv",
         "Nifty 100": f"{github_base}/nifty100.csv",
         "Nifty 200": f"{github_base}/nifty200.csv",
+        "Nifty 500": f"{github_base}/nifty500.csv",
+        "Nifty Total Mkt": f"{github_base}//niftytotalmarket.csv",
+        "Nifty Mid Smallcap 400": f"{github_base}/niftymidsmallcap400.csv",
+        "Nifty Smallcap 250": f"{github_base}/niftysmallcap250.csv",
+        "Nifty Midcap 150": f"{github_base}/niftymidcap150.csv",
+
     }
     
     if index_name in csv_urls:
@@ -150,8 +156,8 @@ with col1:
     st.markdown("## 📊 ROC Screener")
 
 with col2:
-    st.markdown("### Bloomberg-Style Momentum Stock Screener for Indian Markets")
-    st.caption(f"⏰ Last Updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S IST')}")
+    st.markdown("###Adaptive Momentum Screener Dashboard - NSE")
+    st.caption(f"⏰ Last Updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S + 05:30:00 IST')}")
 
 st.divider()
 
@@ -162,7 +168,7 @@ with st.sidebar:
     # Index Selection
     index_selection = st.selectbox(
         "📈 Select Index",
-        ["Nifty 50", "Nifty 100", "Nifty 200"],
+        ["Nifty 50", "Nifty 100", "Nifty 200","Nifty 500", "Nifty Total Mkt", "Nifty Mid Smallcap 400","Nifty Smallcap 250", "Nifty Midcap 150"],
         help="Choose which index to screen"
     )
     
@@ -239,7 +245,7 @@ with tab1:
     with col1:
         st.markdown("### Getting Started")
         st.markdown("""
-        1. **Select Index** - Choose the market index (Nifty 50, 100, or 200)
+        1. **Select Index** - Choose the market index (Nifty 50, 100, 200 or 500)
         2. **Adjust Filters** - Set thresholds for ROC, Peak Proximity, and Up-Days Ratio
         3. **Run Screener** - Click "Run Screener" to identify top performing stocks
         4. **Analyze Results** - View detailed rankings, charts, and stock details
