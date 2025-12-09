@@ -1,4 +1,6 @@
 # Streamlit Momentum & ROC Screener - Bloomberg Style Dashboard
+# FIXED VERSION - CSV Loading Issues Resolved
+
 # ============================================================================
 # Interactive Stock Screener with Advanced Filtering & Visualization
 # ============================================================================
@@ -12,13 +14,19 @@ import plotly.express as px
 from datetime import datetime, timedelta
 import warnings
 import os
+import logging
 from pathlib import Path
 
 warnings.filterwarnings('ignore')
 
+# Setup logging for debugging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
 # ============================================================================
 # PAGE CONFIGURATION
 # ============================================================================
+
 st.set_page_config(
     page_title="Momentum Stock Screener",
     page_icon="📈",
@@ -29,94 +37,93 @@ st.set_page_config(
 # ============================================================================
 # CUSTOM THEME - Bloomberg Style
 # ============================================================================
+
 st.markdown("""
-<style>
-    /* Main background */
-    .main {
-        background: linear-gradient(135deg, #0f1419 0%, #1a1f2e 100%);
-    }
-    
-    /* Sidebar styling */
-    [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #1a1f2e 0%, #252d3d 100%);
-    }
-    
-    /* Headers */
-    h1, h2, h3 {
-        color: #1DB954 !important;
-        font-weight: 700;
-        text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
-    }
-    
-    /* Text colors */
-    p, span, label {
-        color: #e8e8e8 !important;
-    }
-    
-    /* Metric cards */
-    .metric-card {
-        background: rgba(29, 185, 84, 0.1);
-        border-left: 4px solid #1DB954;
-        padding: 15px;
-        border-radius: 8px;
-    }
-    
-    /* Button styling */
-    .stButton > button {
-        background: linear-gradient(90deg, #1DB954 0%, #1ed760 100%);
-        color: white !important;
-        border: none;
-        border-radius: 8px;
-        font-weight: 600;
-        padding: 10px 20px;
-    }
-    
-    .stButton > button:hover {
-        background: linear-gradient(90deg, #1ed760 0%, #1DB954 100%);
-        transform: scale(1.02);
-    }
-</style>
 """, unsafe_allow_html=True)
 
 # ============================================================================
-# UTILITY FUNCTIONS - Load CSV Files
+# UTILITY FUNCTIONS - Load CSV Files (FIXED)
 # ============================================================================
 
 @st.cache_data
 def get_available_csv_files(ticker_folder="ticker"):
-    """Get list of available CSV files in ticker folder"""
+    """Get list of available CSV files in ticker folder - WITH DEBUGGING"""
     try:
-        ticker_path = Path(ticker_folder)
-        if ticker_path.exists():
-            csv_files = sorted([f.stem for f in ticker_path.glob("*.csv")])
-            return csv_files if csv_files else []
+        # Check multiple possible paths
+        possible_paths = [
+            Path(ticker_folder),
+            Path.cwd() / ticker_folder,
+            Path(__file__).parent / ticker_folder if __file__ else None
+        ]
+        
+        for ticker_path in possible_paths:
+            if ticker_path is None:
+                continue
+            
+            logger.info(f"Checking path: {ticker_path}")
+            
+            if ticker_path.exists() and ticker_path.is_dir():
+                csv_files = sorted([f.stem for f in ticker_path.glob("*.csv")])
+                if csv_files:
+                    logger.info(f"Found {len(csv_files)} CSV files in {ticker_path}")
+                    return csv_files, str(ticker_path)
+                else:
+                    logger.warning(f"No CSV files found in {ticker_path}")
+        
+        # If we get here, folder doesn't exist anywhere
+        logger.error(f"Ticker folder not found. Checked: {[str(p) for p in possible_paths if p]}")
+        return [], None
+        
     except Exception as e:
-        pass
-    return []
+        logger.error(f"Error in get_available_csv_files: {str(e)}", exc_info=True)
+        return [], None
 
 
 @st.cache_data
 def load_tickers_from_csv(csv_filename, ticker_folder="ticker"):
-    """Load tickers from selected CSV file"""
+    """Load tickers from selected CSV file - WITH ERROR HANDLING"""
     try:
+        # Try the main folder first
         csv_path = Path(ticker_folder) / f"{csv_filename}.csv"
-        if csv_path.exists():
-            df = pd.read_csv(csv_path)
-            # Try common column names (case-insensitive)
-            columns_lower = [col.lower() for col in df.columns]
+        
+        # If not found, try other paths
+        if not csv_path.exists():
+            csv_path = Path.cwd() / ticker_folder / f"{csv_filename}.csv"
+        
+        if not csv_path.exists():
+            logger.error(f"CSV file not found: {csv_path}")
+            return []
+        
+        logger.info(f"Loading from: {csv_path}")
+        df = pd.read_csv(csv_path)
+        
+        # Try common column names (case-insensitive)
+        columns_lower = [col.lower() for col in df.columns]
+        
+        if 'symbol' in columns_lower:
+            idx = columns_lower.index('symbol')
+            symbols = df[df.columns[idx]].dropna().unique().tolist()
+            logger.info(f"Loaded {len(symbols)} symbols from 'symbol' column")
+            return symbols
             
-            if 'symbol' in columns_lower:
-                idx = columns_lower.index('symbol')
-                return df[df.columns[idx]].dropna().unique().tolist()
-            elif 'ticker' in columns_lower:
-                idx = columns_lower.index('ticker')
-                return df[df.columns[idx]].dropna().unique().tolist()
-            elif len(df.columns) > 0:
-                # Use first column if common names not found
-                return df.iloc[:, 0].dropna().unique().tolist()
+        elif 'ticker' in columns_lower:
+            idx = columns_lower.index('ticker')
+            symbols = df[df.columns[idx]].dropna().unique().tolist()
+            logger.info(f"Loaded {len(symbols)} symbols from 'ticker' column")
+            return symbols
+            
+        elif len(df.columns) > 0:
+            # Use first column if common names not found
+            symbols = df.iloc[:, 0].dropna().unique().tolist()
+            logger.warning(f"Using first column ({df.columns[0]}) to load symbols")
+            return symbols
+        
+        logger.error(f"No valid symbol column found in {csv_filename}")
+        return []
+        
     except Exception as e:
-        pass
-    return []
+        logger.error(f"Error loading {csv_filename}: {str(e)}", exc_info=True)
+        return []
 
 
 # ============================================================================
@@ -200,6 +207,7 @@ def fetch_screener_data(tickers, min_return, peak_ratio, updays_pct):
                 })
         
         except Exception as e:
+            logger.warning(f"Failed to fetch {ticker}: {str(e)}")
             failed.append(ticker)
     
     # Create DataFrame and rank
@@ -209,9 +217,9 @@ def fetch_screener_data(tickers, min_return, peak_ratio, updays_pct):
         df_results['Rank_6M'] = df_results['Return_6M'].rank(ascending=False)
         df_results['Rank_3M'] = df_results['Return_3M'].rank(ascending=False)
         df_results['Rank_1M'] = df_results['Return_1M'].rank(ascending=False)
-        df_results['Rank_Final'] = (df_results['Rank_6M'] +
-                                    df_results['Rank_3M'] +
-                                    df_results['Rank_1M'])
+        df_results['Rank_Final'] = (df_results['Rank_6M'] + 
+                                     df_results['Rank_3M'] + 
+                                     df_results['Rank_1M'])
         df_results = df_results.sort_values('Rank_Final').reset_index(drop=True)
         df_results['Position'] = range(1, len(df_results) + 1)
     
@@ -223,7 +231,7 @@ def fetch_screener_data(tickers, min_return, peak_ratio, updays_pct):
 # ============================================================================
 
 def main():
-    # Initialize session state for last update time
+    # Initialize session state
     if 'last_scan_time' not in st.session_state:
         st.session_state.last_scan_time = None
     
@@ -235,7 +243,6 @@ def main():
         st.markdown("**Bloomberg-Style Interactive Dashboard for Indian Markets**")
     
     with col2:
-        # Display last scan time or current time
         if st.session_state.last_scan_time:
             st.metric("Last Updated", st.session_state.last_scan_time)
         else:
@@ -244,16 +251,16 @@ def main():
     st.markdown("---")
     
     # ========================================================================
-    # SIDEBAR CONTROLS
+    # SIDEBAR CONTROLS (FIXED)
     # ========================================================================
     
     with st.sidebar:
         st.header("⚙️ Screening Parameters")
         
-        # ====== CSV SELECTION ======
+        # ====== CSV SELECTION (FIXED) ======
         st.subheader("📁 Select Index")
         
-        available_csvs = get_available_csv_files("ticker")
+        available_csvs, ticker_folder_path = get_available_csv_files("ticker")
         
         if available_csvs:
             selected_csv = st.selectbox(
@@ -270,10 +277,27 @@ def main():
                 st.success(f"✅ Loaded {len(tickers)} symbols from {selected_csv}")
             else:
                 st.error(f"⚠️ No symbols found in {selected_csv}")
+                logger.error(f"Failed to load tickers from {selected_csv}")
                 tickers = []
+        
         else:
             st.error("❌ No CSV files found in 'ticker' folder")
-            st.info("📌 **Setup Instructions:**\n1. Create a folder named `ticker` in your project\n2. Add CSV files with Symbol column\n3. Restart the app")
+            st.info(
+                "📌 **Setup Instructions:**\n\n"
+                "1. Create a folder named `ticker` in your project root\n"
+                "2. Add CSV files with a 'Symbol' or 'Ticker' column\n"
+                "3. CSV files should be in the same directory as this script\n"
+                "4. Restart the app\n\n"
+                "**Example CSV structure:**\n"
+                "```\n"
+                "Symbol,Name\n"
+                "RELIANCE,Reliance Industries\n"
+                "TCS,Tata Consultancy Services\n"
+                "INFY,Infosys\n"
+                "```\n\n"
+                f"**Current working directory:** {Path.cwd()}\n"
+                f"**Checked paths:** {ticker_folder_path if ticker_folder_path else 'None found'}"
+            )
             tickers = []
         
         st.markdown("---")
@@ -342,6 +366,7 @@ def main():
     # ========================================================================
     
     if run_screener and tickers:
+        
         # Update the scan time
         scan_start = datetime.now()
         st.session_state.last_scan_time = scan_start.strftime("%H:%M IST")
@@ -349,6 +374,7 @@ def main():
         # Progress bar
         progress_bar = st.progress(0)
         status_text = st.empty()
+        
         status_text.text("Fetching data and screening stocks...")
         progress_bar.progress(50)
         
@@ -363,7 +389,7 @@ def main():
         progress_bar.progress(100)
         status_text.text("✅ Screening complete!")
         
-        # Display status with last update time
+        # Display status
         st.markdown(f"**Status**: Ready for screening | Last updated: {st.session_state.last_scan_time}")
         
         if len(df_results) == 0:
@@ -417,10 +443,10 @@ def main():
         # ====================================================================
         
         with tab1:
-            df_display = df_results.head(top_n)[
-                ['Position', 'Ticker', 'Price', 'Return_6M', 'Return_3M',
-                 'Return_1M', 'Peak_Ratio', 'Volatility', 'Rank_Final']
-            ].copy()
+            df_display = df_results.head(top_n)[[
+                'Position', 'Ticker', 'Price', 'Return_6M', 'Return_3M',
+                'Return_1M', 'Peak_Ratio', 'Volatility', 'Rank_Final'
+            ]].copy()
             
             # Style DataFrame
             def highlight_returns(val):
@@ -458,7 +484,6 @@ def main():
             # Returns comparison
             with col1:
                 fig_returns = go.Figure()
-                
                 top_tickers = df_results.head(10)
                 
                 fig_returns.add_trace(go.Bar(
@@ -594,7 +619,6 @@ def main():
             
             with col2:
                 st.subheader("Correlation Matrix")
-                
                 corr_cols = ['Return_6M', 'Return_3M', 'Return_1M', 'Volatility', 'Peak_Ratio']
                 corr_matrix = df_results[corr_cols].corr()
                 
@@ -623,6 +647,7 @@ def main():
             st.success(f"🔄 Updated: {datetime.now().strftime('%d-%b-%Y %H:%M:%S IST')}")
     
     else:
+        
         # Initial instruction screen
         st.info(
             """
