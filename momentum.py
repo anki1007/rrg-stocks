@@ -14,7 +14,7 @@ warnings.filterwarnings('ignore')
 ist = pytz.timezone('Asia/Kolkata')
 
 # Page config
-st.set_pageconfig(
+st.set_page_config(
     page_title="Momentum Screener", 
     page_icon="📈", 
     layout="wide",
@@ -308,3 +308,4 @@ with tab4:
                         st.metric("Score", f"{stock['final_score']:.2f}")
         
         st.caption("**Data Source:** GitHub CSV | **Auto-refresh:** Every hour | **Timezone:** IST")
+
