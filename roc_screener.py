@@ -157,7 +157,15 @@ with col1:
 
 with col2:
     st.markdown("🎯 Adaptive Momentum Screener Dashboard - NSE")
-    st.caption(f"⏰ Last Updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    import pytz
+from datetime import datetime
+
+# Set IST timezone
+IST = pytz.timezone('Asia/Kolkata')
+
+# Then use this everywhere for timestamp:
+current_time = datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S IST')
+
 
 st.divider()
 
