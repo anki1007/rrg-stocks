@@ -156,14 +156,14 @@ with col1:
     st.markdown("## 📊 ROC Screener")
 
 with col2:
-    st.markdown("###Adaptive Momentum Screener Dashboard - NSE")
-    st.caption(f"⏰ Last Updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S + 05:30:00 IST')}")
+    st.markdown("🎯 Adaptive Momentum Screener Dashboard - NSE")
+    st.caption(f"⏰ Last Updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
 st.divider()
 
 # ============ SIDEBAR CONTROLS ============
 with st.sidebar:
-    st.markdown("### 🎯 SCREENING PARAMETERS")
+    st.markdown("🎯 SCREENING PARAMETERS")
     
     # Index Selection
     index_selection = st.selectbox(
@@ -512,4 +512,4 @@ with tab4:
         st.info("👈 Run the screener to see stock details")
 
 st.divider()
-st.caption("📌 **Data Source**: GitHub Repository | 🔄 **Auto-refreshed**: Every hour")
+st.caption("📌 **Data Source**: Yahoo Finance |🔄 **Auto-refreshed**: Every hour")
