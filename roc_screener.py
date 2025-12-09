@@ -1,8 +1,5 @@
-# Streamlit Momentum & ROC Screener - OPTIMIZED FOR YOUR CSV FORMAT
-# ============================================================================
-# This version is specifically optimized for your ticker CSV structure
-# (Symbol, Company Name, Industry)
-# ============================================================================
+# Streamlit Momentum & ROC Screener - CSV LOADING FIXED
+# Properly loads symbols from CSV files with robust error handling
 
 import streamlit as st
 import pandas as pd
@@ -12,18 +9,10 @@ import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime, timedelta
 import warnings
-import os
-import logging
 from pathlib import Path
+import os
 
 warnings.filterwarnings('ignore')
-
-# Setup logging for debugging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
 
 # ============================================================================
 # PAGE CONFIGURATION
@@ -37,139 +26,16 @@ st.set_page_config(
 )
 
 # ============================================================================
-# UTILITY FUNCTIONS - OPTIMIZED FOR YOUR CSV FORMAT
-# ============================================================================
-
-def find_ticker_folder():
-    """Find the ticker folder in multiple possible locations"""
-    possible_paths = [
-        Path("ticker"),
-        Path.cwd() / "ticker",
-        Path(__file__).parent / "ticker" if "__file__" in dir() else None,
-    ]
-    
-    for path in possible_paths:
-        if path and path.exists() and path.is_dir():
-            logger.info(f"✅ Found ticker folder at: {path.absolute()}")
-            return path
-    
-    logger.error(f"❌ Ticker folder not found. Checked: {[str(p) for p in possible_paths if p]}")
-    return None
-
-
-@st.cache_data
-def get_available_csv_files(ticker_folder="ticker"):
-    """
-    Get list of available CSV files in ticker folder
-    Optimized for: nifty100.csv, nifty200.csv, etc.
-    """
-    try:
-        ticker_path = Path(ticker_folder)
-        
-        # Try to find the folder
-        if not ticker_path.exists():
-            ticker_path = find_ticker_folder()
-        
-        if not ticker_path:
-            logger.error("Ticker folder not found in any location")
-            st.error(
-                "❌ **Ticker folder not found!**\n\n"
-                "Please ensure the `ticker/` folder exists in your project root with CSV files.\n\n"
-                f"Current working directory: `{Path.cwd()}`"
-            )
-            return [], None
-        
-        csv_files = sorted([f.stem for f in ticker_path.glob("*.csv")])
-        
-        if not csv_files:
-            logger.warning(f"No CSV files found in {ticker_path}")
-            st.warning(f"⚠️ No CSV files found in {ticker_path}")
-            return [], None
-        
-        logger.info(f"✅ Found {len(csv_files)} CSV files: {csv_files}")
-        return csv_files, str(ticker_path)
-        
-    except Exception as e:
-        logger.error(f"Error in get_available_csv_files: {str(e)}", exc_info=True)
-        st.error(f"Error reading ticker folder: {str(e)}")
-        return [], None
-
-
-@st.cache_data
-def load_tickers_from_csv(csv_filename, ticker_folder="ticker"):
-    """
-    Load tickers from CSV file
-    Optimized for format: Symbol | Company Name | Industry
-    """
-    try:
-        # Find the CSV file
-        csv_path = Path(ticker_folder) / f"{csv_filename}.csv"
-        
-        if not csv_path.exists():
-            # Try alternative path
-            alt_path = find_ticker_folder()
-            if alt_path:
-                csv_path = alt_path / f"{csv_filename}.csv"
-        
-        if not csv_path.exists():
-            logger.error(f"CSV file not found: {csv_path}")
-            st.error(f"CSV file not found: {csv_filename}.csv")
-            return []
-        
-        logger.info(f"📂 Loading CSV from: {csv_path}")
-        
-        # Read CSV
-        df = pd.read_csv(csv_path)
-        logger.info(f"CSV columns: {df.columns.tolist()}")
-        logger.info(f"CSV rows: {len(df)}")
-        
-        # Get column names (case-insensitive)
-        columns_lower = {col.lower(): col for col in df.columns}
-        
-        # Find the Symbol column
-        symbol_col = None
-        for key in ['symbol', 'ticker', 'code']:
-            if key in columns_lower:
-                symbol_col = columns_lower[key]
-                break
-        
-        if not symbol_col:
-            logger.error(f"No Symbol/Ticker column found. Available columns: {df.columns.tolist()}")
-            st.error(
-                f"❌ No Symbol column found in {csv_filename}.csv\n\n"
-                f"Available columns: {', '.join(df.columns.tolist())}\n\n"
-                "Please ensure your CSV has a 'Symbol' column."
-            )
-            return []
-        
-        # Extract symbols
-        symbols = df[symbol_col].dropna().astype(str).unique().tolist()
-        symbols = [s.strip() for s in symbols if s.strip()]  # Remove whitespace
-        
-        logger.info(f"✅ Loaded {len(symbols)} symbols from '{symbol_col}' column")
-        st.success(f"✅ Loaded {len(symbols)} symbols from {csv_filename}")
-        
-        return symbols
-        
-    except Exception as e:
-        logger.error(f"Error loading {csv_filename}: {str(e)}", exc_info=True)
-        st.error(f"Error loading {csv_filename}.csv: {str(e)}")
-        return []
-
-
-# ============================================================================
 # CONFIGURATION CLASS
 # ============================================================================
 
 class ScreenerConfig:
     """Configuration for momentum screener"""
     
-    # Filter ranges
     MIN_1Y_RETURN = 0.065
     PEAK_RATIO = 0.80
     MIN_UPDAYS_PCT = 0.20
     
-    # Data lookback
     LOOKBACK_DAYS = 730
     LOOKBACK_52W = 252
     LOOKBACK_6M = 126
@@ -178,31 +44,126 @@ class ScreenerConfig:
 
 
 # ============================================================================
+# CSV LOADING FUNCTIONS - ROBUST VERSION
+# ============================================================================
+
+def find_ticker_folder():
+    """Find ticker folder in multiple locations"""
+    possible_paths = [
+        Path("ticker"),
+        Path.cwd() / "ticker",
+        Path(__file__).parent / "ticker" if "__file__" in dir() else None,
+    ]
+    
+    for path in possible_paths:
+        if path and path.exists() and path.is_dir():
+            return path
+    
+    return None
+
+
+@st.cache_data
+def get_available_csv_files():
+    """Get list of available CSV files from ticker folder"""
+    try:
+        ticker_path = find_ticker_folder()
+        
+        if not ticker_path:
+            return [], None
+        
+        # Get all CSV files
+        csv_files = sorted([f.stem for f in ticker_path.glob("*.csv")])
+        
+        if not csv_files:
+            return [], None
+        
+        return csv_files, str(ticker_path)
+        
+    except Exception as e:
+        st.error(f"Error finding CSV files: {str(e)}")
+        return [], None
+
+
+@st.cache_data
+def load_tickers_from_csv(csv_filename):
+    """Load tickers from CSV file - ROBUST VERSION"""
+    try:
+        ticker_path = find_ticker_folder()
+        
+        if not ticker_path:
+            st.error(f"❌ Ticker folder not found!")
+            return []
+        
+        csv_file = ticker_path / f"{csv_filename}.csv"
+        
+        if not csv_file.exists():
+            st.error(f"❌ File not found: {csv_filename}.csv")
+            return []
+        
+        # Read CSV
+        df = pd.read_csv(csv_file)
+        
+        if df.empty:
+            st.error(f"❌ {csv_filename}.csv is empty")
+            return []
+        
+        # Get column names (case-insensitive)
+        columns_lower = {col.lower().strip(): col for col in df.columns}
+        
+        # Find the Symbol column - try multiple names
+        symbol_col = None
+        for key in ['symbol', 'ticker', 'code', 'stock', 'equity']:
+            if key in columns_lower:
+                symbol_col = columns_lower[key]
+                break
+        
+        if not symbol_col:
+            st.error(
+                f"❌ No Symbol column found in {csv_filename}.csv\n\n"
+                f"Available columns: {', '.join(df.columns.tolist())}\n\n"
+                "Expected: 'Symbol' or 'Ticker'"
+            )
+            return []
+        
+        # Extract symbols - clean whitespace
+        symbols = df[symbol_col].dropna().astype(str).unique().tolist()
+        symbols = [s.strip() for s in symbols if s.strip()]
+        
+        if not symbols:
+            st.error(f"❌ No symbols found in {csv_filename}.csv")
+            return []
+        
+        return symbols
+        
+    except Exception as e:
+        st.error(f"❌ Error loading {csv_filename}.csv: {str(e)}")
+        return []
+
+
+# ============================================================================
 # SCREENER FUNCTION
 # ============================================================================
 
 @st.cache_data(ttl=3600)
 def fetch_screener_data(tickers, min_return, peak_ratio, updays_pct):
-    """Fetch and screen stock data"""
+    """Fetch and screen stock data - EXACTLY like your Jupyter notebook"""
     results = []
     failed = []
     
     # Progress tracking
-    progress_placeholder = st.empty()
+    progress_bar = st.progress(0)
+    status_text = st.empty()
     
     for idx, ticker in enumerate(tickers):
         try:
             # Update progress
             progress = (idx + 1) / len(tickers)
-            progress_placeholder.progress(
-                progress,
-                text=f"Processing {idx + 1}/{len(tickers)} - {ticker}"
-            )
+            progress_bar.progress(progress, text=f"Processing {idx + 1}/{len(tickers)} - {ticker}")
             
             end_date = datetime.today()
             start_date = end_date - timedelta(days=ScreenerConfig.LOOKBACK_DAYS)
             
-            # Fetch data
+            # Fetch data - SAME AS JUPYTER
             df = yf.download(ticker, start=start_date, end=end_date, progress=False)
             
             if df.empty or len(df) < ScreenerConfig.LOOKBACK_6M:
@@ -211,23 +172,26 @@ def fetch_screener_data(tickers, min_return, peak_ratio, updays_pct):
             
             close = df['Close']
             
-            # Calculate metrics
+            # Calculate EMAs - SAME AS JUPYTER
             ema100 = close.ewm(span=100).mean()
             ema200 = close.ewm(span=200).mean()
             
+            # Calculate returns - SAME AS JUPYTER
             ret_1y = (close.iloc[-1] / close.iloc[-252] - 1) if len(close) >= 252 else np.nan
             ret_6m = (close.iloc[-1] / close.iloc[-126] - 1) if len(close) >= 126 else np.nan
             ret_3m = (close.iloc[-1] / close.iloc[-63] - 1) if len(close) >= 63 else np.nan
             ret_1m = (close.iloc[-1] / close.iloc[-21] - 1) if len(close) >= 21 else np.nan
             
+            # 52-week high - SAME AS JUPYTER
             high_52w = close.iloc[-252:].max() if len(close) >= 252 else close.max()
             peak_ratio_val = close.iloc[-1] / high_52w
             
+            # Up days percentage - SAME AS JUPYTER
             pct_change = close.pct_change()
             up_days_6m = (pct_change.iloc[-126:] > 0).sum() if len(pct_change) >= 126 else 0
             updays_pct_val = up_days_6m / min(126, len(pct_change)) if len(pct_change) > 0 else 0
             
-            # Apply filters
+            # Apply filters - SAME AS JUPYTER
             if (close.iloc[-1] > ema100.iloc[-1] and
                 ema100.iloc[-1] > ema200.iloc[-1] and
                 ret_1y >= min_return and
@@ -249,10 +213,10 @@ def fetch_screener_data(tickers, min_return, peak_ratio, updays_pct):
                 })
         
         except Exception as e:
-            logger.warning(f"Failed to fetch {ticker}: {str(e)}")
             failed.append(ticker)
     
-    progress_placeholder.empty()
+    progress_bar.empty()
+    status_text.empty()
     
     # Create DataFrame and rank
     df_results = pd.DataFrame(results)
@@ -307,10 +271,10 @@ def main():
     with st.sidebar:
         st.header("⚙️ Screening Parameters")
         
-        # ====== CSV SELECTION ======
+        # ====== INDEX SELECTION ======
         st.subheader("📁 Select Index")
         
-        available_csvs, ticker_folder_path = get_available_csv_files("ticker")
+        available_csvs, ticker_folder_path = get_available_csv_files()
         tickers = []
         
         if available_csvs:
@@ -322,12 +286,38 @@ def main():
             )
             
             # Load tickers from selected CSV
-            tickers = load_tickers_from_csv(selected_csv, "ticker")
+            tickers = load_tickers_from_csv(selected_csv)
             
             if tickers:
-                st.info(f"📊 Index: **{selected_csv}** | Symbols: **{len(tickers)}**")
+                st.success(f"✅ Loaded {len(tickers)} symbols from {selected_csv}")
             else:
                 st.error(f"Failed to load symbols from {selected_csv}")
+        
+        else:
+            st.error(
+                """
+                ❌ **No CSV files found in 'ticker' folder!**
+                
+                **Setup Instructions:**
+                1. Create a folder named `ticker` in your project root
+                2. Add CSV files (e.g., nifty50.csv, nifty100.csv, etc.)
+                3. Each CSV should have a 'Symbol' column with stock tickers
+                4. Example format:
+                   - Symbol, Company Name, Industry
+                   - RELIANCE.NS, Reliance Industries, Energy
+                   - TCS.NS, Tata Consultancy Services, IT
+                
+                **Folder Structure:**
+                ```
+                your-project/
+                ├── roc_screener.py
+                └── ticker/
+                    ├── nifty50.csv
+                    ├── nifty100.csv
+                    └── nifty200.csv
+                ```
+                """
+            )
         
         st.markdown("---")
         
@@ -416,22 +406,13 @@ def main():
             st.metric("Stocks Passed", f"{passed}/{len(tickers)}")
         
         with col2:
-            st.metric(
-                "Avg Return (6M)",
-                f"{df_results['Return_6M'].mean():.1f}%"
-            )
+            st.metric("Avg Return (6M)", f"{df_results['Return_6M'].mean():.1f}%")
         
         with col3:
-            st.metric(
-                "Avg Volatility",
-                f"{df_results['Volatility'].mean():.1f}%"
-            )
+            st.metric("Avg Volatility", f"{df_results['Volatility'].mean():.1f}%")
         
         with col4:
-            st.metric(
-                "Success Rate",
-                f"{(passed/(passed+failed)*100):.1f}%"
-            )
+            st.metric("Success Rate", f"{(passed/(passed+failed)*100):.1f}%")
         
         st.markdown("---")
         
@@ -654,20 +635,13 @@ def main():
             """
             ### 🚀 Getting Started
             
-            1. **Select Index** from the sidebar (nifty100, nifty200, etc.)
+            1. **Select Index** from the sidebar (from your CSV files)
             2. **Adjust Filters** to customize your screening criteria
             3. **Click "Run Screener"** to identify top-performing stocks
             4. **Analyze Results** using multiple views
             
-            ### 📋 CSV Format Expected
-            Your CSV files should have columns:
-            - **Symbol** (e.g., RELIANCE, TCS, INFY)
-            - Company Name (optional)
-            - Industry (optional)
-            
-            ### 🎯 Current Status
+            **Status**: Ready for screening | Last updated: {datetime.now().strftime('%H:%M IST')}
             """
-            + (f"✅ Found {len(available_csvs)} indices" if available_csvs else "❌ No indices found")
         )
 
 
