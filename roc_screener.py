@@ -1,8 +1,3 @@
-# Streamlit Momentum & ROC Screener - Bloomberg Style Dashboard
-# ============================================================================
-# Interactive Stock Screener with Advanced Filtering & Visualization
-# ============================================================================
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -27,7 +22,7 @@ st.set_page_config(
 )
 
 # ============================================================================
-# CUSTOM THEME - Bloomberg Style
+# CUSTOM THEME
 # ============================================================================
 st.markdown("""
 <style>
@@ -102,7 +97,7 @@ def load_tickers_from_csv(csv_filename, ticker_folder="ticker"):
         csv_path = Path(ticker_folder) / f"{csv_filename}.csv"
         if csv_path.exists():
             df = pd.read_csv(csv_path)
-            # Try common column names (case-insensitive)
+          
             columns_lower = [col.lower() for col in df.columns]
             
             if 'symbol' in columns_lower:
@@ -112,7 +107,7 @@ def load_tickers_from_csv(csv_filename, ticker_folder="ticker"):
                 idx = columns_lower.index('ticker')
                 return df[df.columns[idx]].dropna().unique().tolist()
             elif len(df.columns) > 0:
-                # Use first column if common names not found
+             
                 return df.iloc[:, 0].dropna().unique().tolist()
     except Exception as e:
         pass
@@ -128,11 +123,12 @@ class ScreenerConfig:
     
     # Filter ranges
     MIN_1Y_RETURN = 0.065
-    PEAK_RATIO = 0.80
+    PEAK_RATIO = 0.70
     MIN_UPDAYS_PCT = 0.20
     
     # Data lookback
-    LOOKBACK_DAYS = 730
+    LOOKBACK_DAYS = 756
+    LOOKBACK_DAYS = 504
     LOOKBACK_52W = 252
     LOOKBACK_6M = 126
     LOOKBACK_3M = 63
@@ -231,8 +227,8 @@ def main():
     col1, col2 = st.columns([0.7, 0.3])
     
     with col1:
-        st.title("📈 Momentum Stock Screener")
-        st.markdown("**Bloomberg-Style Interactive Dashboard for Indian Markets**")
+        st.title("📈 ROC Screener")
+        st.markdown("**Interactive Dashboard for Indian Markets**")
     
     with col2:
         # Display last scan time or current time
@@ -251,7 +247,7 @@ def main():
         st.header("⚙️ Screening Parameters")
         
         # ====== CSV SELECTION ======
-        st.subheader("📁 Select Index")
+        st.subheader("Select Index")
         
         available_csvs = get_available_csv_files("ticker")
         
