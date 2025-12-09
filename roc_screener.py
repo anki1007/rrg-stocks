@@ -109,11 +109,16 @@ def load_index_data(index_name):
 
 def calculate_roc_metrics(df):
     """Calculate ROC-based metrics if not already present"""
-       if 'roc' not in df.columns:
-       if 'close' in df.columns and 'prev_close_1y' in df.columns:
+    # If the CSV already has these columns, use them
+    # Otherwise, create sample calculations
+    if 'roc' not in df.columns:
+        # Assuming we have price data, calculate ROC
+        if 'close' in df.columns and 'prev_close_1y' in df.columns:
             df['roc'] = ((df['close'] - df['prev_close_1y']) / df['prev_close_1y'] * 100).round(2)
         else:
+            # Generate sample data for demonstration
             df['roc'] = np.random.uniform(5, 50, len(df)).round(2)
+
     
     if 'peak_proximity' not in df.columns:
         if 'close' in df.columns and 'high_52w' in df.columns:
