@@ -1,12 +1,14 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import pytz
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime
 import requests
 from io import StringIO
 import warnings
+
 
 warnings.filterwarnings('ignore')
 
@@ -149,6 +151,8 @@ def filter_stocks(df, roc_min, peak_prox_max, up_days_min, top_n):
     filtered['rank'] = range(1, len(filtered) + 1)
     
     return filtered
+# Set IST timezone
+IST = pytz.timezone('Asia/Kolkata')
 
 # ============ HEADER ============
 col1, col2 = st.columns([1, 3])
@@ -157,14 +161,7 @@ with col1:
 
 with col2:
     st.markdown("🎯 Adaptive Momentum Screener Dashboard - NSE")
-    import pytz
-from datetime import datetime
-
-# Set IST timezone
-IST = pytz.timezone('Asia/Kolkata')
-
-# Then use this everywhere for timestamp:
-current_time = datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S IST')
+    current_time = datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S IST')
 
 
 st.divider()
