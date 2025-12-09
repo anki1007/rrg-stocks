@@ -105,8 +105,8 @@ def load_tickers_from_csv(csv_filename, ticker_folder="ticker"):
             # Try common column names (case-insensitive)
             columns_lower = [col.lower() for col in df.columns]
             
-            if 'symbol' in columns_lower:
-                idx = columns_lower.index('symbol')
+            if 'Symbol' in columns_lower:
+                idx = columns_lower.index('Symbol')
                 return df[df.columns[idx]].dropna().unique().tolist()
             elif 'ticker' in columns_lower:
                 idx = columns_lower.index('ticker')
@@ -267,9 +267,9 @@ def main():
             tickers = load_tickers_from_csv(selected_csv, "ticker")
             
             if tickers:
-                st.success(f"✅ Loaded {len(tickers)} symbols from {selected_csv}")
+                st.success(f"✅ Loaded {len(tickers)} Symbols from {selected_csv}")
             else:
-                st.error(f"⚠️ No symbols found in {selected_csv}")
+                st.error(f"⚠️ No Symbols found in {selected_csv}")
                 tickers = []
         else:
             st.error("❌ No CSV files found in 'ticker' folder")
