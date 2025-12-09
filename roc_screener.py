@@ -1,20 +1,22 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import pytz
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime
+import pytz
 import requests
 from io import StringIO
 import warnings
 
-
 warnings.filterwarnings('ignore')
+
+# Set IST timezone
+IST = pytz.timezone('Asia/Kolkata')
 
 # Page Configuration
 st.set_page_config(
-    page_title="ROC Screener",
+    page_title="ROC Stock Screener",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -93,12 +95,6 @@ def load_index_data(index_name):
         "Nifty 50": f"{github_base}/nifty50.csv",
         "Nifty 100": f"{github_base}/nifty100.csv",
         "Nifty 200": f"{github_base}/nifty200.csv",
-        "Nifty 500": f"{github_base}/nifty500.csv",
-        "Nifty Total Mkt": f"{github_base}//niftytotalmarket.csv",
-        "Nifty Mid Smallcap 400": f"{github_base}/niftymidsmallcap400.csv",
-        "Nifty Smallcap 250": f"{github_base}/niftysmallcap250.csv",
-        "Nifty Midcap 150": f"{github_base}/niftymidcap150.csv",
-
     }
     
     if index_name in csv_urls:
@@ -151,8 +147,6 @@ def filter_stocks(df, roc_min, peak_prox_max, up_days_min, top_n):
     filtered['rank'] = range(1, len(filtered) + 1)
     
     return filtered
-# Set IST timezone
-IST = pytz.timezone('Asia/Kolkata')
 
 # ============ HEADER ============
 col1, col2 = st.columns([1, 3])
@@ -160,20 +154,21 @@ with col1:
     st.markdown("## 📊 ROC Screener")
 
 with col2:
-    st.markdown("🎯 Adaptive Momentum Screener Dashboard - NSE")
-    current_time = datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S IST')
-
+    st.markdown("### Bloomberg-Style Momentum Stock Screener for Indian Markets")
+    # Get current IST time
+    ist_time = datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S %Z')
+    st.caption(f"📡 Last Updated: {ist_time}")
 
 st.divider()
 
 # ============ SIDEBAR CONTROLS ============
 with st.sidebar:
-    st.markdown("🎯 SCREENING PARAMETERS")
+    st.markdown("### 🎯 SCREENING PARAMETERS")
     
     # Index Selection
     index_selection = st.selectbox(
         "📈 Select Index",
-        ["Nifty 50", "Nifty 100", "Nifty 200","Nifty 500", "Nifty Total Mkt", "Nifty Mid Smallcap 400","Nifty Smallcap 250", "Nifty Midcap 150"],
+        ["Nifty 50", "Nifty 100", "Nifty 200"],
         help="Choose which index to screen"
     )
     
@@ -250,7 +245,7 @@ with tab1:
     with col1:
         st.markdown("### Getting Started")
         st.markdown("""
-        1. **Select Index** - Choose the market index (Nifty 50, 100, 200 or 500)
+        1. **Select Index** - Choose the market index (Nifty 50, 100, or 200)
         2. **Adjust Filters** - Set thresholds for ROC, Peak Proximity, and Up-Days Ratio
         3. **Run Screener** - Click "Run Screener" to identify top performing stocks
         4. **Analyze Results** - View detailed rankings, charts, and stock details
@@ -393,7 +388,7 @@ with tab2:
             st.download_button(
                 label="📥 Download Results as CSV",
                 data=csv_data,
-                file_name=f"roc_screener_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                file_name=f"roc_screener_{datetime.now(IST).strftime('%Y%m%d_%H%M%S')}.csv",
                 mime="text/csv",
                 use_container_width=True
             )
@@ -517,4 +512,4 @@ with tab4:
         st.info("👈 Run the screener to see stock details")
 
 st.divider()
-st.caption("📌 **Data Source**: Yahoo Finance |🔄 **Auto-refreshed**: Every hour")
+st.caption("📌 **Data Source**: GitHub Repository | 🔄 **Auto-refreshed**: Every hour | 🕐 **Timezone**: IST (UTC+5:30)")
