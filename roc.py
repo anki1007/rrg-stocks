@@ -524,4 +524,4 @@ with tab4:
         st.info("👈 Run the screener to see stock details")
 
 st.divider()
-st.caption("📌 **Data Sources**: Yahoo Finance | 🔄 **Auto-refresh**: Hourly | 🕐 **Timezone**: Asia/Kolkata")
+st.caption("📌 **Data Source**: Yahoo Finance | 🔄 **Auto-refresh**: Hourly | 🕐 **Timezone**: Asia/Kolkata")
