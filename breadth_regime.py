@@ -35,6 +35,7 @@ INDEX_CONFIG = {
     "Nifty 50": {"csv_name": "ticker/nifty50.csv", "description": "Top 50 Large Cap Stocks"},
     "Nifty 100": {"csv_name": "ticker/nifty100.csv", "description": "Top 100 Large Cap Stocks"},
     "Nifty 200": {"csv_name": "ticker/nifty200.csv", "description": "Top 200 Large Cap and Mid Cap Stocks"},
+    "Nifty 500": {"csv_name": "ticker/nifty500.csv", "description": "Top 500 Large-Mid-Smallcap Stocks"},
     "Nifty Total Market": {"csv_name": "ticker/niftytotalmarket.csv", "description": "Nifty Total Market Index"},
 }
 
