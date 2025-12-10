@@ -670,7 +670,7 @@ def main():
         </p>
         """, unsafe_allow_html=True)
         
-        if st.button("🔄 **FETCH 5Y & 10Y DATA**", type="primary", use_container_width=True):
+        if st.button("🔄 **FETCH 5Y & 10Y DATA**", type="primary", key="btn_fetch_5y_10y", width="stretch"):
             today = datetime.now()
             start_5y = today - timedelta(days=365*5 + 30)
             start_10y = today - timedelta(days=365*10 + 30)
@@ -779,7 +779,7 @@ def main():
                 
                 # Chart
                 fig = create_comparison_chart(breadth_5y, breadth_10y, ema, THEME)
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, key=f"chart_comparison_ema_{ema}", width="stretch")
                 
                 st.divider()
     
@@ -795,7 +795,7 @@ def main():
         </p>
         """, unsafe_allow_html=True)
         
-        if st.button("🔄 **FETCH HISTORICAL DATA (2008-2025)**", type="primary", use_container_width=True):
+        if st.button("🔄 **FETCH HISTORICAL DATA (2008-2025)**", type="primary", key="btn_fetch_historical", width="stretch"):
             start_date = datetime(2008, 1, 1)
             today = datetime.now()
             
@@ -868,8 +868,9 @@ def main():
                         # Style the dataframe
                         st.dataframe(
                             df,
-                            use_container_width=True,
+                            width="stretch",
                             hide_index=True,
+                            key=f"df_historical_ema_{ema}",
                             column_config={
                                 "Year": st.column_config.NumberColumn("Year", format="%d"),
                                 "Worst Breadth %": st.column_config.TextColumn("Worst Breadth"),
@@ -885,7 +886,7 @@ def main():
                             csv,
                             f"ema{ema}_yearly_extremes_2008_2025.csv",
                             "text/csv",
-                            use_container_width=True
+                            key=f"download_ema_{ema}"
                         )
                 
                 st.divider()
