@@ -409,7 +409,11 @@ with tab2:
                 "Rank": st.column_config.NumberColumn(width="small"),
                 "Symbol": st.column_config.TextColumn(width="small"),
                 "ROC (1Y) %": st.column_config.ProgressColumn(min_value=0, max_value=100),
-                "Peak Proximity %": st.column_config.ProgressColumn(min_value=0, max_value=100, invert_color=True),
+                "Peak Proximity %": st.column_config.ProgressColumn(
+                    min_value=0, 
+                    max_value=100,
+                    help="Lower is better - closer to 52-week high"
+                ),
                 "Up-Days Ratio %": st.column_config.ProgressColumn(min_value=0, max_value=100),
             }
         )
