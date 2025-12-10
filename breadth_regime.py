@@ -1,53 +1,56 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import yfinance as yf
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import warnings
 import pickle
 from pathlib import Path
+import hashlib
 
 warnings.filterwarnings('ignore')
 
 st.set_page_config(
-    page_title="Market Breadth Analysis",
+    page_title="Multi-EMA Breadth Analysis",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
-# ============================================================================
-# CONFIG
-# ============================================================================
+# Theme Configuration
 THEME = {
     "bg_color": "#0a0a0a",
     "text_color": "#e0e0e0",
     "grid_color": "#1a1a1a",
     "ema_colors": {
-        20: "#FF6B9D",
-        50: "#4ECDC4", 
-        100: "#95E1D3",
-        200: "#FFA07A"
+        "20": "#FF6B9D",
+        "50": "#4ECDC4", 
+        "100": "#95E1D3",
+        "200": "#FFA07A"
     },
 }
 
 INDEX_CONFIG = {
-    "Nifty 50": {"csv_name": "ticker/nifty50.csv"},
-    "Nifty 100": {"csv_name": "ticker/nifty100.csv"},
-    "Nifty 200": {"csv_name": "ticker/nifty200.csv"},
-    "Nifty 500": {"csv_name": "ticker/nifty500.csv"},
+    "Nifty 50": {"csv_name": "ticker/nifty50.csv", "description": "Top 50 Large Cap Stocks"},
+    "Nifty 100": {"csv_name": "ticker/nifty100.csv", "description": "Top 100 Large Cap Stocks"},
+    "Nifty 200": {"csv_name": "ticker/nifty200.csv", "description": "Top 200 Large Cap and Mid Cap Stocks"},
+    "Nifty Total Market": {"csv_name": "ticker/niftytotalmarket.csv", "description": "Nifty Total Market Index"},
 }
 
 EMA_PERIODS = [20, 50, 100, 200]
-TODAY = datetime.now().date()
-FIVE_YEARS_AGO = TODAY - timedelta(days=365*5)
 
-# ============================================================================
-# UTILITY FUNCTIONS
-# ============================================================================
+# Sidebar
+with st.sidebar:
+    st.markdown("### ⚙️ Configuration")
+    clear_cache = st.button("🗑️ Clear Cache", help="Clear downloaded data cache")
+    if clear_cache:
+        cache_dir = Path("cache")
+        if cache_dir.exists():
+            for file in cache_dir.glob("*.pkl"):
+                file.unlink()
+            st.success("✅ Cache cleared!")
+            st.rerun()
 
 @st.cache_data(ttl=86400)
 def load_tickers_from_csv(csv_filename):
@@ -61,15 +64,13 @@ def load_tickers_from_csv(csv_filename):
     except Exception as e:
         return None, str(e)
 
-def get_cache_key(index_name, date_range):
-    """Generate cache key."""
-    import hashlib
-    key = f"{index_name}_{date_range}"
-    return hashlib.md5(key.encode()).hexdigest()
+def get_cache_key(tickers, start_date, end_date):
+    """Generate unique cache key for dataset."""
+    key_str = f"{'-'.join(sorted(tickers))}_{start_date}_{end_date}"
+    return hashlib.md5(key_str.encode()).hexdigest()
 
-@st.cache_data(ttl=86400)
 def load_cached_data(cache_key):
-    """Load from cache."""
+    """Load data from cache if exists."""
     cache_dir = Path("cache")
     cache_file = cache_dir / f"{cache_key}.pkl"
     if cache_file.exists():
@@ -78,251 +79,189 @@ def load_cached_data(cache_key):
     return None
 
 def save_to_cache(cache_key, data):
-    """Save to cache."""
+    """Save data to cache."""
     cache_dir = Path("cache")
     cache_dir.mkdir(exist_ok=True)
-    with open(cache_dir / f"{cache_key}.pkl", 'wb') as f:
+    cache_file = cache_dir / f"{cache_key}.pkl"
+    with open(cache_file, 'wb') as f:
         pickle.dump(data, f)
 
-# ============================================================================
-# DATA DOWNLOAD
-# ============================================================================
-
-def download_ticker_data(ticker, start_date, end_date):
-    """Download single ticker with error handling."""
-    try:
-        data = yf.download(
-            ticker,
-            start=start_date,
-            end=end_date,
-            progress=False,
-            timeout=10
-        )
-        if not data.empty and len(data) > 0:
-            return ticker, data['Close'], None
-        return ticker, None, "Empty data"
-    except Exception as e:
-        return ticker, None, str(e)
-
-@st.cache_data(ttl=86400)
-def download_all_tickers(tickers, start_date, end_date):
-    """Parallel download using ThreadPoolExecutor."""
-    all_data = {}
-    failed = []
+class MultiBreadthAnalyzer:
+    """Analyzer for multiple EMA breadth indicators."""
     
-    progress_bar = st.progress(0)
-    status = st.empty()
+    @staticmethod
+    def calculate_ema(data, period):
+        """Calculate Exponential Moving Average."""
+        return data.ewm(span=period, adjust=False).mean()
     
-    with ThreadPoolExecutor(max_workers=5) as executor:
-        futures = {
-            executor.submit(download_ticker_data, ticker, start_date, end_date): ticker 
-            for ticker in tickers
-        }
+    def download_all_data(self, tickers, start_date, end_date):
+        """Download all ticker data in batch."""
+        progress_bar = st.progress(0)
+        status = st.empty()
         
-        completed = 0
-        for future in as_completed(futures):
-            ticker, data, error = future.result()
-            completed += 1
-            
-            if error:
-                failed.append((ticker, error))
-            else:
-                all_data[ticker] = data
-            
-            progress_bar.progress(completed / len(tickers))
-            status.text(f"Downloaded: {completed}/{len(tickers)}")
-    
-    progress_bar.empty()
-    status.empty()
-    
-    return all_data, failed
-
-# ============================================================================
-# BREADTH CALCULATION
-# ============================================================================
-
-def calculate_ema(series, period):
-    """Calculate EMA."""
-    return series.ewm(span=period, adjust=False).mean()
-
-def calculate_breadth_metrics(all_data, ema_period, start_date, end_date):
-    """
-    Calculate breadth for single EMA period.
-    Returns: daily % below, daily count below, total valid stocks
-    """
-    below_ema_dict = {}
-    
-    for ticker, close_data in all_data.items():
-        if close_data is None or len(close_data) < ema_period:
-            continue
+        status.text("📥 Downloading data for all stocks (batch mode)...")
         
-        ema = calculate_ema(close_data, ema_period)
-        below_ema = (close_data < ema).astype(int)
-        below_ema_dict[ticker] = below_ema
+        try:
+            # Download all at once - yfinance handles this better
+            data = yf.download(
+                tickers,
+                start=start_date,
+                end=end_date,
+                progress=False,
+                group_by='ticker',
+                threads=False
+            )
+            
+            progress_bar.progress(100)
+            status.text("✅ Download complete!")
+            
+            return data
+        except Exception as e:
+            st.error(f"❌ Download failed: {str(e)}")
+            return None
+        finally:
+            progress_bar.empty()
+            status.empty()
     
-    if not below_ema_dict:
-        return None, None, 0
-    
-    df_combined = pd.DataFrame(below_ema_dict).dropna()
-    total_valid = len(below_ema_dict)
-    
-    # BUG FIX: Handle case where dataframe is empty after dropna
-    if df_combined.empty:
-        return None, None, total_valid
-    
-    # Daily counts and percentages
-    daily_count = df_combined.sum(axis=1).astype(int)
-    daily_pct = (df_combined.mean(axis=1) * 100).round(2)
-    
-    return daily_pct, daily_count, total_valid
+    def calculate_multi_ema_breadth(self, tickers, start_date, end_date):
+        """Calculate breadth for multiple EMA periods."""
+        
+        # Try cache first
+        cache_key = get_cache_key(tickers, start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
+        cached = load_cached_data(cache_key)
+        if cached:
+            st.info("✅ Loaded from cache")
+            return cached
+        
+        # Download data
+        data = self.download_all_data(tickers, start_date, end_date)
+        if data is None:
+            return None
+        
+        results = {ema: {'percent': None, 'count': None, 'total': 0} for ema in EMA_PERIODS}
+        
+        progress_bar = st.progress(0)
+        status = st.empty()
+        
+        for idx, ema_period in enumerate(EMA_PERIODS):
+            status.text(f"📊 Calculating EMA-{ema_period} breadth...")
+            
+            ema_results = {}
+            valid_count = 0
+            
+            for ticker in tickers:
+                try:
+                    # Handle both single and multi-ticker dataframes
+                    if len(tickers) == 1:
+                        close_data = data['Close'].dropna()
+                    else:
+                        if ticker not in data.columns.levels[0]:
+                            continue
+                        close_data = data[ticker]['Close'].dropna()
+                    
+                    if len(close_data) < ema_period:
+                        continue
+                    
+                    ema = self.calculate_ema(close_data, ema_period)
+                    above = (close_data.values > ema.values).astype(int)
+                    ema_results[ticker] = pd.Series(above, index=close_data.index)
+                    valid_count += 1
+                    
+                except:
+                    continue
+            
+            if ema_results:
+                df_combined = pd.DataFrame(ema_results).dropna()
+                results[ema_period]['percent'] = (df_combined.mean(axis=1) * 100).round(2)
+                results[ema_period]['count'] = df_combined.sum(axis=1).astype(int)
+                results[ema_period]['total'] = valid_count
+            
+            progress_bar.progress((idx + 1) / len(EMA_PERIODS))
+        
+        progress_bar.empty()
+        status.empty()
+        
+        # Save to cache
+        save_to_cache(cache_key, results)
+        
+        return results
 
-# ============================================================================
-# PLOTTING FUNCTIONS
-# ============================================================================
-
-def plot_5y_vs_10y(all_breadth_data):
-    """Create 5Y vs 10Y comparison for all EMAs."""
+def plot_comparison_chart(data_5y, data_10y, theme):
+    """Create comparison chart for 5Y vs 10Y."""
     
     fig = make_subplots(
-        rows=2, cols=2,
-        subplot_titles=[f"EMA-{ema}" for ema in EMA_PERIODS],
-        vertical_spacing=0.12,
-        horizontal_spacing=0.10
+        rows=len(EMA_PERIODS), cols=2,
+        subplot_titles=[f"EMA-{ema} (5Y)" for ema in EMA_PERIODS] + [f"EMA-{ema} (10Y)" for ema in EMA_PERIODS],
+        vertical_spacing=0.08,
+        horizontal_spacing=0.08,
+        specs=[[{"secondary_y": False}, {"secondary_y": False}] for _ in EMA_PERIODS]
     )
-    
-    positions = [(1,1), (1,2), (2,1), (2,2)]
     
     for idx, ema in enumerate(EMA_PERIODS):
-        row, col = positions[idx]
-        pct_data = all_breadth_data[ema]['pct']
+        row = idx + 1
         
-        if pct_data is not None:
-            # Full 10Y
+        # 5Y data
+        if data_5y[ema]['percent'] is not None:
             fig.add_trace(
                 go.Scatter(
-                    x=pct_data.index,
-                    y=pct_data.values,
-                    name=f"10Y",
-                    line=dict(color=THEME['ema_colors'][ema], width=1, dash='dot'),
-                    showlegend=(idx == 0),
-                    hovertemplate="%{y:.1f}%<extra></extra>"
+                    x=data_5y[ema]['percent'].index,
+                    y=data_5y[ema]['percent'].values,
+                    name=f"EMA-{ema} 5Y",
+                    line=dict(color=theme['ema_colors'][str(ema)], width=1.5),
+                    fill='tozeroy',
+                    fillcolor=f"rgba{tuple(list(int(theme['ema_colors'][str(ema)][i:i+2], 16) for i in (1, 3, 5)) + [0.2])}",
+                    hovertemplate="%{x|%Y-%m-%d}<br>%{y:.1f}%<extra></extra>",
+                    showlegend=(idx == 0)
                 ),
-                row=row, col=col
+                row=row, col=1
             )
-            
-            # Last 5Y overlay
-            pct_5y = pct_data[pct_data.index >= FIVE_YEARS_AGO]
-            if not pct_5y.empty:
-                fig.add_trace(
-                    go.Scatter(
-                        x=pct_5y.index,
-                        y=pct_5y.values,
-                        name=f"5Y",
-                        line=dict(color=THEME['ema_colors'][ema], width=2.5),
-                        showlegend=(idx == 0),
-                        hovertemplate="%{y:.1f}%<extra></extra>"
-                    ),
-                    row=row, col=col
-                )
-            
-            # Reference levels
-            fig.add_hline(y=70, line_dash="dash", line_color="red", line_width=1, 
-                         row=row, col=col, opacity=0.3)
-            fig.add_hline(y=30, line_dash="dash", line_color="green", line_width=1, 
-                         row=row, col=col, opacity=0.3)
         
-        fig.update_yaxes(title_text="% Below" if col==1 else "", row=row, col=col, 
-                        range=[0, 100], gridcolor=THEME['grid_color'])
-        fig.update_xaxes(gridcolor=THEME['grid_color'], row=row, col=col)
-    
-    fig.update_layout(
-        height=800,
-        plot_bgcolor=THEME['bg_color'],
-        paper_bgcolor=THEME['bg_color'],
-        font=dict(color=THEME['text_color'], size=10),
-        hovermode='x unified',
-        margin=dict(l=50, r=50, t=70, b=50),
-        showlegend=True
-    )
-    
-    return fig
-
-def plot_yearly_comparison(yearly_lows_df):
-    """Create yearly lows comparison chart."""
-    
-    fig = go.Figure()
-    
-    for ema in EMA_PERIODS:
-        df_ema = yearly_lows_df[yearly_lows_df['EMA'] == ema].sort_values('Year')
-        
-        if not df_ema.empty:
+        # 10Y data
+        if data_10y[ema]['percent'] is not None:
             fig.add_trace(
                 go.Scatter(
-                    x=df_ema['Year'],
-                    y=df_ema['Max_Below_Count'],
-                    name=f"EMA-{ema}",
-                    line=dict(color=THEME['ema_colors'][ema], width=2.5),
-                    mode='lines+markers',
-                    marker=dict(size=5),
-                    hovertemplate="Year: %{x}<br>Max Below: %{y}<extra></extra>"
-                )
+                    x=data_10y[ema]['percent'].index,
+                    y=data_10y[ema]['percent'].values,
+                    name=f"EMA-{ema} 10Y",
+                    line=dict(color=theme['ema_colors'][str(ema)], width=1.5),
+                    fill='tozeroy',
+                    fillcolor=f"rgba{tuple(list(int(theme['ema_colors'][str(ema)][i:i+2], 16) for i in (1, 3, 5)) + [0.2])}",
+                    hovertemplate="%{x|%Y-%m-%d}<br>%{y:.1f}%<extra></extra>",
+                    showlegend=(idx == 0)
+                ),
+                row=row, col=2
             )
+        
+        # Add reference lines
+        for col in [1, 2]:
+            fig.add_hline(y=70, line_dash="dash", line_color="green", line_width=1, row=row, col=col, opacity=0.5)
+            fig.add_hline(y=30, line_dash="dash", line_color="red", line_width=1, row=row, col=col, opacity=0.5)
+        
+        # Update axes
+        fig.update_yaxes(title_text="Breadth %", row=row, col=1, range=[0, 100], gridcolor=theme['grid_color'])
+        fig.update_yaxes(title_text="Breadth %", row=row, col=2, range=[0, 100], gridcolor=theme['grid_color'])
+        fig.update_xaxes(gridcolor=theme['grid_color'], row=row, col=1)
+        fig.update_xaxes(gridcolor=theme['grid_color'], row=row, col=2)
     
     fig.update_layout(
-        title="Yearly Peak Breadth (Max Stocks Below EMA)",
-        height=500,
-        plot_bgcolor=THEME['bg_color'],
-        paper_bgcolor=THEME['bg_color'],
-        font=dict(color=THEME['text_color'], size=11),
+        height=350 * len(EMA_PERIODS),
+        plot_bgcolor=theme['bg_color'],
+        paper_bgcolor=theme['bg_color'],
+        font=dict(color=theme['text_color'], size=10),
         hovermode='x unified',
-        xaxis=dict(title="Year", gridcolor=THEME['grid_color'], dtick=1),
-        yaxis=dict(title="Stock Count", gridcolor=THEME['grid_color']),
-        margin=dict(l=60, r=60, t=70, b=50),
+        margin=dict(l=60, r=60, t=80, b=60),
     )
     
     return fig
-
-# ============================================================================
-# YEARLY LOWS CALCULATION
-# ============================================================================
-
-def calculate_yearly_lows(all_breadth_data):
-    """Calculate max stocks below EMA for each year."""
-    
-    yearly_data = []
-    
-    for ema in EMA_PERIODS:
-        count_data = all_breadth_data[ema]['count']
-        total_stocks = all_breadth_data[ema]['total']
-        
-        if count_data is not None:
-            # Group by year and find max
-            yearly_max = count_data.groupby(count_data.index.year).max()
-            
-            for year, max_count in yearly_max.items():
-                yearly_data.append({
-                    'Year': int(year),
-                    'EMA': ema,
-                    'Max_Below_Count': int(max_count),
-                    'Total_Stocks': total_stocks,
-                    'Max_Below_Pct': round((max_count / total_stocks) * 100, 2) if total_stocks > 0 else 0
-                })
-    
-    return pd.DataFrame(yearly_data).sort_values(['Year', 'EMA'], ascending=[False, True])
-
-# ============================================================================
-# MAIN APP
-# ============================================================================
 
 def main():
-    st.markdown("## 📊 Market Breadth Analysis")
-    st.markdown("*5Y vs 10Y Comparison | Yearly Historical Data | Current Status*")
+    st.markdown("## 📊 Multi-EMA Breadth Analysis")
+    st.markdown("*Compare 5Y vs 10Y breadth across EMA-20, 50, 100, 200 | Track yearly lows since 2008*")
     st.divider()
     
     # Index Selection
-    col1, col2 = st.columns([2, 1])
-    with col1:
-        selected_index = st.selectbox("Select Index", list(INDEX_CONFIG.keys()), index=0)
+    selected_index = st.selectbox("Select Index", list(INDEX_CONFIG.keys()), index=0)
+    st.info(f"ℹ️ {INDEX_CONFIG[selected_index]['description']}")
     
     # Load tickers
     tickers, error = load_tickers_from_csv(INDEX_CONFIG[selected_index]['csv_name'])
@@ -330,178 +269,119 @@ def main():
         st.error(f"❌ {error}")
         st.stop()
     
-    st.success(f"✅ {len(tickers)} stocks loaded")
+    st.success(f"✅ Loaded {len(tickers)} tickers")
     st.divider()
     
-    # Fetch Button
-    if st.button("🔄 ANALYZE (2008 - Present)", type="primary", use_container_width=True):
-        cache_key = get_cache_key(selected_index, "2008_present")
-        cached = load_cached_data(cache_key)
-        
-        if cached:
-            st.info("✅ Loaded from cache")
-            all_breadth_data = cached
-        else:
-            with st.spinner("📥 Downloading & analyzing..."):
-                start_date = datetime(2008, 1, 1)
-                end_date = datetime.now()
-                
-                all_data, failed = download_all_tickers(tickers, start_date, end_date)
-                
-                if failed:
-                    st.warning(f"⚠️ Failed to download {len(failed)} stocks")
-                
-                # Calculate breadth for all EMAs
-                all_breadth_data = {}
-                for ema in EMA_PERIODS:
-                    pct, count, total = calculate_breadth_metrics(all_data, ema, start_date, end_date)
-                    all_breadth_data[ema] = {'pct': pct, 'count': count, 'total': total}
-                
-                save_to_cache(cache_key, all_breadth_data)
-                st.success("✅ Analysis complete!")
-        
-        st.session_state['breadth_data'] = all_breadth_data
-        st.rerun()
+    analyzer = MultiBreadthAnalyzer()
     
-    if 'breadth_data' in st.session_state:
-        breadth_data = st.session_state['breadth_data']
-        
-        # Check if any data is valid
-        has_data = any(breadth_data[ema]['pct'] is not None for ema in EMA_PERIODS)
-        
-        if not has_data:
-            st.error("❌ No valid breadth data available. Check ticker data.")
-            st.stop()
-        
-        # ====================================================================
-        # SECTION 1: 5Y vs 10Y COMPARISON
-        # ====================================================================
+    tab1, tab2 = st.tabs(["📈 5Y vs 10Y Comparison", "📉 Yearly Lows (2008-2025)"])
+    
+    with tab1:
         st.markdown("### 5-Year vs 10-Year Breadth Comparison")
-        st.caption("**Thick line** = Last 5 years | **Dotted line** = Full history | Higher % = More stocks below EMA")
         
-        fig_5y_10y = plot_5y_vs_10y(breadth_data)
-        st.plotly_chart(fig_5y_10y, use_container_width=True)
+        if st.button("🔄 FETCH 5Y & 10Y DATA", type="primary", use_container_width=True):
+            today = datetime.now()
+            start_5y = today - timedelta(days=365*5)
+            start_10y = today - timedelta(days=365*10)
+            
+            with st.spinner("📥 Fetching 5-year data..."):
+                breadth_5y = analyzer.calculate_multi_ema_breadth(tickers, start_5y, today)
+            
+            if breadth_5y:
+                with st.spinner("📥 Fetching 10-year data..."):
+                    breadth_10y = analyzer.calculate_multi_ema_breadth(tickers, start_10y, today)
+                
+                if breadth_10y:
+                    st.success("✅ Data fetched successfully!")
+                    st.session_state['breadth_5y'] = breadth_5y
+                    st.session_state['breadth_10y'] = breadth_10y
+                    st.rerun()
         
-        # Current metrics
-        st.markdown("#### 📊 Current Status")
-        cols = st.columns(4)
-        for idx, ema in enumerate(EMA_PERIODS):
-            with cols[idx]:
-                if breadth_data[ema]['pct'] is not None:
-                    pct = breadth_data[ema]['pct'].iloc[-1]
-                    count = int(breadth_data[ema]['count'].iloc[-1])
-                    total = breadth_data[ema]['total']
+        if 'breadth_5y' in st.session_state and 'breadth_10y' in st.session_state:
+            breadth_5y = st.session_state['breadth_5y']
+            breadth_10y = st.session_state['breadth_10y']
+            
+            # Display charts
+            fig = plot_comparison_chart(breadth_5y, breadth_10y, THEME)
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Statistics
+            st.markdown("### 📊 Statistics Summary")
+            
+            for ema in EMA_PERIODS:
+                with st.expander(f"EMA-{ema} Statistics", expanded=(ema==50)):
+                    col1, col2 = st.columns(2)
                     
-                    st.metric(
-                        f"EMA-{ema}",
-                        f"{pct:.1f}%",
-                        f"{count}/{total} stocks"
+                    with col1:
+                        st.markdown("**5-Year Stats**")
+                        if breadth_5y[ema]['percent'] is not None:
+                            data = breadth_5y[ema]
+                            col1a, col1b, col1c = st.columns(3)
+                            col1a.metric("Current", f"{data['percent'].iloc[-1]:.1f}%")
+                            col1b.metric("Average", f"{data['percent'].mean():.1f}%")
+                            col1c.metric("Stocks", f"{data['count'].iloc[-1]}/{data['total']}")
+                            
+                            col1a.metric("Highest", f"{data['percent'].max():.1f}%")
+                            col1b.metric("Lowest", f"{data['percent'].min():.1f}%")
+                            col1c.metric("Std Dev", f"{data['percent'].std():.1f}%")
+                    
+                    with col2:
+                        st.markdown("**10-Year Stats**")
+                        if breadth_10y[ema]['percent'] is not None:
+                            data = breadth_10y[ema]
+                            col2a, col2b, col2c = st.columns(3)
+                            col2a.metric("Current", f"{data['percent'].iloc[-1]:.1f}%")
+                            col2b.metric("Average", f"{data['percent'].mean():.1f}%")
+                            col2c.metric("Stocks", f"{data['count'].iloc[-1]}/{data['total']}")
+                            
+                            col2a.metric("Highest", f"{data['percent'].max():.1f}%")
+                            col2b.metric("Lowest", f"{data['percent'].min():.1f}%")
+                            col2c.metric("Std Dev", f"{data['percent'].std():.1f}%")
+    
+    with tab2:
+        st.markdown("### Yearly Lowest Breadth (2008-2025)")
+        
+        if st.button("🔄 FETCH HISTORICAL DATA (2008-2025)", type="primary", use_container_width=True):
+            start_date = datetime(2008, 1, 1)
+            today = datetime.now()
+            
+            with st.spinner("📥 Fetching 17 years of data... (may take 5-10 minutes)"):
+                breadth_historical = analyzer.calculate_multi_ema_breadth(tickers, start_date, today)
+            
+            if breadth_historical:
+                st.success("✅ Historical data fetched!")
+                st.session_state['breadth_historical'] = breadth_historical
+                st.rerun()
+        
+        if 'breadth_historical' in st.session_state:
+            breadth_hist = st.session_state['breadth_historical']
+            
+            for ema in EMA_PERIODS:
+                if breadth_hist[ema]['percent'] is not None:
+                    st.markdown(f"#### EMA-{ema} Lowest Breadth by Year")
+                    
+                    data = breadth_hist[ema]['percent']
+                    yearly_lows = data.groupby(data.index.year).agg(['min', 'idxmin'])
+                    
+                    df_yearly = pd.DataFrame({
+                        'Year': yearly_lows.index,
+                        'Lowest Breadth %': yearly_lows['min'].round(2),
+                        'Date': yearly_lows['idxmin'].dt.strftime('%Y-%m-%d'),
+                        'Stocks Above': [breadth_hist[ema]['count'].loc[date] for date in yearly_lows['idxmin']],
+                        'Total Stocks': breadth_hist[ema]['total']
+                    })
+                    
+                    st.dataframe(df_yearly, use_container_width=True, hide_index=True)
+                    
+                    csv = df_yearly.to_csv(index=False)
+                    st.download_button(
+                        f"📥 Download EMA-{ema} Data",
+                        csv,
+                        f"ema{ema}_yearly_lows_2008_2025.csv",
+                        "text/csv"
                     )
-        
-        st.divider()
-        
-        # ====================================================================
-        # SECTION 2: YEARLY LOWS COMPARISON
-        # ====================================================================
-        st.markdown("### Yearly Peak Breadth (2008-2025)")
-        st.caption("Maximum number of stocks trading below each EMA per year")
-        
-        yearly_df = calculate_yearly_lows(breadth_data)
-        
-        # BUG FIX: Check if yearly_df has multiple years before plotting
-        if not yearly_df.empty and yearly_df['Year'].nunique() > 1:
-            fig_yearly = plot_yearly_comparison(yearly_df)
-            st.plotly_chart(fig_yearly, use_container_width=True)
-        else:
-            st.warning("⚠️ Insufficient yearly data for chart")
-        
-        st.divider()
-        
-        # ====================================================================
-        # SECTION 3: CURRENT vs HISTORICAL YEARLY MAX
-        # ====================================================================
-        st.markdown("### Current Breadth vs Historical Yearly Peak")
-        
-        # Create pivot table: Years as columns, EMAs as rows
-        pivot_data = []
-        
-        for ema in EMA_PERIODS:
-            row_data = {'EMA': ema}
-            
-            # Current
-            pct_data = breadth_data[ema]['pct']
-            count_data = breadth_data[ema]['count']
-            total = breadth_data[ema]['total']
-            
-            if pct_data is not None:
-                current_count = int(count_data.iloc[-1])
-                row_data['Current'] = f"{current_count}/{total}"
-            
-            # Yearly max
-            yearly_ema = yearly_df[yearly_df['EMA'] == ema].sort_values('Year', ascending=False)
-            for _, row in yearly_ema.iterrows():
-                year = int(row['Year'])
-                count = int(row['Max_Below_Count'])
-                row_data[str(year)] = count
-            
-            pivot_data.append(row_data)
-        
-        comparison_df = pd.DataFrame(pivot_data)
-        
-        # Display as styled table
-        st.dataframe(
-            comparison_df,
-            use_container_width=True,
-            hide_index=True,
-            height=250
-        )
-        
-        # Download option
-        csv = comparison_df.to_csv(index=False)
-        st.download_button(
-            "📥 Download Yearly Comparison (CSV)",
-            csv,
-            f"breadth_yearly_{datetime.now().strftime('%Y%m%d')}.csv",
-            "text/csv"
-        )
-        
-        st.divider()
-        
-        # ====================================================================
-        # SECTION 4: DETAILED DAILY DATA
-        # ====================================================================
-        st.markdown("### Daily Breadth Data")
-        
-        selected_ema = st.selectbox("Select EMA", EMA_PERIODS, format_func=lambda x: f"EMA-{x}")
-        
-        if breadth_data[selected_ema]['pct'] is not None:
-            pct_data = breadth_data[selected_ema]['pct']
-            count_data = breadth_data[selected_ema]['count']
-            total = breadth_data[selected_ema]['total']
-            
-            df_display = pd.DataFrame({
-                'Date': pct_data.index.strftime('%Y-%m-%d'),
-                '% Below EMA': pct_data.values,
-                'Stocks Below': count_data.values,
-                'Total': total
-            })
-            
-            st.dataframe(
-                df_display.sort_values('Date', ascending=False),
-                use_container_width=True,
-                hide_index=True,
-                height=500
-            )
-            
-            csv = df_display.to_csv(index=False)
-            st.download_button(
-                f"📥 Download EMA-{selected_ema} Data (CSV)",
-                csv,
-                f"ema{selected_ema}_daily_{datetime.now().strftime('%Y%m%d')}.csv",
-                "text/csv"
-            )
-    else:
-        st.info("👆 Click **ANALYZE** button to fetch data")
+                    
+                    st.divider()
 
 if __name__ == "__main__":
     main()
