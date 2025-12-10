@@ -1,4 +1,3 @@
-code = r'''
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -522,8 +521,3 @@ with tab4:
 
 st.divider()
 st.caption("📌 **Data Sources**: Yahoo Finance | 🔄 **Auto-refresh**: Hourly | 🕐 **Timezone**: Asia/Kolkata")
-'''
-path = "/mnt/data/roc_screener_final.py"
-with open(path, "w", encoding="utf-8") as f:
-    f.write(code)
-print("Wrote file:", path)
