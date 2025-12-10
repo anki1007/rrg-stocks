@@ -148,7 +148,7 @@ def calculate_ema(series, period):
 def calculate_breadth_metrics(all_data, ema_period, start_date, end_date):
     """
     Calculate breadth for single EMA period.
-    Returns: daily % below, daily count below
+    Returns: daily % below, daily count below, total valid stocks
     """
     below_ema_dict = {}
     
@@ -165,6 +165,10 @@ def calculate_breadth_metrics(all_data, ema_period, start_date, end_date):
     
     df_combined = pd.DataFrame(below_ema_dict).dropna()
     total_valid = len(below_ema_dict)
+    
+    # BUG FIX: Handle case where dataframe is empty after dropna
+    if df_combined.empty:
+        return None, None, total_valid
     
     # Daily counts and percentages
     daily_count = df_combined.sum(axis=1).astype(int)
@@ -208,17 +212,18 @@ def plot_5y_vs_10y(all_breadth_data):
             
             # Last 5Y overlay
             pct_5y = pct_data[pct_data.index >= FIVE_YEARS_AGO]
-            fig.add_trace(
-                go.Scatter(
-                    x=pct_5y.index,
-                    y=pct_5y.values,
-                    name=f"5Y",
-                    line=dict(color=THEME['ema_colors'][ema], width=2.5),
-                    showlegend=(idx == 0),
-                    hovertemplate="%{y:.1f}%<extra></extra>"
-                ),
-                row=row, col=col
-            )
+            if not pct_5y.empty:
+                fig.add_trace(
+                    go.Scatter(
+                        x=pct_5y.index,
+                        y=pct_5y.values,
+                        name=f"5Y",
+                        line=dict(color=THEME['ema_colors'][ema], width=2.5),
+                        showlegend=(idx == 0),
+                        hovertemplate="%{y:.1f}%<extra></extra>"
+                    ),
+                    row=row, col=col
+                )
             
             # Reference levels
             fig.add_hline(y=70, line_dash="dash", line_color="red", line_width=1, 
@@ -300,47 +305,10 @@ def calculate_yearly_lows(all_breadth_data):
                     'EMA': ema,
                     'Max_Below_Count': int(max_count),
                     'Total_Stocks': total_stocks,
-                    'Max_Below_Pct': round((max_count / total_stocks) * 100, 2)
+                    'Max_Below_Pct': round((max_count / total_stocks) * 100, 2) if total_stocks > 0 else 0
                 })
     
     return pd.DataFrame(yearly_data).sort_values(['Year', 'EMA'], ascending=[False, True])
-
-# ============================================================================
-# CURRENT STATS TABLE
-# ============================================================================
-
-def create_current_stats_table(all_breadth_data):
-    """Create comparison table: Current vs Historical Yearly Max."""
-    
-    current_date = TODAY
-    yearly_df = calculate_yearly_lows(all_breadth_data)
-    
-    stats = []
-    
-    for ema in EMA_PERIODS:
-        pct_data = all_breadth_data[ema]['pct']
-        count_data = all_breadth_data[ema]['count']
-        total = all_breadth_data[ema]['total']
-        
-        if pct_data is not None:
-            current_pct = pct_data.iloc[-1]
-            current_count = count_data.iloc[-1]
-            
-            # Get yearly max for this EMA across all years
-            yearly_ema = yearly_df[yearly_df['EMA'] == ema]
-            if not yearly_ema.empty:
-                yearly_breakdown = yearly_ema[['Year', 'Max_Below_Count']].set_index('Year')['Max_Below_Count'].to_dict()
-            else:
-                yearly_breakdown = {}
-            
-            stats.append({
-                'EMA': ema,
-                'Current_%': f"{current_pct:.1f}%",
-                'Current_Count': f"{int(current_count)}/{total}",
-                'Yearly_Breakdown': yearly_breakdown
-            })
-    
-    return stats
 
 # ============================================================================
 # MAIN APP
@@ -398,8 +366,15 @@ def main():
     if 'breadth_data' in st.session_state:
         breadth_data = st.session_state['breadth_data']
         
+        # Check if any data is valid
+        has_data = any(breadth_data[ema]['pct'] is not None for ema in EMA_PERIODS)
+        
+        if not has_data:
+            st.error("❌ No valid breadth data available. Check ticker data.")
+            st.stop()
+        
         # ====================================================================
-        # TAB 1: 5Y vs 10Y COMPARISON
+        # SECTION 1: 5Y vs 10Y COMPARISON
         # ====================================================================
         st.markdown("### 5-Year vs 10-Year Breadth Comparison")
         st.caption("**Thick line** = Last 5 years | **Dotted line** = Full history | Higher % = More stocks below EMA")
@@ -426,20 +401,24 @@ def main():
         st.divider()
         
         # ====================================================================
-        # TAB 2: YEARLY LOWS COMPARISON
+        # SECTION 2: YEARLY LOWS COMPARISON
         # ====================================================================
         st.markdown("### Yearly Peak Breadth (2008-2025)")
         st.caption("Maximum number of stocks trading below each EMA per year")
         
         yearly_df = calculate_yearly_lows(breadth_data)
         
-        fig_yearly = plot_yearly_comparison(yearly_df)
-        st.plotly_chart(fig_yearly, use_container_width=True)
+        # BUG FIX: Check if yearly_df has multiple years before plotting
+        if not yearly_df.empty and yearly_df['Year'].nunique() > 1:
+            fig_yearly = plot_yearly_comparison(yearly_df)
+            st.plotly_chart(fig_yearly, use_container_width=True)
+        else:
+            st.warning("⚠️ Insufficient yearly data for chart")
         
         st.divider()
         
         # ====================================================================
-        # TAB 3: CURRENT vs HISTORICAL YEARLY MAX
+        # SECTION 3: CURRENT vs HISTORICAL YEARLY MAX
         # ====================================================================
         st.markdown("### Current Breadth vs Historical Yearly Peak")
         
@@ -460,7 +439,7 @@ def main():
             
             # Yearly max
             yearly_ema = yearly_df[yearly_df['EMA'] == ema].sort_values('Year', ascending=False)
-            for _, row in yearly_ema.head(17).iterrows():  # 2008-2024
+            for _, row in yearly_ema.iterrows():
                 year = int(row['Year'])
                 count = int(row['Max_Below_Count'])
                 row_data[str(year)] = count
@@ -489,7 +468,7 @@ def main():
         st.divider()
         
         # ====================================================================
-        # TAB 4: DETAILED DAILY DATA
+        # SECTION 4: DETAILED DAILY DATA
         # ====================================================================
         st.markdown("### Daily Breadth Data")
         
