@@ -233,9 +233,8 @@ def load_tickers_from_csv(csv_filename):
         if symbol_col is None:
             return None, None, "Symbol column not found"
         
-        # Get unique symbols and add .NS suffix for NSE
-        symbols = df[symbol_col].unique().tolist()
-        tickers = [f"{sym}.NS" for sym in symbols]
+        # Get unique symbols (already includes .NS suffix in CSV)
+        tickers = df[symbol_col].unique().tolist()
         
         # Get company info if available
         company_info = {}
@@ -253,7 +252,7 @@ def load_tickers_from_csv(csv_filename):
                 break
         
         for _, row in df.iterrows():
-            sym = f"{row[symbol_col]}.NS"
+            sym = row[symbol_col]
             company_info[sym] = {
                 'name': row[name_col] if name_col else row[symbol_col],
                 'industry': row[industry_col] if industry_col else 'N/A'
