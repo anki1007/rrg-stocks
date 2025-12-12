@@ -490,7 +490,7 @@ with rank_col:
     st.markdown("### Ranking")
     if ranked_syms:
         rows_html = []
-        for sym in ranked_syms[:22]:
+        for sym in ranked_syms[:35]:
             rr = float(rs_ratio_map[sym].iloc[end_idx])
             mm = float(rs_mom_map[sym].iloc[end_idx])
             stat = get_status(rr, mm)
