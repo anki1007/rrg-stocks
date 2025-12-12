@@ -3,7 +3,7 @@ import datetime as _dt
 import email.utils as _eutils
 import urllib.request as _urlreq
 from urllib.parse import quote
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -27,7 +27,7 @@ GITHUB_USER = "anki1007"
 GITHUB_REPO = "rrg-stocks"
 GITHUB_BRANCH = "main"
 GITHUB_TICKER_DIR = "ticker"
-CSV_BASENAME = "niftyindices.csv"  # <— your CSV path under /ticker
+CSV_BASENAME = "niftyindices.csv"  # CSV path under /ticker
 RAW_BASE = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/{GITHUB_BRANCH}/{GITHUB_TICKER_DIR}/"
 
 DEFAULT_TF = "Weekly"
@@ -101,8 +101,9 @@ def _to_yahoo_symbol(raw_sym: str) -> str:
         return s
     return "^" + s  # map index codes like CNXIT -> ^CNXIT
 
+# ---- CSV loaders (GitHub with cache-bust, or uploaded override) ----
 @st.cache_data(ttl=600)
-def load_universe_from_github_csv(basename: str):
+def load_universe_from_github_csv(basename: str, cache_bust: str) -> Tuple[List[str], Dict[str, Dict[str, str]]]:
     url = RAW_BASE + basename
     df = pd.read_csv(url)
     mapping = _normalize_cols(df.columns.tolist())
@@ -120,6 +121,37 @@ def load_universe_from_github_csv(basename: str):
     sel = sel[sel["Symbol"].astype(str).str.strip() != ""].drop_duplicates(subset=["Symbol"])
 
     sel["Yahoo"] = sel["Symbol"].apply(_to_yahoo_symbol)
+    universe = sel["Yahoo"].tolist()
+    meta = {
+        r["Yahoo"]: {
+            "name": (r["Company Name"] or r["Yahoo"]),
+            "industry": (r["Industry"] or "-"),
+            "raw_symbol": r["Symbol"],
+            "is_equity": r["Yahoo"].endswith(".NS"),
+        }
+        for _, r in sel.iterrows()
+    }
+    # cache_bust is unused in code but varies the cache key
+    _ = cache_bust
+    return universe, meta
+
+def load_universe_from_uploaded_csv(file) -> Tuple[List[str], Dict[str, Dict[str, str]]]:
+    df = pd.read_csv(file)
+    mapping = _normalize_cols(df.columns.tolist())
+    sym_col = next((c for c,k in mapping.items() if k in ("symbol","ticker","symbols")), None)
+    if sym_col is None:
+        raise ValueError("Uploaded CSV must contain 'Symbol' column.")
+    name_col = next((c for c,k in mapping.items() if k in ("companyname","name","company","companyfullname")), sym_col)
+    ind_col  = next((c for c,k in mapping.items() if k in ("industry","sector","industries")), None)
+    if ind_col is None:
+        ind_col = "Industry"
+        df[ind_col] = "-"
+
+    sel = df[[sym_col, name_col, ind_col]].copy()
+    sel.columns = ["Symbol","Company Name","Industry"]
+    sel = sel[sel["Symbol"].astype(str).str.strip() != ""].drop_duplicates(subset=["Symbol"])
+    sel["Yahoo"] = sel["Symbol"].apply(_to_yahoo_symbol)
+
     universe = sel["Yahoo"].tolist()
     meta = {
         r["Yahoo"]: {
@@ -327,17 +359,28 @@ def symbol_color_map(symbols):
 
 # -------------------- Controls --------------------
 st.sidebar.header("RRG — Controls")
+
+# Data source controls
+uploaded = st.sidebar.file_uploader("Upload indices CSV (optional override)", type=["csv"])
+if st.sidebar.button("Reload universe"):
+    st.cache_data.clear()
+    st.rerun()
+
 bench_label = st.sidebar.selectbox("Benchmark", list(BENCH_CHOICES.keys()), index=0)
 interval_label = st.sidebar.selectbox("Strength vs (TF)", TF_LABELS, index=TF_LABELS.index(DEFAULT_TF))
 interval = TF_TO_INTERVAL[interval_label]
 default_period_for_tf = {"1d": "1Y", "1wk": "1Y", "1mo": "10Y"}[interval]
 period_label = st.sidebar.selectbox("Period", list(PERIOD_MAP.keys()), index=list(PERIOD_MAP.keys()).index(default_period_for_tf))
 period = PERIOD_MAP[period_label]
+
 rank_modes = ["RRG Power (dist)", "RS-Ratio", "RS-Momentum", "Price %Δ (tail)", "Momentum Slope (tail)"]
 rank_mode = st.sidebar.selectbox("Rank by", rank_modes, index=0)
 tail_len = st.sidebar.slider("Trail Length", 1, 20, DEFAULT_TAIL, 1)
 show_labels = st.sidebar.toggle("Show labels on chart", value=False)
 label_top_n = st.sidebar.slider("Label top N by distance", 3, 30, 12, 1, disabled=not show_labels)
+max_rank_display = st.sidebar.slider("Max items in ranking panel", 10, 200, 50, 1)
+
+diag = st.sidebar.checkbox("Show diagnostics", value=False)
 
 if "playing" not in st.session_state:
     st.session_state.playing = False
@@ -346,7 +389,12 @@ speed_ms = st.sidebar.slider("Speed (ms/frame)", 150, 1500, 300, 50)
 looping = st.sidebar.checkbox("Loop", value=True)
 
 # -------------------- Data Build --------------------
-UNIVERSE, META = load_universe_from_github_csv(CSV_BASENAME)
+if uploaded is not None:
+    UNIVERSE, META = load_universe_from_uploaded_csv(uploaded)
+else:
+    # cache_bust varies the cache key so updated CSVs are fetched within ttl window
+    UNIVERSE, META = load_universe_from_github_csv(CSV_BASENAME, cache_bust=str(pd.Timestamp.utcnow().floor("1min")))
+
 bench_symbol = BENCH_CHOICES[bench_label]
 benchmark_data, tickers_data = download_block_with_benchmark(UNIVERSE, bench_symbol, period, interval)
 if benchmark_data is None or benchmark_data.empty:
@@ -371,6 +419,15 @@ for t, s in tickers_data.items():
 if not tickers:
     st.warning("After alignment, no symbols have enough coverage. Try a longer period.")
     st.stop()
+
+# Optional diagnostics
+if diag:
+    kept = set(rs_ratio_map.keys())
+    dropped = [s for s in UNIVERSE if s not in kept and s != bench_symbol]
+    st.info(f"CSV universe: {len(UNIVERSE)} | Eligible after coverage: {len(kept)} | Ranked shown: {len(kept)}")
+    if dropped:
+        st.warning(f"Dropped (no data/insufficient coverage): {len(dropped)}")
+        st.write(dropped)
 
 # Initialize visible set BEFORE ranking/perf is computed
 if "visible_set" not in st.session_state:
@@ -406,7 +463,7 @@ end_idx = st.slider("Date", min_value=DEFAULT_TAIL, max_value=idx_len - 1,
 start_idx = max(end_idx - tail_len, 0)
 date_str = format_bar_date(idx[end_idx], interval)
 
-# -------- Title (as requested) --------
+# -------- Title --------
 st.markdown(f"### Relative Rotation Graphs – Indices – {date_str}")
 
 # -------------------- Ranking Metric (1 = strongest) --------------------
@@ -434,7 +491,7 @@ def ranking_value(t: str) -> float:
 perf = [(t, ranking_value(t)) for t in tickers if t in st.session_state.visible_set]
 perf.sort(key=lambda x: x[1], reverse=True)
 
-# >>> Ranked symbols and rank-map used for BOTH the right panel and the table
+# Ranked symbols and rank-map used for BOTH the right panel and the table
 ranked_syms = [sym for sym, _ in perf]
 rank_dict = {sym: i for i, sym in enumerate(ranked_syms, start=1)}
 
@@ -490,7 +547,7 @@ with rank_col:
     st.markdown("### Ranking")
     if ranked_syms:
         rows_html = []
-        for sym in ranked_syms[:35]:
+        for sym in ranked_syms[:max_rank_display]:
             rr = float(rs_ratio_map[sym].iloc[end_idx])
             mm = float(rs_mom_map[sym].iloc[end_idx])
             stat = get_status(rr, mm)
@@ -530,7 +587,7 @@ def make_table_html(rows):
 
 # Build table rows IN RANK ORDER so it matches the right panel
 rows = []
-for t in ranked_syms:  # <<< ranked order (strongest → weakest)
+for t in ranked_syms:
     rr = float(rs_ratio_map[t].iloc[end_idx])
     mm = float(rs_mom_map[t].iloc[end_idx])
     status = get_status(rr, mm)
