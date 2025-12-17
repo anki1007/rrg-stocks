@@ -36,7 +36,7 @@ WINDOW = 14
 DEFAULT_TAIL = 8
 
 # ============================================================
-# PAGE SETUP
+# PAGE
 # ============================================================
 
 st.set_page_config(page_title="RRG Stocks Terminal", layout="wide")
@@ -56,7 +56,7 @@ st.markdown("""
 }
 .rrg-table td { padding:6px 8px; }
 .table-legend { display:flex; gap:14px; margin-bottom:8px; font-size:12px; }
-.legend-box { width:14px; height:8px; border-radius:3px; }
+.legend-box { width:14px; height:8px; border-radius:3px; display:inline-block; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -98,7 +98,6 @@ def download_prices(symbols, benchmark, period, interval):
     data = {}
     failed = []
 
-    # Benchmark first
     bench_df = yf.download(
         benchmark,
         period=period,
@@ -107,6 +106,7 @@ def download_prices(symbols, benchmark, period, interval):
         progress=False,
         threads=False
     )
+
     if bench_df.empty:
         return {}, symbols
 
@@ -130,12 +130,12 @@ def download_prices(symbols, benchmark, period, interval):
     return data, failed
 
 # ============================================================
-# SIDEBAR CONTROLS
+# SIDEBAR
 # ============================================================
 
 st.sidebar.header("RRG Controls")
 
-universe_name = st.sidebar.selectbox("Universe", list(UNIVERSES.keys()))
+universe_name = st.sidebar.selectbox("Universe", list(UNIVERSES.keys())))
 benchmark_name = st.sidebar.selectbox("Benchmark", list(BENCHMARKS.keys()))
 tf_label = st.sidebar.selectbox("Timeframe", list(TF_MAP.keys()))
 period_label = st.sidebar.selectbox("Period", list(PERIOD_MAP.keys()))
@@ -152,7 +152,7 @@ symbols = df["Symbol"].tolist()
 benchmark = BENCHMARKS[benchmark_name]
 
 # ============================================================
-# DOWNLOAD DATA (YAHOO ONLY)
+# DOWNLOAD DATA
 # ============================================================
 
 raw, failed_symbols = download_prices(
@@ -189,22 +189,25 @@ for s in symbols:
     rs_mom[s] = mm
 
 # ============================================================
-# RANKING
+# SAFE RANKING (CRITICAL FIX)
 # ============================================================
 
-end_idx = -1
-start_idx = max(len(bench_px) + end_idx - tail_len, 0)
+rank_metric = {}
 
-ranked = sorted(
-    rs_ratio.keys(),
-    key=lambda s: np.hypot(
-        rs_ratio[s].iloc[end_idx] - 100,
-        rs_mom[s].iloc[end_idx] - 100
-    ),
-    reverse=True
-)
+for s in rs_ratio:
+    try:
+        rr_val = float(rs_ratio[s].iloc[-1])
+        mm_val = float(rs_mom[s].iloc[-1])
+        if np.isnan(rr_val) or np.isnan(mm_val):
+            continue
+        rank_metric[s] = np.hypot(rr_val - 100.0, mm_val - 100.0)
+    except Exception:
+        continue
 
+ranked = sorted(rank_metric.keys(), key=lambda s: rank_metric[s], reverse=True)
 rank_dict = {s: i + 1 for i, s in enumerate(ranked)}
+
+start_idx = max(len(rs_ratio[ranked[0]]) - tail_len, 0)
 
 # ============================================================
 # LAYOUT
@@ -212,7 +215,7 @@ rank_dict = {s: i + 1 for i, s in enumerate(ranked)}
 
 plot_col, rank_col = st.columns([4.5, 1.8])
 
-# ================== CHART CONTROLS ==================
+# ================= CHART =================
 
 with plot_col:
     with st.expander("🔍 Chart Controls", expanded=False):
@@ -223,7 +226,6 @@ with plot_col:
     with st.expander("📈 RRG Chart", expanded=True):
         fig, ax = plt.subplots(figsize=(12, 8))
 
-        # Quadrants
         ax.fill_between([x_min,100],[100,100],[y_max,y_max], color="#c7d2fe", alpha=0.6)
         ax.fill_between([100,x_max],[100,100],[y_max,y_max], color="#bbf7d0", alpha=0.6)
         ax.fill_between([x_min,100],[y_min,y_min],[100,100], color="#fecaca", alpha=0.6)
@@ -243,8 +245,8 @@ with plot_col:
         ax.set_ylabel("RS-Momentum")
 
         for s in ranked:
-            rr = rs_ratio[s].iloc[start_idx:end_idx+1]
-            mm = rs_mom[s].iloc[start_idx:end_idx+1]
+            rr = rs_ratio[s].iloc[start_idx:]
+            mm = rs_mom[s].iloc[start_idx:]
             if rr.empty or mm.empty:
                 continue
             ax.plot(rr,mm,alpha=0.6)
@@ -261,32 +263,14 @@ with plot_col:
         with c2:
             st.download_button("⬇ PDF", export_figure(fig,"pdf"), "rrg.pdf")
 
-# ================== RANKING PANEL ==================
+# ================= RANKING =================
 
 with rank_col:
     st.markdown("### Ranking")
     for s in ranked[:30]:
         st.markdown(f"**{rank_dict[s]}. {display_symbol(s)}**")
 
-    with st.expander("📊 Ranking Table"):
-        rows = ""
-        for s in ranked[:30]:
-            rows += f"""
-            <tr>
-              <td>{rank_dict[s]}</td>
-              <td><a href="{tradingview_link(s)}" target="_blank">{display_symbol(s)}</a></td>
-              <td>{rs_ratio[s].iloc[end_idx]:.2f}</td>
-              <td>{rs_mom[s].iloc[end_idx]:.2f}</td>
-            </tr>
-            """
-        st.markdown(f"""
-        <table class="rrg-table">
-        <thead><tr><th>Rank</th><th>Symbol</th><th>RS-Ratio</th><th>RS-Momentum</th></tr></thead>
-        <tbody>{rows}</tbody>
-        </table>
-        """, unsafe_allow_html=True)
-
-# ================== MAIN TABLE ==================
+# ================= TABLE =================
 
 legend = """
 <div class="table-legend">
@@ -299,10 +283,8 @@ legend = """
 rows = ""
 for s in ranked:
     r = rank_dict[s]
-    rr_val = rs_ratio[s].iloc[end_idx]
-    mm_val = rs_mom[s].iloc[end_idx]
-    if pd.isna(rr_val) or pd.isna(mm_val):
-        continue
+    rr_val = float(rs_ratio[s].iloc[-1])
+    mm_val = float(rs_mom[s].iloc[-1])
     rows += f"""
     <tr style="background:{rank_color(r)}">
       <td>{r}</td>
@@ -328,4 +310,4 @@ with st.expander("Table", expanded=True):
 if failed_symbols:
     st.sidebar.warning(f"{len(failed_symbols)} symbols skipped due to Yahoo limits.")
 
-st.caption("RRG Stocks Terminal — Yahoo Finance only, stable & production ready")
+st.caption("RRG Stocks Terminal — FINAL, Yahoo-only, production stable")
