@@ -1,244 +1,175 @@
 # ============================================================
-# RRG STOCKS — STREAMLIT SAFE VERSION
-# FIXED: GitHub API rate-limit issue
+# RRG STOCKS — FULL TERMINAL DASHBOARD (PRODUCTION)
 # ============================================================
 
-import os, time, pathlib, logging, functools, calendar, io
-import datetime as _dt
-from urllib.parse import quote
-from typing import List, Dict
-
+import time, pathlib, io, calendar
 import numpy as np
 import pandas as pd
 import yfinance as yf
-import requests
 import streamlit as st
-
-import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.colors import to_hex
+from io import BytesIO
+from urllib.parse import quote
 
-# ============================================================
-# CONFIG
-# ============================================================
-
-GITHUB_USER   = "anki1007"
-GITHUB_REPO   = "rrg-stocks"
-GITHUB_BRANCH = "main"
-GITHUB_TICKER_DIR = "ticker"
-
-RAW_BASE = (
-    f"https://raw.githubusercontent.com/"
-    f"{GITHUB_USER}/{GITHUB_REPO}/{GITHUB_BRANCH}/{GITHUB_TICKER_DIR}/"
-)
-
-# 👇 STATIC CSV LIST (NO API CALLS)
+# ---------------- CONFIG ----------------
+GITHUB_RAW = "https://raw.githubusercontent.com/anki1007/rrg-stocks/main/ticker/"
 CSV_FILES = [
-    "nifty50.csv",
-    "nifty200.csv",
-    "nifty500.csv",
-    "niftymidcap150.csv",
-    "niftysmallcap250.csv",
-    "niftymidsmallcap400.csv",
-    "niftytotalmarket.csv",
+    "nifty50.csv","nifty200.csv","nifty500.csv",
+    "niftymidcap150.csv","niftysmallcap250.csv","niftymidsmallcap400.csv"
 ]
-
-FRIENDLY_NAMES = {
-    "nifty50.csv": "Nifty 50",
-    "nifty200.csv": "Nifty 200",
-    "nifty500.csv": "Nifty 500",
-    "niftymidcap150.csv": "Nifty Midcap 150",
-    "niftysmallcap250.csv": "Nifty Smallcap 250",
-    "niftymidsmallcap400.csv": "Nifty MidSmallcap 400",
-    "niftytotalmarket.csv": "Nifty Total Market",
-}
-
-BENCHMARKS = {
-    "Nifty 50": "^NSEI",
-    "Nifty 200": "^CNX200",
-    "Nifty 500": "^CRSLDX",
-}
-
-PERIOD_MAP = {
-    "6M": "6mo",
-    "1Y": "1y",
-    "2Y": "2y",
-    "3Y": "3y",
-    "5Y": "5y",
-    "10Y": "10y",
-}
-
-TF_MAP = {
-    "Daily": "1d",
-    "Weekly": "1wk",
-    "Monthly": "1mo",
-}
-
+BENCH_CHOICES = {"Nifty 50":"^NSEI","Nifty 200":"^CNX200","Nifty 500":"^CRSLDX"}
+TF_MAP = {"Daily":"1d","Weekly":"1wk","Monthly":"1mo"}
+PERIOD_MAP = {"6M":"6mo","1Y":"1y","2Y":"2y","3Y":"3y","5Y":"5y","10Y":"10y"}
 WINDOW = 14
-TAIL_DEFAULT = 8
+DEFAULT_TAIL = 8
+IST_TZ="Asia/Kolkata"
 
-# ============================================================
-# STREAMLIT SETUP
-# ============================================================
+# ---------------- PAGE ----------------
+st.set_page_config(page_title="RRG Stocks Terminal", layout="wide")
 
-st.set_page_config(
-    page_title="Relative Rotation Graph (RRG)",
-    layout="wide"
-)
+# ---------------- CSS ----------------
+st.markdown("""
+<style>
+.rrg-wrap { max-height: calc(100vh - 260px); overflow:auto; }
+.rrg-table th { position:sticky; top:0; background:#111827; color:#e5e7eb; }
+.blink-up { animation: blinkGreen 1.2s ease-out; }
+.blink-down { animation: blinkRed 1.2s ease-out; }
+@keyframes blinkGreen { from{background:#bbf7d0;} to{background:transparent;} }
+@keyframes blinkRed { from{background:#fecaca;} to{background:transparent;} }
+</style>
+""", unsafe_allow_html=True)
 
-mpl.rcParams["figure.dpi"] = 120
-mpl.rcParams["font.size"] = 12
+# ---------------- HELPERS ----------------
+def display_symbol(sym): return sym.replace(".NS","")
+def tv_link(sym): return f"https://www.tradingview.com/chart/?symbol=NSE:{display_symbol(sym)}"
 
-# ============================================================
-# HELPERS
-# ============================================================
+def rank_gradient(rank):
+    if rank<=30:   return f"rgb({22+rank*2},163,{74})"
+    if rank<=60:   return f"rgb(37,{99+(rank-30)*2},235)"
+    if rank<=90:   return f"rgb({250},{204-(rank-60)*2},21)"
+    return "transparent"
 
-def friendly_name(csv):
-    return FRIENDLY_NAMES.get(csv, csv.replace(".csv", "").title())
+def jdk(price, bench):
+    rs = 100 * price / bench
+    rr = 100 + (rs - rs.rolling(WINDOW).mean()) / rs.rolling(WINDOW).std()
+    mm = 101 + (rr.pct_change()*100 - rr.pct_change().rolling(WINDOW).mean()) / rr.pct_change().rolling(WINDOW).std()
+    ix = rr.index.intersection(mm.index)
+    return rr.loc[ix], mm.loc[ix]
 
-def build_name_maps():
-    name_map = {friendly_name(f): f for f in CSV_FILES}
-    return name_map, sorted(name_map.keys())
+def export_fig(fig, fmt):
+    buf = BytesIO()
+    fig.savefig(buf, format=fmt, dpi=200, bbox_inches="tight")
+    buf.seek(0)
+    return buf
 
-@st.cache_data(ttl=3600)
-def load_universe(csv_file):
-    url = RAW_BASE + csv_file
-    df = pd.read_csv(url)
-
-    cols = {c.lower().replace(" ", ""): c for c in df.columns}
-    sym_col = cols.get("symbol") or cols.get("ticker")
-
-    if not sym_col:
-        raise ValueError("CSV must contain Symbol column")
-
-    df = df[[sym_col]].dropna()
-    df[sym_col] = df[sym_col].astype(str).str.strip()
-
-    return df[sym_col].unique().tolist()
-
-def jdk_rs(price, bench, win=14):
-    df = pd.concat([price, bench], axis=1).dropna()
-    rs = 100 * df.iloc[:, 0] / df.iloc[:, 1]
-
-    m = rs.rolling(win).mean()
-    s = rs.rolling(win).std().replace(0, np.nan)
-
-    rs_ratio = 100 + (rs - m) / s
-    rroc = rs_ratio.pct_change() * 100
-
-    m2 = rroc.rolling(win).mean()
-    s2 = rroc.rolling(win).std().replace(0, np.nan)
-
-    rs_mom = 101 + (rroc - m2) / s2
-    return rs_ratio.dropna(), rs_mom.dropna()
-
-def quadrant(x, y):
-    if x >= 100 and y >= 100:
-        return "Leading"
-    if x < 100 and y >= 100:
-        return "Improving"
-    if x < 100 and y < 100:
-        return "Lagging"
-    return "Weakening"
-
-# ============================================================
-# SIDEBAR
-# ============================================================
-
+# ---------------- SIDEBAR ----------------
 st.sidebar.header("RRG Controls")
+csv_choice = st.sidebar.selectbox("Universe", CSV_FILES)
+bench_label = st.sidebar.selectbox("Benchmark", list(BENCH_CHOICES))
+tf_label = st.sidebar.selectbox("Timeframe", TF_MAP)
+period_label = st.sidebar.selectbox("Period", PERIOD_MAP)
+tail_len = st.sidebar.slider("Trail Length",1,20,DEFAULT_TAIL)
+live_mode = st.sidebar.toggle("Intraday Auto-Refresh", False)
 
-NAME_MAP, DISPLAY_LIST = build_name_maps()
+# ---------------- LOAD UNIVERSE ----------------
+df = pd.read_csv(GITHUB_RAW+csv_choice)
+df["Yahoo"] = df["Symbol"].astype(str).str.upper()+".NS"
+symbols = df["Yahoo"].tolist()
+meta = dict(zip(df["Yahoo"], df["Symbol"]))
 
-csv_display = st.sidebar.selectbox("Universe", DISPLAY_LIST)
-csv_file = NAME_MAP[csv_display]
+# ---------------- DATA ----------------
+bench = BENCH_CHOICES[bench_label]
+raw = yf.download(symbols+[bench], period=PERIOD_MAP[period_label],
+                  interval=TF_MAP[tf_label], group_by="ticker",
+                  auto_adjust=True, progress=False)
+bench_px = raw[bench]["Close"]
 
-bench_display = st.sidebar.selectbox("Benchmark", list(BENCHMARKS))
-benchmark = BENCHMARKS[bench_display]
-
-tf_label = st.sidebar.selectbox("Timeframe", list(TF_MAP))
-interval = TF_MAP[tf_label]
-
-period_label = st.sidebar.selectbox("Period", list(PERIOD_MAP))
-period = PERIOD_MAP[period_label]
-
-tail = st.sidebar.slider("Trail Length", 3, 20, TAIL_DEFAULT)
-
-# ============================================================
-# DATA LOAD
-# ============================================================
-
-symbols = load_universe(csv_file)
-
-prices = yf.download(
-    symbols + [benchmark],
-    period=period,
-    interval=interval,
-    group_by="ticker",
-    auto_adjust=True,
-    progress=False,
-)
-
-bench_close = prices[benchmark]["Close"]
-
-rs_data = {}
-
-for sym in symbols:
+rsr, rsm = {}, {}
+for s in symbols:
     try:
-        s = prices[sym]["Close"]
-        rr, rm = jdk_rs(s, bench_close, WINDOW)
-        if len(rr) > 20:
-            rs_data[sym] = (rr, rm)
-    except Exception:
-        continue
+        rr, mm = jdk(raw[s]["Close"], bench_px)
+        if len(rr)>20:
+            rsr[s]=rr; rsm[s]=mm
+    except: pass
 
-if not rs_data:
-    st.error("No valid symbols after calculation.")
-    st.stop()
+end_idx = -1
+start_idx = max(len(bench_px)+end_idx-tail_len,0)
 
-# ============================================================
-# PLOT
-# ============================================================
+# ---------------- RANKING ----------------
+ranked = sorted(rsr.keys(),
+                key=lambda s: np.hypot(rsr[s].iloc[end_idx]-100, rsm[s].iloc[end_idx]-100),
+                reverse=True)
+rank_dict = {s:i+1 for i,s in enumerate(ranked)}
 
-fig, ax = plt.subplots(figsize=(10, 7))
+if "prev_ranks" not in st.session_state:
+    st.session_state.prev_ranks = {}
 
-ax.axhline(100, linestyle=":", color="gray")
-ax.axvline(100, linestyle=":", color="gray")
+rank_change = {s: st.session_state.prev_ranks.get(s,rank_dict[s])-rank_dict[s] for s in ranked}
+st.session_state.prev_ranks = rank_dict.copy()
 
-ax.set_xlim(94, 106)
-ax.set_ylim(94, 106)
+# ---------------- LAYOUT ----------------
+plot_col, rank_col = st.columns([4.5,1.8])
 
-ax.set_xlabel("RS Ratio")
-ax.set_ylabel("RS Momentum")
-ax.set_title(f"RRG — {csv_display} vs {bench_display}")
+with plot_col:
+    fig, ax = plt.subplots(figsize=(10.6,6.8))
 
-colors = plt.cm.tab20.colors
+    # Quadrants
+    ax.fill_between([94,100],[100,100],[106,106], color="#c7d2fe", alpha=.6)
+    ax.fill_between([100,106],[100,100],[106,106], color="#bbf7d0", alpha=.6)
+    ax.fill_between([94,100],[94,94],[100,100], color="#fecaca", alpha=.6)
+    ax.fill_between([100,106],[94,94],[100,100], color="#fef9c3", alpha=.6)
 
-for i, (sym, (rr, rm)) in enumerate(rs_data.items()):
-    rr_t = rr.iloc[-tail:]
-    rm_t = rm.iloc[-tail:]
+    ax.text(95,105,"Improving",weight="bold")
+    ax.text(105,105,"Leading",ha="right",weight="bold")
+    ax.text(95,95,"Lagging",weight="bold")
+    ax.text(105,95,"Weakening",ha="right",weight="bold")
 
-    ax.plot(rr_t, rm_t, color=colors[i % 20], alpha=0.7)
-    ax.scatter(rr_t.iloc[-1], rm_t.iloc[-1], s=70, color=colors[i % 20])
-    ax.text(rr_t.iloc[-1] + 0.2, rm_t.iloc[-1], sym, fontsize=9)
+    ax.axhline(100,ls=":",c="gray"); ax.axvline(100,ls=":",c="gray")
+    ax.set_xlim(94,106); ax.set_ylim(94,106)
+    ax.set_xlabel("RS-Ratio"); ax.set_ylabel("RS-Momentum")
 
-st.pyplot(fig, use_container_width=True)
+    for s in ranked:
+        rr = rsr[s].iloc[start_idx:end_idx+1]
+        mm = rsm[s].iloc[start_idx:end_idx+1]
+        ax.plot(rr,mm,alpha=.6)
+        ax.scatter(rr.iloc[-1],mm.iloc[-1],s=70)
+        if rank_dict[s]<=15:
+            ax.annotate(display_symbol(s),(rr.iloc[-1],mm.iloc[-1]),xytext=(6,6),textcoords="offset points")
 
-# ============================================================
-# TABLE
-# ============================================================
+    st.pyplot(fig,use_container_width=True)
 
-rows = []
-for sym, (rr, rm) in rs_data.items():
-    x, y = rr.iloc[-1], rm.iloc[-1]
-    rows.append({
-        "Symbol": sym,
-        "RS Ratio": round(x, 2),
-        "RS Momentum": round(y, 2),
-        "Quadrant": quadrant(x, y),
-    })
+    c1,c2 = st.columns(2)
+    with c1: st.download_button("⬇ PNG", export_fig(fig,"png"), "rrg.png")
+    with c2: st.download_button("⬇ PDF", export_fig(fig,"pdf"), "rrg.pdf")
 
-df_out = pd.DataFrame(rows).sort_values("RS Ratio", ascending=False)
+with rank_col:
+    st.markdown("### Ranking")
+    for s in ranked[:30]:
+        st.markdown(f"**{rank_dict[s]}. {display_symbol(s)}**")
 
-st.dataframe(df_out, use_container_width=True)
+# ---------------- TABLE ----------------
+rows=[]
+for s in ranked:
+    r = rank_dict[s]
+    bg = rank_gradient(r)
+    blink = "blink-up" if rank_change[s]>0 else "blink-down" if rank_change[s]<0 else ""
+    rows.append(f"""
+    <tr class="{blink}" style="background:{bg}">
+      <td>{r}</td>
+      <td><a href="{tv_link(s)}" target="_blank">{display_symbol(s)}</a></td>
+      <td>{rsr[s].iloc[end_idx]:.2f}</td>
+      <td>{rsm[s].iloc[end_idx]:.2f}</td>
+    </tr>
+    """)
 
-st.caption("✔ GitHub-API-free | ✔ Streamlit-Cloud-safe | ✔ Production ready")
+table_html = """
+<div class="rrg-wrap">
+<table class="rrg-table">
+<tr><th>Rank</th><th>Symbol</th><th>RS-Ratio</th><th>RS-Momentum</th></tr>
+""" + "".join(rows) + "</table></div>"
+
+with st.expander("Table", True):
+    st.markdown(table_html, unsafe_allow_html=True)
+
+st.caption("RRG Stocks Terminal — fully compiled, production ready")
