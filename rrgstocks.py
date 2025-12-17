@@ -85,8 +85,17 @@ h1, h2, h3, h4, h5, h6, strong, b { color:#0f172a !important; }
 @st.cache_data(ttl=600)
 def list_csv_files_from_github(user: str, repo: str, branch: str, folder: str) -> List[str]:
     url = f"https://api.github.com/repos/{user}/{repo}/contents/{folder}?ref={branch}"
-    r = requests.get(url, timeout=15)
+    headers = {}
+    
+    # GET TOKEN FROM STREAMLIT SECRETS
+    token = st.secrets.get("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") or os.environ.get("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")
+    if token:
+        headers["Authorization"] = f"token {token}"
+    
+    # NOW USE HEADERS
+    r = requests.get(url, timeout=15, headers=headers)
     r.raise_for_status()
+
     items = r.json()
     files = [it["name"] for it in items if it.get("type") == "file" and it["name"].lower().endswith(".csv")]
     files.sort()
@@ -585,3 +594,4 @@ with dl2:
                        file_name=f"table_{date_str}.csv", mime="text/csv", use_container_width=True)
 
 st.caption("Names open TradingView. Use Play/Pause to watch rotation; Speed adjusts frame interval, and Loop wraps frames.")
+
