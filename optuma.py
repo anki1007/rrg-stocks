@@ -1,25 +1,17 @@
 # ==========================================================
-# OPTUMA-GRADE RRG ENGINE — BLOOMBERG STYLE UI
+# OPTUMA-GRADE INTRADAY RRG + SECTOR CENTROIDS
 # ==========================================================
 
-import os, time, pathlib, calendar, functools, io
 import numpy as np
 import pandas as pd
 import yfinance as yf
-import requests
 import streamlit as st
 import matplotlib.pyplot as plt
-from matplotlib.colors import to_hex
-from urllib.parse import quote
 
-# -------------------- STREAMLIT CONFIG --------------------
-st.set_page_config(
-    page_title="RRG Terminal",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# ---------------- STREAMLIT CONFIG ----------------
+st.set_page_config(page_title="RRG Terminal", layout="wide")
 
-# -------------------- UI THEMES ---------------------------
+# ---------------- THEMES ----------------
 THEMES = {
     "Bloomberg Dark": """
     <style>
@@ -30,37 +22,25 @@ THEMES = {
         font-size:13px;
     }
     h1,h2,h3 { color:#fbbf24 !important; }
-    .stDataFrame { background:#0b0f14; }
-    </style>
-    """,
-
-    "Bloomberg Light": """
-    <style>
-    html, body {
-        background:#f8fafc !important;
-        color:#0f172a !important;
-        font-family: 'IBM Plex Mono','JetBrains Mono', monospace;
-        font-size:13px;
-    }
-    h1,h2,h3 { color:#1d4ed8 !important; }
     </style>
     """
 }
+st.markdown(THEMES["Bloomberg Dark"], unsafe_allow_html=True)
 
-theme = st.sidebar.selectbox("UI Theme", THEMES.keys())
-st.markdown(THEMES[theme], unsafe_allow_html=True)
-
-# -------------------- PARAMETERS --------------------------
+# ---------------- PARAMETERS ----------------
 WINDOW = 14
-DEFAULT_TAIL = 8
 
 BENCHMARKS = {
-    "Nifty 50": "^NSEI",
-    "Nifty 200": "^CNX200",
-    "Nifty 500": "^CRSLDX"
+    "Nifty 50": "^NSEI"
 }
 
-# -------------------- HELPERS -----------------------------
+INTERVALS = {
+    "Daily": ("1d", "6mo"),
+    "15 Min": ("15m", "60d"),
+    "5 Min": ("5m", "30d")
+}
+
+# ---------------- HELPERS ----------------
 def jdk_components(price, bench, win=14):
     df = pd.concat([price, bench], axis=1).dropna()
     rs = 100 * df.iloc[:,0] / df.iloc[:,1]
@@ -82,49 +62,67 @@ def get_status(x, y):
 def zscore(s):
     return (s - s.mean()) / (s.std(ddof=0) + 1e-9)
 
-# -------------------- DATA LOAD ---------------------------
-@st.cache_data(ttl=900)
-def load_prices(symbols, bench, period="1y"):
-    data = yf.download(symbols + [bench], period=period, auto_adjust=True, progress=False)
-    return data
+# ---------------- SIDEBAR ----------------
+st.sidebar.header("Controls")
 
-# -------------------- SIDEBAR CONTROLS --------------------
-st.sidebar.header("RRG Controls")
+interval_label = st.sidebar.selectbox("Timeframe", INTERVALS.keys())
+interval, period = INTERVALS[interval_label]
 
-benchmark_label = st.sidebar.selectbox("Benchmark", BENCHMARKS.keys())
-benchmark = BENCHMARKS[benchmark_label]
-
-period = st.sidebar.selectbox("Period", ["6mo","1y","2y","3y"], index=1)
-tail = st.sidebar.slider("Trail Length", 3, 20, DEFAULT_TAIL)
-
-x_min, x_max = st.sidebar.slider("RS-Ratio Zoom", 85.0, 115.0, (94.0, 106.0), 0.5)
-y_min, y_max = st.sidebar.slider("RS-Momentum Zoom", 85.0, 115.0, (94.0, 106.0), 0.5)
+benchmark = BENCHMARKS["Nifty 50"]
 
 symbols_input = st.sidebar.text_area(
-    "Symbols (comma separated, NSE)",
+    "Stocks (comma separated)",
     "RELIANCE.NS,TCS.NS,INFY.NS,HDFCBANK.NS,ICICIBANK.NS"
 )
 
 symbols = [s.strip().upper() for s in symbols_input.split(",") if s.strip()]
 
-# -------------------- PRICE DATA --------------------------
-raw = load_prices(symbols, benchmark, period)
+show_centroids = st.sidebar.toggle("Show Sector Centroids", value=True)
+
+x_min, x_max = st.sidebar.slider("RS-Ratio Zoom", 90.0, 110.0, (94.0, 106.0), 0.5)
+y_min, y_max = st.sidebar.slider("RS-Momentum Zoom", 90.0, 110.0, (94.0, 106.0), 0.5)
+
+# ---------------- DATA LOAD ----------------
+@st.cache_data(ttl=300)
+def load_data(symbols, bench, interval, period):
+    data = yf.download(symbols + [bench],
+                       interval=interval,
+                       period=period,
+                       auto_adjust=True,
+                       progress=False)
+    return data
+
+raw = load_data(symbols, benchmark, interval, period)
 
 bench = raw["Close"][benchmark]
+
 prices = {s: raw["Close"][s].dropna() for s in symbols if s in raw["Close"]}
 
-# -------------------- RRG CALCULATION ---------------------
+# ---------------- SECTOR MAP ----------------
+@st.cache_data(ttl=3600)
+def fetch_sectors(symbols):
+    sectors = {}
+    for s in symbols:
+        try:
+            info = yf.Ticker(s).fast_info
+            sectors[s] = info.get("sector", "Other")
+        except:
+            sectors[s] = "Other"
+    return sectors
+
+sector_map = fetch_sectors(symbols)
+
+# ---------------- RRG CALC ----------------
 rr_map, mm_map = {}, {}
 for s, px in prices.items():
     rr, mm = jdk_components(px, bench, WINDOW)
     rr_map[s] = rr
     mm_map[s] = mm
 
-idx = bench.index
 end_idx = -1
-start_idx = -tail
+tail = 8
 
-# -------------------- COMPOSITE MOMENTUM SCORE ------------
+# ---------------- COMPOSITE MOMENTUM ----------------
 rows = []
 for s in symbols:
     rr = rr_map[s].iloc[end_idx]
@@ -132,33 +130,36 @@ for s in symbols:
 
     slope = np.polyfit(
         range(tail),
-        mm_map[s].iloc[start_idx:end_idx].values,
+        mm_map[s].iloc[-tail:].values,
         1
     )[0]
 
-    rel_perf = (prices[s].iloc[end_idx] / prices[s].iloc[start_idx] - 1) * 100
+    rows.append((s, rr, mm, slope, sector_map[s]))
 
-    rows.append((s, rr, mm, slope, rel_perf))
-
-df = pd.DataFrame(rows, columns=["Symbol","RS-Ratio","RS-Momentum","Slope","RelPerf"])
+df = pd.DataFrame(rows, columns=["Symbol","RS-Ratio","RS-Momentum","Slope","Sector"])
 
 df["MomentumScore"] = (
-    0.35*zscore(df["RS-Ratio"]) +
-    0.35*zscore(df["RS-Momentum"]) +
-    0.15*zscore(df["Slope"]) +
-    0.15*zscore(df["RelPerf"])
+    0.4*zscore(df["RS-Ratio"]) +
+    0.4*zscore(df["RS-Momentum"]) +
+    0.2*zscore(df["Slope"])
 )
 
 df["MomentumScore"] = 50 + 10*df["MomentumScore"]
 df["Status"] = df.apply(lambda r: get_status(r["RS-Ratio"], r["RS-Momentum"]), axis=1)
-df = df.sort_values("MomentumScore", ascending=False).reset_index(drop=True)
 
-# -------------------- LAYOUT ------------------------------
-plot_col, table_col = st.columns([3.5, 1.5])
+# ---------------- SECTOR CENTROIDS ----------------
+centroids = (
+    df.groupby("Sector")[["RS-Ratio","RS-Momentum"]]
+      .mean()
+      .reset_index()
+)
 
-# -------------------- RRG PLOT ----------------------------
+# ---------------- LAYOUT ----------------
+plot_col, side_col = st.columns([4, 1.6])
+
+# ---------------- RRG PLOT ----------------
 with plot_col:
-    fig, ax = plt.subplots(figsize=(10,6))
+    fig, ax = plt.subplots(figsize=(11,7))
     ax.axhline(100, ls=":", c="gray")
     ax.axvline(100, ls=":", c="gray")
 
@@ -167,11 +168,27 @@ with plot_col:
     ax.fill_between([100,106],[100,100],[106,106], color=(0,1,0,0.15))
     ax.fill_between([94,100],[100,100],[106,106], color=(0,0,1,0.15))
 
+    # Plot stocks
     for s in symbols:
-        rr = rr_map[s].iloc[start_idx:end_idx]
-        mm = mm_map[s].iloc[start_idx:end_idx]
-        ax.plot(rr, mm, lw=1.2)
-        ax.scatter(rr.iloc[-1], mm.iloc[-1], s=80)
+        rr = rr_map[s].iloc[-tail:]
+        mm = mm_map[s].iloc[-tail:]
+        ax.plot(rr, mm, lw=1)
+        ax.scatter(rr.iloc[-1], mm.iloc[-1], s=70)
+
+    # Sector centroids
+    if show_centroids:
+        ax.scatter(
+            centroids["RS-Ratio"],
+            centroids["RS-Momentum"],
+            marker="D",
+            s=220,
+            edgecolor="black",
+            linewidth=1.2,
+            color="white"
+        )
+        for _, r in centroids.iterrows():
+            ax.text(r["RS-Ratio"]+0.2, r["RS-Momentum"]+0.2,
+                    r["Sector"], fontsize=9)
 
     ax.set_xlim(x_min, x_max)
     ax.set_ylim(y_min, y_max)
@@ -180,33 +197,31 @@ with plot_col:
 
     st.pyplot(fig, use_container_width=True)
 
-# -------------------- RIGHT SIDEBAR RANKING ---------------
-with table_col:
+# ---------------- RIGHT SIDEBAR RANKING ----------------
+with side_col:
     st.markdown("### Momentum Ranking")
+    df_sorted = df.sort_values("MomentumScore", ascending=False)
 
     for q in ["Leading","Improving","Weakening","Lagging"]:
         with st.expander(q, expanded=(q=="Leading")):
-            sub = df[df["Status"]==q].head(10)
-            for i,r in sub.iterrows():
-                st.markdown(f"**{i+1}. {r['Symbol']}**  \nScore: `{r['MomentumScore']:.1f}`")
+            sub = df_sorted[df_sorted["Status"]==q].head(8)
+            for i, r in sub.iterrows():
+                st.markdown(
+                    f"**{r['Symbol']}**  \n"
+                    f"Score: `{r['MomentumScore']:.1f}`  \n"
+                    f"Sector: {r['Sector']}"
+                )
 
-# -------------------- FILTERABLE TABLE --------------------
-st.markdown("## 📋 RRG Table")
-
-flt_status = st.multiselect("Filter Status", df["Status"].unique(), df["Status"].unique())
-
-table = df[df["Status"].isin(flt_status)]
+# ---------------- TABLE ----------------
+st.markdown("## RRG Table")
 
 st.dataframe(
-    table[[
-        "Symbol","Status","MomentumScore",
-        "RS-Ratio","RS-Momentum","Slope","RelPerf"
-    ]].rename(columns={
-        "MomentumScore":"Momentum Score",
-        "RelPerf":"Rel Price %"
-    }),
+    df_sorted[[
+        "Symbol","Sector","Status",
+        "MomentumScore","RS-Ratio","RS-Momentum","Slope"
+    ]],
     use_container_width=True,
     height=420
 )
 
-st.caption("Optuma-grade Relative Rotation Graph — Bloomberg style terminal UI")
+st.caption("Intraday Relative Rotation Graph (5m / 15m) with Sector Centroids — Optuma-style")
