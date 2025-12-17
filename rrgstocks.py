@@ -1,8 +1,7 @@
 # ============================================================
-# RRG STOCKS — FINAL PRODUCTION VERSION
+# RRG STOCKS — FINAL STABLE VERSION (YAHOO FINANCE ONLY)
 # ============================================================
 
-import io
 import numpy as np
 import pandas as pd
 import yfinance as yf
@@ -10,7 +9,9 @@ import streamlit as st
 import matplotlib.pyplot as plt
 from io import BytesIO
 
-# ================= CONFIG =================
+# ============================================================
+# CONFIG
+# ============================================================
 
 GITHUB_RAW = "https://raw.githubusercontent.com/anki1007/rrg-stocks/main/ticker/"
 
@@ -23,77 +24,68 @@ UNIVERSES = {
     "Nifty Midsmallcap 400": "niftymidsmallcap400.csv",
 }
 
-BENCH_CHOICES = {
+BENCHMARKS = {
     "Nifty 50": "^NSEI",
-    "Nifty 200": "^CNX200",
     "Nifty 500": "^CRSLDX",
 }
 
 TF_MAP = {"Daily": "1d", "Weekly": "1wk", "Monthly": "1mo"}
-PERIOD_MAP = {"6M": "6mo", "1Y": "1y", "2Y": "2y", "3Y": "3y", "5Y": "5y", "10Y": "10y"}
+PERIOD_MAP = {"6M": "6mo", "1Y": "1y", "2Y": "2y", "3Y": "3y"}
 
 WINDOW = 14
 DEFAULT_TAIL = 8
 
-# ================= PAGE =================
+# ============================================================
+# PAGE SETUP
+# ============================================================
 
 st.set_page_config(page_title="RRG Stocks Terminal", layout="wide")
 
-# ================= CSS =================
+# ============================================================
+# CSS
+# ============================================================
 
 st.markdown("""
 <style>
-.rrg-wrap { max-height: calc(100vh - 260px); overflow:auto; }
-.rrg-table { border-collapse: collapse; width:100%; }
+.rrg-wrap { max-height: 520px; overflow:auto; }
+.rrg-table { width:100%; border-collapse:collapse; }
 .rrg-table th {
   position:sticky; top:0;
   background:#111827; color:#e5e7eb;
   padding:8px; text-align:left;
 }
 .rrg-table td { padding:6px 8px; }
-.blink-up { animation: blinkGreen 1.2s ease-out; }
-.blink-down { animation: blinkRed 1.2s ease-out; }
-@keyframes blinkGreen { from{background:#bbf7d0;} to{background:transparent;} }
-@keyframes blinkRed { from{background:#fecaca;} to{background:transparent;} }
-
-.rrg-legend {
-  position: fixed; top: 72px; right: 20px;
-  background: rgba(15,23,42,0.92); color:#e5e7eb;
-  border-radius:10px; padding:12px 14px;
-  font-size:13px; z-index:999;
-}
-.legend-row { display:flex; gap:8px; margin:4px 0; align-items:center; }
-.legend-box { width:18px; height:10px; border-radius:3px; }
-.legend-green { background: linear-gradient(to right,#166534,#bbf7d0); }
-.legend-blue { background: linear-gradient(to right,#1e40af,#dbeafe); }
-.legend-yellow { background: linear-gradient(to right,#ca8a04,#fef9c3); }
+.table-legend { display:flex; gap:14px; margin-bottom:8px; font-size:12px; }
+.legend-box { width:14px; height:8px; border-radius:3px; }
 </style>
 """, unsafe_allow_html=True)
 
-# ================= HELPERS =================
+# ============================================================
+# HELPERS
+# ============================================================
 
-def display_symbol(sym: str) -> str:
+def display_symbol(sym):
     return sym.replace(".NS", "")
 
-def tradingview_link(sym: str) -> str:
+def tradingview_link(sym):
     return f"https://www.tradingview.com/chart/?symbol=NSE:{display_symbol(sym)}"
 
-def rank_gradient(rank: int) -> str:
+def rank_color(rank):
     if rank <= 30:
-        return f"rgb({22 + rank*2},163,74)"
+        return "#16a34a"
     if rank <= 60:
-        return f"rgb(37,{99 + (rank-30)*2},235)"
+        return "#2563eb"
     if rank <= 90:
-        return f"rgb(250,{204 - (rank-60)*2},21)"
+        return "#facc15"
     return "transparent"
 
-def jdk_components(price, bench):
-    rs = 100 * price / bench
+def jdk_rrg(price, benchmark):
+    rs = 100 * price / benchmark
     rr = 100 + (rs - rs.rolling(WINDOW).mean()) / rs.rolling(WINDOW).std()
     roc = rr.pct_change(fill_method=None) * 100
     mm = 101 + (roc - roc.rolling(WINDOW).mean()) / roc.rolling(WINDOW).std()
-    ix = rr.index.intersection(mm.index)
-    return rr.loc[ix], mm.loc[ix]
+    idx = rr.index.intersection(mm.index)
+    return rr.loc[idx], mm.loc[idx]
 
 def export_figure(fig, fmt):
     buf = BytesIO()
@@ -101,64 +93,104 @@ def export_figure(fig, fmt):
     buf.seek(0)
     return buf
 
-@st.cache_data(ttl=900)
+@st.cache_data(ttl=1800)
 def download_prices(symbols, benchmark, period, interval):
-    return yf.download(
-        symbols + [benchmark],
+    data = {}
+    failed = []
+
+    # Benchmark first
+    bench_df = yf.download(
+        benchmark,
         period=period,
         interval=interval,
-        group_by="ticker",
         auto_adjust=True,
         progress=False,
-        threads=False   # rate-limit safe
+        threads=False
     )
+    if bench_df.empty:
+        return {}, symbols
 
-# ================= SIDEBAR =================
+    data[benchmark] = bench_df
+
+    for s in symbols:
+        try:
+            df = yf.download(
+                s,
+                period=period,
+                interval=interval,
+                auto_adjust=True,
+                progress=False,
+                threads=False
+            )
+            if not df.empty:
+                data[s] = df
+        except Exception:
+            failed.append(s)
+
+    return data, failed
+
+# ============================================================
+# SIDEBAR CONTROLS
+# ============================================================
 
 st.sidebar.header("RRG Controls")
 
 universe_name = st.sidebar.selectbox("Universe", list(UNIVERSES.keys()))
-csv_file = UNIVERSES[universe_name]
-
-bench_label = st.sidebar.selectbox("Benchmark", list(BENCH_CHOICES.keys()))
+benchmark_name = st.sidebar.selectbox("Benchmark", list(BENCHMARKS.keys()))
 tf_label = st.sidebar.selectbox("Timeframe", list(TF_MAP.keys()))
 period_label = st.sidebar.selectbox("Period", list(PERIOD_MAP.keys()))
 tail_len = st.sidebar.slider("Trail Length", 1, 20, DEFAULT_TAIL)
 
-# ================= LOAD UNIVERSE =================
+# ============================================================
+# LOAD SYMBOLS
+# ============================================================
 
-df = pd.read_csv(GITHUB_RAW + csv_file)
-df["Symbol"] = df["Symbol"].astype(str).str.strip().str.upper()
+df = pd.read_csv(GITHUB_RAW + UNIVERSES[universe_name])
+df["Symbol"] = df["Symbol"].astype(str).str.upper().str.strip()
 symbols = df["Symbol"].tolist()
 
-# ================= DATA =================
+benchmark = BENCHMARKS[benchmark_name]
 
-bench = BENCH_CHOICES[bench_label]
+# ============================================================
+# DOWNLOAD DATA (YAHOO ONLY)
+# ============================================================
 
-raw = download_prices(
+raw, failed_symbols = download_prices(
     symbols,
-    bench,
+    benchmark,
     PERIOD_MAP[period_label],
     TF_MAP[tf_label]
 )
 
-bench_px = raw[bench]["Close"].dropna()
+if benchmark not in raw:
+    st.error("Benchmark data not available from Yahoo.")
+    st.stop()
+
+bench_px = raw[benchmark]["Close"].dropna()
+
+# ============================================================
+# COMPUTE RRG
+# ============================================================
 
 rs_ratio, rs_mom = {}, {}
 
 for s in symbols:
-    if s not in raw or "Close" not in raw[s]:
+    if s not in raw:
         continue
     px = raw[s]["Close"].dropna()
     if px.empty:
         continue
-    rr, mm = jdk_components(px, bench_px)
-    if len(rr) < 20 or len(mm) < 20:
+
+    rr, mm = jdk_rrg(px, bench_px)
+    if len(rr) < 20:
         continue
+
     rs_ratio[s] = rr
     rs_mom[s] = mm
 
-# ================= RANKING =================
+# ============================================================
+# RANKING
+# ============================================================
 
 end_idx = -1
 start_idx = max(len(bench_px) + end_idx - tail_len, 0)
@@ -172,113 +204,128 @@ ranked = sorted(
     reverse=True
 )
 
-rank_dict = {s: i+1 for i, s in enumerate(ranked)}
+rank_dict = {s: i + 1 for i, s in enumerate(ranked)}
 
-if "prev_ranks" not in st.session_state:
-    st.session_state.prev_ranks = {}
-
-rank_change = {
-    s: st.session_state.prev_ranks.get(s, rank_dict[s]) - rank_dict[s]
-    for s in ranked
-}
-st.session_state.prev_ranks = rank_dict.copy()
-
-# ================= LEGEND =================
-
-st.markdown("""
-<div class="rrg-legend">
-<b>Rank Heatmap</b>
-<div class="legend-row"><div class="legend-box legend-green"></div>Top 30</div>
-<div class="legend-row"><div class="legend-box legend-blue"></div>31–60</div>
-<div class="legend-row"><div class="legend-box legend-yellow"></div>61–90</div>
-</div>
-""", unsafe_allow_html=True)
-
-# ================= LAYOUT =================
+# ============================================================
+# LAYOUT
+# ============================================================
 
 plot_col, rank_col = st.columns([4.5, 1.8])
 
+# ================== CHART CONTROLS ==================
+
 with plot_col:
-    fig, ax = plt.subplots(figsize=(10.6, 6.8))
+    with st.expander("🔍 Chart Controls", expanded=False):
+        x_min, x_max = st.slider("RS-Ratio Range", 90.0, 110.0, (94.0, 106.0), 0.5)
+        y_min, y_max = st.slider("RS-Momentum Range", 90.0, 110.0, (94.0, 106.0), 0.5)
+        show_labels = st.checkbox("Show Top-15 Labels", True)
 
-    # Quadrants
-    ax.fill_between([94,100],[100,100],[106,106], color="#c7d2fe", alpha=0.6)
-    ax.fill_between([100,106],[100,100],[106,106], color="#bbf7d0", alpha=0.6)
-    ax.fill_between([94,100],[94,94],[100,100], color="#fecaca", alpha=0.6)
-    ax.fill_between([100,106],[94,94],[100,100], color="#fef9c3", alpha=0.6)
+    with st.expander("📈 RRG Chart", expanded=True):
+        fig, ax = plt.subplots(figsize=(12, 8))
 
-    ax.text(95,105,"Improving", weight="bold")
-    ax.text(105,105,"Leading", ha="right", weight="bold")
-    ax.text(95,95,"Lagging", weight="bold")
-    ax.text(105,95,"Weakening", ha="right", weight="bold")
+        # Quadrants
+        ax.fill_between([x_min,100],[100,100],[y_max,y_max], color="#c7d2fe", alpha=0.6)
+        ax.fill_between([100,x_max],[100,100],[y_max,y_max], color="#bbf7d0", alpha=0.6)
+        ax.fill_between([x_min,100],[y_min,y_min],[100,100], color="#fecaca", alpha=0.6)
+        ax.fill_between([100,x_max],[y_min,y_min],[100,100], color="#fef9c3", alpha=0.6)
 
-    ax.axhline(100, ls=":", c="gray")
-    ax.axvline(100, ls=":", c="gray")
-    ax.set_xlim(94,106)
-    ax.set_ylim(94,106)
-    ax.set_xlabel("RS-Ratio")
-    ax.set_ylabel("RS-Momentum")
+        ax.text(x_min+1,y_max-1,"Improving",weight="bold")
+        ax.text(x_max-1,y_max-1,"Leading",ha="right",weight="bold")
+        ax.text(x_min+1,y_min+1,"Lagging",weight="bold")
+        ax.text(x_max-1,y_min+1,"Weakening",ha="right",weight="bold")
 
-    for s in ranked:
-        rr = rs_ratio[s].iloc[start_idx:end_idx+1]
-        mm = rs_mom[s].iloc[start_idx:end_idx+1]
-        if rr.empty or mm.empty:
-            continue
-        ax.plot(rr, mm, alpha=0.6)
-        ax.scatter(rr.iloc[-1], mm.iloc[-1], s=70)
-        if rank_dict[s] <= 15:
-            ax.annotate(
-                display_symbol(s),
-                (rr.iloc[-1], mm.iloc[-1]),
-                xytext=(6,6),
-                textcoords="offset points",
-                fontsize=9
-            )
+        ax.axhline(100,ls=":",c="gray")
+        ax.axvline(100,ls=":",c="gray")
 
-    st.pyplot(fig, width="stretch")
+        ax.set_xlim(x_min,x_max)
+        ax.set_ylim(y_min,y_max)
+        ax.set_xlabel("RS-Ratio")
+        ax.set_ylabel("RS-Momentum")
 
-    c1, c2 = st.columns(2)
-    with c1:
-        st.download_button("⬇ PNG", export_figure(fig, "png"), "rrg.png")
-    with c2:
-        st.download_button("⬇ PDF", export_figure(fig, "pdf"), "rrg.pdf")
+        for s in ranked:
+            rr = rs_ratio[s].iloc[start_idx:end_idx+1]
+            mm = rs_mom[s].iloc[start_idx:end_idx+1]
+            if rr.empty or mm.empty:
+                continue
+            ax.plot(rr,mm,alpha=0.6)
+            ax.scatter(rr.iloc[-1],mm.iloc[-1],s=60)
+            if show_labels and rank_dict[s] <= 15:
+                ax.annotate(display_symbol(s),(rr.iloc[-1],mm.iloc[-1]),
+                            xytext=(6,6),textcoords="offset points",fontsize=9)
+
+        st.pyplot(fig, width="stretch")
+
+        c1,c2 = st.columns(2)
+        with c1:
+            st.download_button("⬇ PNG", export_figure(fig,"png"), "rrg.png")
+        with c2:
+            st.download_button("⬇ PDF", export_figure(fig,"pdf"), "rrg.pdf")
+
+# ================== RANKING PANEL ==================
 
 with rank_col:
     st.markdown("### Ranking")
     for s in ranked[:30]:
         st.markdown(f"**{rank_dict[s]}. {display_symbol(s)}**")
 
-# ================= TABLE =================
+    with st.expander("📊 Ranking Table"):
+        rows = ""
+        for s in ranked[:30]:
+            rows += f"""
+            <tr>
+              <td>{rank_dict[s]}</td>
+              <td><a href="{tradingview_link(s)}" target="_blank">{display_symbol(s)}</a></td>
+              <td>{rs_ratio[s].iloc[end_idx]:.2f}</td>
+              <td>{rs_mom[s].iloc[end_idx]:.2f}</td>
+            </tr>
+            """
+        st.markdown(f"""
+        <table class="rrg-table">
+        <thead><tr><th>Rank</th><th>Symbol</th><th>RS-Ratio</th><th>RS-Momentum</th></tr></thead>
+        <tbody>{rows}</tbody>
+        </table>
+        """, unsafe_allow_html=True)
 
-rows_html = ""
+# ================== MAIN TABLE ==================
 
-for s in ranked:
-    r = rank_dict[s]
-    bg = rank_gradient(r)
-    blink = "blink-up" if rank_change[s] > 0 else "blink-down" if rank_change[s] < 0 else ""
-    rows_html += f"""
-    <tr class="{blink}" style="background:{bg}">
-      <td>{r}</td>
-      <td><a href="{tradingview_link(s)}" target="_blank">{display_symbol(s)}</a></td>
-      <td>{rs_ratio[s].iloc[end_idx]:.2f}</td>
-      <td>{rs_mom[s].iloc[end_idx]:.2f}</td>
-    </tr>
-    """
-
-table_html = f"""
-<div class="rrg-wrap">
-<table class="rrg-table">
-<thead>
-<tr><th>Rank</th><th>Symbol</th><th>RS-Ratio</th><th>RS-Momentum</th></tr>
-</thead>
-<tbody>
-{rows_html}
-</tbody>
-</table>
+legend = """
+<div class="table-legend">
+  <div><span class="legend-box" style="background:#16a34a"></span> Top 30</div>
+  <div><span class="legend-box" style="background:#2563eb"></span> 31–60</div>
+  <div><span class="legend-box" style="background:#facc15"></span> 61–90</div>
 </div>
 """
 
-with st.expander("Table", expanded=True):
-    st.markdown(table_html, unsafe_allow_html=True)
+rows = ""
+for s in ranked:
+    r = rank_dict[s]
+    rr_val = rs_ratio[s].iloc[end_idx]
+    mm_val = rs_mom[s].iloc[end_idx]
+    if pd.isna(rr_val) or pd.isna(mm_val):
+        continue
+    rows += f"""
+    <tr style="background:{rank_color(r)}">
+      <td>{r}</td>
+      <td><a href="{tradingview_link(s)}" target="_blank">{display_symbol(s)}</a></td>
+      <td>{rr_val:.2f}</td>
+      <td>{mm_val:.2f}</td>
+    </tr>
+    """
 
-st.caption("RRG Stocks Terminal — final, stable, production ready")
+with st.expander("Table", expanded=True):
+    st.markdown(
+        legend + f"""
+        <div class="rrg-wrap">
+        <table class="rrg-table">
+        <thead><tr><th>Rank</th><th>Symbol</th><th>RS-Ratio</th><th>RS-Momentum</th></tr></thead>
+        <tbody>{rows}</tbody>
+        </table>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+if failed_symbols:
+    st.sidebar.warning(f"{len(failed_symbols)} symbols skipped due to Yahoo limits.")
+
+st.caption("RRG Stocks Terminal — Yahoo Finance only, stable & production ready")
