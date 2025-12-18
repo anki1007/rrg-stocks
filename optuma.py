@@ -29,10 +29,10 @@ st.markdown("""
             --lagging-color: #ef4444;
         }
         [data-testid="stMetricValue"] {
-            font-size: 24px;
+            font-size: 20px;
         }
         .stSelectbox > div > div {
-            font-size: 24px;
+            font-size: 14px;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -469,3 +469,4 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+
