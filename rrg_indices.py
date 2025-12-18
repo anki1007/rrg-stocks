@@ -385,7 +385,7 @@ diag = st.sidebar.checkbox("Show diagnostics", value=False)
 if "playing" not in st.session_state:
     st.session_state.playing = False
 st.sidebar.toggle("Play / Pause", value=st.session_state.playing, key="playing")
-speed_ms = st.sidebar.slider("Speed (ms/frame)", 150, 3000, 1000, 50)
+speed_ms = st.sidebar.slider("Speed (ms/frame)", 1000, 3000, 1500, 50)
 looping = st.sidebar.checkbox("Loop", value=True)
 
 # -------------------- Data Build --------------------
