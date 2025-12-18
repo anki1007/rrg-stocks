@@ -55,18 +55,6 @@ st.markdown("""
         color: #ef4444;
         font-weight: bold;
     }
-    
-    /* Center align dataframe headers and cells */
-    .dataframe th {
-        text-align: center !important;
-        font-weight: bold;
-    }
-    .dataframe td {
-        text-align: center !important;
-    }
-    .dataframe td:nth-child(2), .dataframe td:nth-child(3) {
-        text-align: left !important;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -235,24 +223,20 @@ def select_graph_stocks(df, min_stocks=40):
     """Select stocks for graph display with quadrant balancing"""
     graph_stocks = []
     
-    # First, try to get at least 10 from each quadrant
     for status in ["Leading", "Improving", "Weakening", "Lagging"]:
         df_quad = df[df['Status'] == status].copy()
         
         if len(df_quad) == 0:
             continue
         elif len(df_quad) < 10:
-            # If less than 10, take all from this quadrant
             graph_stocks.extend(df_quad.index.tolist())
         else:
-            # Get strongest 10 from Leading/Improving, weakest 10 from Weakening/Lagging
             if status in ["Leading", "Improving"]:
                 top_10 = df_quad.nlargest(10, 'RRG Power')
             else:
                 top_10 = df_quad.nsmallest(10, 'RRG Power')
             graph_stocks.extend(top_10.index.tolist())
     
-    # If we have less than min_stocks, add more based on RRG Power
     if len(graph_stocks) < min_stocks:
         remaining_indices = df.index.difference(graph_stocks)
         additional_needed = min_stocks - len(graph_stocks)
@@ -263,14 +247,11 @@ def select_graph_stocks(df, min_stocks=40):
 
 def select_top_30_with_sectors(df, top_n=30):
     """Select top 30 ensuring sector diversity"""
-    # Start with top 30 by RRG Power
     df_top = df.nlargest(top_n, 'RRG Power').copy()
     
-    # Get all unique sectors in the full dataset
     all_sectors = df['Industry'].unique()
     top_sectors = df_top['Industry'].unique()
     
-    # Find missing sectors
     missing_sectors = set(all_sectors) - set(top_sectors)
     
     if missing_sectors:
@@ -278,7 +259,6 @@ def select_top_30_with_sectors(df, top_n=30):
         for sector in missing_sectors:
             df_sector = df[df['Industry'] == sector]
             if len(df_sector) > 0:
-                # Get strongest 5 from this sector
                 top_5_sector = df_sector.nlargest(5, 'RRG Power')
                 additional_stocks.append(top_5_sector)
         
@@ -295,8 +275,6 @@ if "load_clicked" not in st.session_state:
     st.session_state.load_clicked = False
 if "df_cache" not in st.session_state:
     st.session_state.df_cache = None
-if "df_top_cache" not in st.session_state:
-    st.session_state.df_top_cache = None
 
 # ============================================================================
 # SIDEBAR
@@ -343,7 +321,6 @@ if st.sidebar.button("📥 Load Data", use_container_width=True, key="load_btn",
 if st.sidebar.button("🔄 Clear", use_container_width=True, key="clear_btn"):
     st.session_state.load_clicked = False
     st.session_state.df_cache = None
-    st.session_state.df_top_cache = None
     st.rerun()
 
 st.sidebar.markdown("---")
@@ -602,65 +579,82 @@ if st.session_state.df_cache is not None:
         st.plotly_chart(fig_rrg, use_container_width=True)
         
         st.markdown("---")
-        st.markdown("## 📊 Detailed Analysis by Quadrant")
+        st.markdown("## 📊 Detailed Analysis")
         
-        # COLLAPSIBLE QUADRANT TABLES
-        for status in ["Leading", "Improving", "Weakening", "Lagging"]:
-            df_status = df[df['Status'] == status].copy()
-            
-            if not df_status.empty:
-                status_icon = {"Leading": "🟢", "Improving": "🔵", "Weakening": "🟡", "Lagging": "🔴"}[status]
-                
-                with st.expander(f"{status_icon} **{status}** ({len(df_status)} stocks)", expanded=(status == "Leading")):
-                    # Prepare display dataframe
-                    df_display = df_status[['Sl No.', 'Symbol', 'Industry', 'Price', 'Change %', 
-                                           'RRG Power', 'RS-Ratio', 'RS-Momentum', 'Distance', 
-                                           'Direction', 'Velocity']].copy()
-                    
-                    # Format numeric columns
-                    df_display['Price'] = df_display['Price'].apply(lambda x: f"₹{x:.2f}")
-                    df_display['Change %'] = df_display['Change %'].apply(lambda x: f"{x:+.2f}%")
-                    df_display['RRG Power'] = df_display['RRG Power'].apply(lambda x: f"{x:.2f}")
-                    df_display['RS-Ratio'] = df_display['RS-Ratio'].apply(lambda x: f"{x:.2f}")
-                    df_display['RS-Momentum'] = df_display['RS-Momentum'].apply(lambda x: f"{x:.2f}")
-                    df_display['Distance'] = df_display['Distance'].apply(lambda x: f"{x:.2f}")
-                    df_display['Velocity'] = df_display['Velocity'].apply(lambda x: f"{x:.3f}")
-                    
-                    # Rename columns for display
-                    df_display.columns = ['Sl No.', 'Symbol', 'Industry', 'Price', 'Change %', 
-                                         'Strength', 'RS-Ratio', 'RS-Momentum', 'Distance', 
-                                         'Direction', 'Velocity']
-                    
-                    # Display with filtering and sorting
-                    st.dataframe(
-                        df_display,
-                        use_container_width=True,
-                        height=400,
-                        hide_index=True,
-                        column_config={
-                            "Sl No.": st.column_config.NumberColumn("Sl No.", width="small"),
-                            "Symbol": st.column_config.TextColumn("Symbol", width="medium"),
-                            "Industry": st.column_config.TextColumn("Industry", width="large"),
-                            "Price": st.column_config.TextColumn("Price", width="small"),
-                            "Change %": st.column_config.TextColumn("Change %", width="small"),
-                            "Strength": st.column_config.TextColumn("Strength", width="small"),
-                            "RS-Ratio": st.column_config.TextColumn("RS-Ratio", width="small"),
-                            "RS-Momentum": st.column_config.TextColumn("RS-Momentum", width="small"),
-                            "Distance": st.column_config.TextColumn("Distance", width="small"),
-                            "Direction": st.column_config.TextColumn("Direction", width="small"),
-                            "Velocity": st.column_config.TextColumn("Velocity", width="small"),
-                        }
-                    )
-                    
-                    # Download button for this quadrant
-                    csv_quad = df_status.to_csv(index=False)
-                    st.download_button(
-                        label=f"📥 Download {status} Data",
-                        data=csv_quad,
-                        file_name=f"RRG_{status}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                        mime="text/csv",
-                        key=f"download_{status}"
-                    )
+        # ONE UNIFIED TABLE WITH ALL STOCKS
+        df_display = df[['Sl No.', 'Symbol', 'Industry', 'Price', 'Change %', 
+                        'RRG Power', 'Status', 'RS-Ratio', 'RS-Momentum', 
+                        'Distance', 'Direction', 'Velocity', 'TV Link']].copy()
+        
+        # Display using st.dataframe with clickable links
+        st.dataframe(
+            df_display,
+            use_container_width=True,
+            height=600,
+            hide_index=True,
+            column_config={
+                "Sl No.": st.column_config.NumberColumn(
+                    "Sl No.",
+                    help="Serial Number",
+                    width="small"
+                ),
+                "Symbol": st.column_config.LinkColumn(
+                    "Symbol",
+                    help="Click to open TradingView chart",
+                    display_text="Symbol",
+                    width="medium"
+                ),
+                "Industry": st.column_config.TextColumn(
+                    "Industry",
+                    width="medium"
+                ),
+                "Price": st.column_config.NumberColumn(
+                    "Price",
+                    format="₹%.2f",
+                    width="small"
+                ),
+                "Change %": st.column_config.NumberColumn(
+                    "Change %",
+                    format="%.2f%%",
+                    width="small"
+                ),
+                "RRG Power": st.column_config.NumberColumn(
+                    "Strength",
+                    help="RRG Power",
+                    format="%.2f",
+                    width="small"
+                ),
+                "Status": st.column_config.TextColumn(
+                    "Status",
+                    width="small"
+                ),
+                "RS-Ratio": st.column_config.NumberColumn(
+                    "RS-Ratio",
+                    format="%.2f",
+                    width="small"
+                ),
+                "RS-Momentum": st.column_config.NumberColumn(
+                    "RS-Momentum",
+                    format="%.2f",
+                    width="small"
+                ),
+                "Distance": st.column_config.NumberColumn(
+                    "Distance",
+                    format="%.2f",
+                    width="small"
+                ),
+                "Direction": st.column_config.TextColumn(
+                    "Direction",
+                    width="small"
+                ),
+                "Velocity": st.column_config.NumberColumn(
+                    "Velocity",
+                    format="%.3f",
+                    width="small"
+                ),
+                "TV Link": None  # Hide the TV Link column but keep data for Symbol column
+            }
+        )
     
     # ========================================================================
     # RIGHT SIDEBAR - TOP 30 WITH SECTOR DIVERSITY
@@ -680,7 +674,7 @@ if st.session_state.df_cache is not None:
                 
                 with st.expander(f"{status_icon} **{status}** ({len(df_status_group)})", expanded=(status == "Leading")):
                     for idx, (_, row) in enumerate(df_status_group.iterrows(), 1):
-                        tv_link = df[df['Symbol'] == row['Symbol']]['TV Link'].values[0]
+                        tv_link = row['TV Link']
                         
                         st.markdown(f"""
                         <div style="padding: 8px; margin-bottom: 6px; background: rgba(200,200,200,0.1); 
@@ -704,7 +698,7 @@ if st.session_state.df_cache is not None:
     <div style="text-align: center; color: #888; font-size: 10px;">
         <b>RRG Analysis Dashboard</b><br>
         Data: Yahoo Finance | Charts: TradingView<br>
-        Displaying {len(df_graph)} stocks on graph | Top {len(df_top)} with sector diversity<br>
+        Displaying {len(df_graph)} stocks on graph | Total {len(df)} stocks in table<br>
         Reference: <a href="https://www.optuma.com/blog/scripting-for-rrgs" target="_blank" 
                       style="color: #0066cc;">Optuma RRG Scripting Guide</a><br>
         <i>Disclaimer: For educational purposes only. Not financial advice.</i>
