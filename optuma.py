@@ -1,12 +1,11 @@
 # ==========================================================
-# RRG – Stocks (FINAL | Phase-2 Integrated)
+# RRG – Stocks (FINAL | Phase-2 | Cloud-Safe)
 # ==========================================================
 
 import streamlit as st
 import pandas as pd
 import numpy as np
 import yfinance as yf
-import requests
 import matplotlib.pyplot as plt
 import time
 
@@ -30,7 +29,7 @@ st.title("RRG – Stocks")
 
 # ---------------- CONSTANTS ----------------
 WINDOW = 14
-TAIL_DEFAULT = 8
+TAIL = 8
 
 BENCHMARKS = {
     "NIFTY 50": "^NSEI",
@@ -70,12 +69,12 @@ def jdk_rs(stock, bench):
     rs_mom = 101 + (roc - roc.rolling(WINDOW).mean()) / roc.rolling(WINDOW).std(ddof=0)
     return rs_ratio.dropna(), rs_mom.dropna()
 
-# ---------------- CSV LOADER ----------------
+# ---------------- CSV LOADER (SAFE) ----------------
 @st.cache_data(ttl=600)
 def list_csv_files():
-    api = "https://api.github.com/repos/anki1007/rrg-stocks/contents/ticker"
-    files = requests.get(api, timeout=15).json()
-    return sorted([f["name"] for f in files if f["name"].endswith(".csv")])
+    base = "https://raw.githubusercontent.com/anki1007/rrg-stocks/main/ticker/"
+    idx = pd.read_csv(base + "index.csv")
+    return idx["file"].tolist()
 
 @st.cache_data(ttl=600)
 def load_universe(csv):
@@ -93,7 +92,11 @@ csv_sel = st.sidebar.selectbox(
 
 benchmark_name = st.sidebar.selectbox("Benchmark", BENCHMARKS.keys())
 tf_name = st.sidebar.selectbox("Timeframe", TIMEFRAMES.keys())
-rank_by = st.sidebar.selectbox("Rank by", ["RRG Power (dist)", "RS-Ratio", "RS-Momentum"])
+rank_by = st.sidebar.selectbox(
+    "Rank by",
+    ["RRG Power (dist)", "RS-Ratio", "RS-Momentum"]
+)
+
 show_labels = st.sidebar.toggle("Show labels on graph", True)
 
 st.sidebar.markdown("### Phase-2 Visual Controls")
@@ -101,8 +104,8 @@ show_quadrants = st.sidebar.toggle("Show quadrant background", True)
 show_centroids = st.sidebar.toggle("Show industry centroids", True)
 
 label_top_n = st.sidebar.slider("Label top N", 0, 30, 12)
-x_min, x_max = st.sidebar.slider("RS-Ratio Zoom", 90.0, 110.0, (94.0, 106.0), 0.5)
-y_min, y_max = st.sidebar.slider("RS-Momentum Zoom", 90.0, 110.0, (94.0, 106.0), 0.5)
+x_min, x_max = st.sidebar.slider("RS-Ratio Zoom", 90.0, 110.0, (94.0,106.0), 0.5)
+y_min, y_max = st.sidebar.slider("RS-Momentum Zoom", 90.0, 110.0, (94.0,106.0), 0.5)
 
 st.sidebar.markdown("### RRG Play Controls")
 play = st.sidebar.toggle("Play", False)
@@ -136,8 +139,8 @@ for s in symbols:
     if rr is None or rr.empty or mm.empty:
         continue
 
-    rr_t = rr.iloc[-TAIL_DEFAULT:]
-    mm_t = mm.iloc[-TAIL_DEFAULT:]
+    rr_t = rr.iloc[-TAIL:]
+    mm_t = mm.iloc[-TAIL:]
 
     power = np.sqrt((rr_t.iloc[-1]-100)**2 + (mm_t.iloc[-1]-100)**2)
 
@@ -171,7 +174,7 @@ centroids = (
 )
 
 # ---------------- LAYOUT ----------------
-main_col, right_col = st.columns([4.5, 1.5])
+main_col, right_col = st.columns([4.5,1.5])
 
 # ---------------- RRG GRAPH ----------------
 with main_col:
@@ -187,19 +190,19 @@ with main_col:
 
     for _, r in df.iterrows():
         rr_t, mm_t = trails[r["Symbol"]]
-        color = RRG_COLORS[r["Status"]]
-        ax.plot(rr_t, mm_t, lw=1, color=color)
-        ax.scatter(rr_t.iloc[-1], mm_t.iloc[-1], s=70, color=color)
+        c = RRG_COLORS[r["Status"]]
+        ax.plot(rr_t, mm_t, lw=1, color=c)
+        ax.scatter(rr_t.iloc[-1], mm_t.iloc[-1], s=70, color=c)
 
     if show_centroids:
         ax.scatter(
             centroids["RS-Ratio"], centroids["RS-Momentum"],
-            marker="D", s=220, color="white", edgecolor="black", zorder=5
+            marker="D", s=220, color="white",
+            edgecolor="black", zorder=5
         )
 
     if show_labels:
-        top_syms = df.head(label_top_n)["Symbol"].tolist()
-        for s in top_syms:
+        for s in df.head(label_top_n)["Symbol"]:
             rr_t, mm_t = trails[s]
             ax.text(rr_t.iloc[-1]+0.15, mm_t.iloc[-1]+0.15, s, fontsize=8)
 
@@ -228,7 +231,8 @@ df["Symbol"] = df["Symbol"].apply(
 with st.expander("RRG Table", expanded=True):
     st.dataframe(
         df[[
-            "Rank","Symbol","Name","Status","Industry","RS-Ratio","RS-Momentum"
+            "Rank","Symbol","Name","Status",
+            "Industry","RS-Ratio","RS-Momentum"
         ]],
         column_config={
             "Symbol": st.column_config.LinkColumn(
