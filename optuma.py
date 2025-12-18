@@ -36,16 +36,16 @@ st.markdown("""
 # CONFIGURATION
 # ============================================================================
 BENCHMARKS = {
-    "NIFTY 50": "^NSEI",
+    "NIFTY 500": "^CRSLDX",
     "NIFTY 200": "^CNX200",
-    "NIFTY 500": "^CRSLDX"
+    "NIFTY 50": "^NSEI"
 }
 
 TIMEFRAMES = {
-    "5 min close": ("5m", "60d"),
-    "15 min close": ("15m", "60d"),
-    "30 min close": ("30m", "60d"),
-    "1 hr close": ("60m", "90d"),
+    "5 min": ("5m", "60d"),
+    "15 min": ("15m", "60d"),
+    "30 min": ("30m", "60d"),
+    "1 hr": ("60m", "90d"),
     "Daily": ("1d", "5y"),
     "Weekly": ("1wk", "10y"),
     "Monthly": ("1mo", "20y")
@@ -445,4 +445,3 @@ st.markdown("""
     <i>Disclaimer: For educational purposes only. Not financial advice.</i>
 </div>
 """, unsafe_allow_html=True)
-
