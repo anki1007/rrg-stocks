@@ -6,7 +6,6 @@ import plotly.graph_objects as go
 import requests
 from datetime import datetime, timedelta
 import io
-import base64
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -19,108 +18,12 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Dark theme with enhanced styling - FIXED FOR VISIBILITY
+# Dark theme with enhanced styling
 st.markdown("""
 <style>
     body { background-color: #111827; }
     .main { background-color: #111827; }
     [data-testid="stSidebar"] { background-color: #1f2937; }
-    
-    /* Custom table styling with BRIGHT TEXT */
-    .rrg-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 14px;
-        margin-top: 10px;
-    }
-    .rrg-table th {
-        background-color: #1f2937;
-        color: #ffffff !important;
-        padding: 12px;
-        text-align: center;
-        font-weight: bold;
-        border: 1px solid #4b5563;
-        position: sticky;
-        top: 0;
-        z-index: 10;
-    }
-    .rrg-table td {
-        padding: 10px;
-        text-align: center;
-        border: 1px solid #4b5563;
-        color: #f3f4f6 !important;
-        background-color: #1f2937;
-    }
-    .rrg-table tr:nth-child(even) td {
-        background-color: #374151;
-        color: #f3f4f6 !important;
-    }
-    .rrg-table tr:nth-child(odd) td {
-        background-color: #1f2937;
-        color: #f3f4f6 !important;
-    }
-    .rrg-table tr:hover td {
-        background-color: #4b5563;
-        color: #ffffff !important;
-    }
-    .rrg-table td:nth-child(2), .rrg-table td:nth-child(3) {
-        text-align: left;
-    }
-    
-    /* Status badges with bright colors */
-    .status-leading {
-        background: linear-gradient(135deg, rgba(34, 197, 94, 0.6), rgba(34, 197, 94, 0.4));
-        color: #4ade80 !important;
-        font-weight: bold;
-        padding: 6px 14px;
-        border-radius: 6px;
-        display: inline-block;
-    }
-    .status-improving {
-        background: linear-gradient(135deg, rgba(59, 130, 246, 0.6), rgba(59, 130, 246, 0.4));
-        color: #60a5fa !important;
-        font-weight: bold;
-        padding: 6px 14px;
-        border-radius: 6px;
-        display: inline-block;
-    }
-    .status-weakening {
-        background: linear-gradient(135deg, rgba(251, 191, 36, 0.6), rgba(251, 191, 36, 0.4));
-        color: #fbbf24 !important;
-        font-weight: bold;
-        padding: 6px 14px;
-        border-radius: 6px;
-        display: inline-block;
-    }
-    .status-lagging {
-        background: linear-gradient(135deg, rgba(239, 68, 68, 0.6), rgba(239, 68, 68, 0.4));
-        color: #f87171 !important;
-        font-weight: bold;
-        padding: 6px 14px;
-        border-radius: 6px;
-        display: inline-block;
-    }
-    
-    /* Symbol link styling - BRIGHT BLUE */
-    .symbol-link {
-        color: #60a5fa !important;
-        text-decoration: none;
-        font-weight: bold;
-    }
-    .symbol-link:hover {
-        text-decoration: underline;
-        color: #93c5fd !important;
-    }
-    
-    /* Table container */
-    .table-container {
-        max-height: 600px;
-        overflow-y: auto;
-        overflow-x: auto;
-        border: 1px solid #4b5563;
-        border-radius: 8px;
-        background-color: #1f2937;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -433,7 +336,6 @@ if st.session_state.load_clicked:
                     failed_count += 1
                     continue
                 
-                # Store historical tail data
                 tail_length = min(TAIL_LENGTH, len(rs_ratio))
                 rs_history[format_symbol(s)] = {
                     'rs_ratio': rs_ratio.iloc[-tail_length:].tolist(),
@@ -541,13 +443,12 @@ if st.session_state.df_cache is not None:
         st.metric("Lagging", len(df[df['Status'] == 'Lagging']))
     
     # ========================================================================
-    # MAIN CONTENT - RRG GRAPH WITH ENHANCED VISIBILITY
+    # MAIN CONTENT - RRG GRAPH
     # ========================================================================
     with col_main:
         st.markdown("## Relative Rotation Graph")
         st.markdown(f"**{csv_selected} | {tf_name} | {period_name} | Benchmark: {bench_name}**")
         
-        # Select stocks for graph (at least 40)
         df_graph = select_graph_stocks(df, min_stocks=40)
         
         fig_rrg = go.Figure()
@@ -568,30 +469,30 @@ if st.session_state.df_cache is not None:
         fig_rrg.add_shape(type="rect", x0=100, y0=100-quadrant_size, x1=100+quadrant_size, y1=100,
                          fillcolor="rgba(239, 68, 68, 0.12)", line=dict(color="rgba(239, 68, 68, 0.4)", width=2), layer="below")
         
-        # Quadrant labels - DARKER AND LARGER FOR VISIBILITY
+        # Quadrant labels - DARK AND BOLD
         fig_rrg.add_annotation(
             x=100+quadrant_size*0.5, y=100+quadrant_size*0.5, 
             text="Leading",
             showarrow=False, 
-            font=dict(size=18, color="#0d4a1f", family="Arial Black")
+            font=dict(size=18, color="#0d4a1f", family="Arial")
         )
         fig_rrg.add_annotation(
             x=100-quadrant_size*0.5, y=100+quadrant_size*0.5, 
             text="Improving",
             showarrow=False, 
-            font=dict(size=18, color="#1e3a8a", family="Arial Black")
+            font=dict(size=18, color="#1e3a8a", family="Arial")
         )
         fig_rrg.add_annotation(
             x=100-quadrant_size*0.5, y=100-quadrant_size*0.5, 
             text="Weakening",
             showarrow=False, 
-            font=dict(size=18, color="#713f12", family="Arial Black")
+            font=dict(size=18, color="#713f12", family="Arial")
         )
         fig_rrg.add_annotation(
             x=100+quadrant_size*0.5, y=100-quadrant_size*0.5, 
             text="Lagging",
             showarrow=False, 
-            font=dict(size=18, color="#7f1d1d", family="Arial Black")
+            font=dict(size=18, color="#7f1d1d", family="Arial")
         )
         
         # Center lines
@@ -604,7 +505,6 @@ if st.session_state.df_cache is not None:
             if not df_status.empty:
                 hover_text = []
                 for _, row in df_status.iterrows():
-                    # Draw tail (historical trajectory)
                     if row['Symbol'] in rs_history:
                         tail_data = rs_history[row['Symbol']]
                         rs_ratio_tail = tail_data['rs_ratio']
@@ -620,7 +520,6 @@ if st.session_state.df_cache is not None:
                                 hoverinfo='skip'
                             ))
                             
-                            # Add arrow at the head (current position)
                             if len(rs_ratio_tail) >= 2:
                                 x_tail = rs_ratio_tail[-2]
                                 y_tail = rs_momentum_tail[-2]
@@ -656,7 +555,7 @@ if st.session_state.df_cache is not None:
                     )
                     hover_text.append(hover_info)
                 
-                # Add markers on top of tails - ENHANCED VISIBILITY
+                # Add markers - LARGE AND VISIBLE
                 fig_rrg.add_trace(go.Scatter(
                     x=df_status['RS-Ratio'],
                     y=df_status['RS-Momentum'],
@@ -666,25 +565,25 @@ if st.session_state.df_cache is not None:
                     textposition="top center",
                     customdata=hover_text,
                     marker=dict(
-                        size=16,  # Larger markers
+                        size=16,
                         color=QUADRANT_COLORS[status],
-                        line=dict(color='white', width=2.5),  # Thicker border
+                        line=dict(color='white', width=2.5),
                         opacity=0.95
                     ),
                     hovertemplate='%{customdata}<extra></extra>',
                     textfont=dict(
-                        color='#000000',  # Pure black text
-                        size=11,  # Larger text
+                        color='#000000',
+                        size=11,
                         family='Arial'
                     )
                 ))
         
-        # Enhanced layout for visibility
+        # Enhanced layout
         fig_rrg.update_layout(
             height=550,
             xaxis_title="RS-Ratio (X-axis)",
             yaxis_title="RS-Momentum (Y-axis)",
-            plot_bgcolor="rgba(255, 255, 255, 0.95)",  # Bright white background
+            plot_bgcolor="rgba(255, 255, 255, 0.95)",
             paper_bgcolor="rgba(255, 255, 255, 0.95)",
             font=dict(color="#000000", size=13, family="Arial"),
             hovermode="closest",
@@ -708,136 +607,132 @@ if st.session_state.df_cache is not None:
         
         st.markdown("---")
         
-       # COLLAPSIBLE TABLE WITH BRIGHT TEXT - FIXED VERSION
-with st.expander("📊 **Detailed Analysis** (Click to expand/collapse)", expanded=True):
-    # Build HTML table rows
-    table_rows = ""
-    for _, row in df.iterrows():
-        status_class = f"status-{row['Status'].lower()}"
-        table_rows += f"""
-        <tr>
-            <td style="color: #ffffff !important;">{int(row['Sl No.'])}</td>
-            <td style="color: #60a5fa !important; text-align: left;"><a href="{row['TV Link']}" target="_blank" style="color: #60a5fa !important; text-decoration: none; font-weight: bold;">{row['Name']}</a></td>
-            <td style="color: #e5e7eb !important; text-align: left;">{row['Industry']}</td>
-            <td style="color: #ffffff !important;">₹{row['Price']:.2f}</td>
-            <td style="color: #ffffff !important;">{row['Change %']:+.2f}%</td>
-            <td style="color: #ffffff !important;">{row['RRG Power']:.2f}</td>
-            <td><span class="{status_class}">{row['Status']}</span></td>
-            <td style="color: #ffffff !important;">{row['RS-Ratio']:.2f}</td>
-            <td style="color: #ffffff !important;">{row['RS-Momentum']:.2f}</td>
-            <td style="color: #ffffff !important;">{row['Distance']:.2f}</td>
-            <td style="color: #fbbf24 !important;">{row['Direction']}</td>
-            <td style="color: #ffffff !important;">{row['Velocity']:.3f}</td>
-        </tr>
-        """
-    
-    # Complete HTML table with inline styles
-    html_table = f"""
-    <style>
-        .rrg-table-wrapper {{
-            max-height: 600px;
-            overflow-y: auto;
-            overflow-x: auto;
-            border: 2px solid #4b5563;
-            border-radius: 8px;
-            background-color: #1f2937;
-        }}
-        .rrg-table-custom {{
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 14px;
-            font-family: 'Segoe UI', Arial, sans-serif;
-        }}
-        .rrg-table-custom thead {{
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            background-color: #111827;
-        }}
-        .rrg-table-custom th {{
-            background-color: #111827 !important;
-            color: #ffffff !important;
-            padding: 14px 10px !important;
-            text-align: center !important;
-            font-weight: bold !important;
-            border: 1px solid #4b5563 !important;
-            font-size: 13px !important;
-        }}
-        .rrg-table-custom td {{
-            padding: 10px !important;
-            text-align: center !important;
-            border: 1px solid #4b5563 !important;
-            color: #ffffff !important;
-            background-color: #1f2937 !important;
-            font-size: 13px !important;
-        }}
-        .rrg-table-custom tbody tr:nth-child(even) td {{
-            background-color: #374151 !important;
-        }}
-        .rrg-table-custom tbody tr:hover td {{
-            background-color: #4b5563 !important;
-        }}
-        .status-leading {{
-            background: linear-gradient(135deg, rgba(34, 197, 94, 0.7), rgba(34, 197, 94, 0.5)) !important;
-            color: #4ade80 !important;
-            font-weight: bold !important;
-            padding: 6px 14px !important;
-            border-radius: 6px !important;
-            display: inline-block !important;
-        }}
-        .status-improving {{
-            background: linear-gradient(135deg, rgba(59, 130, 246, 0.7), rgba(59, 130, 246, 0.5)) !important;
-            color: #60a5fa !important;
-            font-weight: bold !important;
-            padding: 6px 14px !important;
-            border-radius: 6px !important;
-            display: inline-block !important;
-        }}
-        .status-weakening {{
-            background: linear-gradient(135deg, rgba(251, 191, 36, 0.7), rgba(251, 191, 36, 0.5)) !important;
-            color: #fbbf24 !important;
-            font-weight: bold !important;
-            padding: 6px 14px !important;
-            border-radius: 6px !important;
-            display: inline-block !important;
-        }}
-        .status-lagging {{
-            background: linear-gradient(135deg, rgba(239, 68, 68, 0.7), rgba(239, 68, 68, 0.5)) !important;
-            color: #f87171 !important;
-            font-weight: bold !important;
-            padding: 6px 14px !important;
-            border-radius: 6px !important;
-            display: inline-block !important;
-        }}
-    </style>
-    <div class="rrg-table-wrapper">
-        <table class="rrg-table-custom">
-            <thead>
+        # COLLAPSIBLE TABLE WITH MAXIMUM VISIBILITY
+        with st.expander("📊 **Detailed Analysis** (Click to expand/collapse)", expanded=True):
+            table_rows = ""
+            for _, row in df.iterrows():
+                status_class = f"status-{row['Status'].lower()}"
+                table_rows += f"""
                 <tr>
-                    <th>Sl No.</th>
-                    <th>Symbol</th>
-                    <th>Industry</th>
-                    <th>Price</th>
-                    <th>Change %</th>
-                    <th>Strength</th>
-                    <th>Status</th>
-                    <th>RS-Ratio</th>
-                    <th>RS-Momentum</th>
-                    <th>Distance</th>
-                    <th>Direction</th>
-                    <th>Velocity</th>
+                    <td style="color: #ffffff !important;">{int(row['Sl No.'])}</td>
+                    <td style="color: #60a5fa !important; text-align: left;"><a href="{row['TV Link']}" target="_blank" style="color: #60a5fa !important; text-decoration: none; font-weight: bold;">{row['Name']}</a></td>
+                    <td style="color: #e5e7eb !important; text-align: left;">{row['Industry']}</td>
+                    <td style="color: #ffffff !important;">₹{row['Price']:.2f}</td>
+                    <td style="color: #ffffff !important;">{row['Change %']:+.2f}%</td>
+                    <td style="color: #ffffff !important;">{row['RRG Power']:.2f}</td>
+                    <td><span class="{status_class}">{row['Status']}</span></td>
+                    <td style="color: #ffffff !important;">{row['RS-Ratio']:.2f}</td>
+                    <td style="color: #ffffff !important;">{row['RS-Momentum']:.2f}</td>
+                    <td style="color: #ffffff !important;">{row['Distance']:.2f}</td>
+                    <td style="color: #fbbf24 !important;">{row['Direction']}</td>
+                    <td style="color: #ffffff !important;">{row['Velocity']:.3f}</td>
                 </tr>
-            </thead>
-            <tbody>
-                {table_rows}
-            </tbody>
-        </table>
-    </div>
-    """
-    
-    # Render HTML with proper height
-    st.components.v1.html(html_table, height=620, scrolling=True)
-
+                """
+            
+            html_table = f"""
+            <style>
+                .rrg-table-wrapper {{
+                    max-height: 600px;
+                    overflow-y: auto;
+                    overflow-x: auto;
+                    border: 2px solid #4b5563;
+                    border-radius: 8px;
+                    background-color: #1f2937;
+                }}
+                .rrg-table-custom {{
+                    width: 100%;
+                    border-collapse: collapse;
+                    font-size: 14px;
+                    font-family: 'Segoe UI', Arial, sans-serif;
+                }}
+                .rrg-table-custom thead {{
+                    position: sticky;
+                    top: 0;
+                    z-index: 100;
+                    background-color: #111827;
+                }}
+                .rrg-table-custom th {{
+                    background-color: #111827 !important;
+                    color: #ffffff !important;
+                    padding: 14px 10px !important;
+                    text-align: center !important;
+                    font-weight: bold !important;
+                    border: 1px solid #4b5563 !important;
+                    font-size: 13px !important;
+                }}
+                .rrg-table-custom td {{
+                    padding: 10px !important;
+                    text-align: center !important;
+                    border: 1px solid #4b5563 !important;
+                    color: #ffffff !important;
+                    background-color: #1f2937 !important;
+                    font-size: 13px !important;
+                }}
+                .rrg-table-custom tbody tr:nth-child(even) td {{
+                    background-color: #374151 !important;
+                }}
+                .rrg-table-custom tbody tr:hover td {{
+                    background-color: #4b5563 !important;
+                }}
+                .status-leading {{
+                    background: linear-gradient(135deg, rgba(34, 197, 94, 0.7), rgba(34, 197, 94, 0.5)) !important;
+                    color: #4ade80 !important;
+                    font-weight: bold !important;
+                    padding: 6px 14px !important;
+                    border-radius: 6px !important;
+                    display: inline-block !important;
+                }}
+                .status-improving {{
+                    background: linear-gradient(135deg, rgba(59, 130, 246, 0.7), rgba(59, 130, 246, 0.5)) !important;
+                    color: #60a5fa !important;
+                    font-weight: bold !important;
+                    padding: 6px 14px !important;
+                    border-radius: 6px !important;
+                    display: inline-block !important;
+                }}
+                .status-weakening {{
+                    background: linear-gradient(135deg, rgba(251, 191, 36, 0.7), rgba(251, 191, 36, 0.5)) !important;
+                    color: #fbbf24 !important;
+                    font-weight: bold !important;
+                    padding: 6px 14px !important;
+                    border-radius: 6px !important;
+                    display: inline-block !important;
+                }}
+                .status-lagging {{
+                    background: linear-gradient(135deg, rgba(239, 68, 68, 0.7), rgba(239, 68, 68, 0.5)) !important;
+                    color: #f87171 !important;
+                    font-weight: bold !important;
+                    padding: 6px 14px !important;
+                    border-radius: 6px !important;
+                    display: inline-block !important;
+                }}
+            </style>
+            <div class="rrg-table-wrapper">
+                <table class="rrg-table-custom">
+                    <thead>
+                        <tr>
+                            <th>Sl No.</th>
+                            <th>Symbol</th>
+                            <th>Industry</th>
+                            <th>Price</th>
+                            <th>Change %</th>
+                            <th>Strength</th>
+                            <th>Status</th>
+                            <th>RS-Ratio</th>
+                            <th>RS-Momentum</th>
+                            <th>Distance</th>
+                            <th>Direction</th>
+                            <th>Velocity</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {table_rows}
+                    </tbody>
+                </table>
+            </div>
+            """
+            
+            st.components.v1.html(html_table, height=620, scrolling=True)
     
     # ========================================================================
     # RIGHT SIDEBAR - TOP 30 PER QUADRANT
@@ -845,11 +740,8 @@ with st.expander("📊 **Detailed Analysis** (Click to expand/collapse)", expand
     with col_right:
         st.markdown("### 🚀 Top 30 Per Quadrant")
         
-        # Display TOP 30 stocks per quadrant, sorted by RRG Power
         for status in ["Leading", "Improving", "Weakening", "Lagging"]:
             df_status_all = df[df['Status'] == status].sort_values('RRG Power', ascending=False)
-            
-            # Take top 30 from this quadrant
             df_status_top30 = df_status_all.head(30)
             
             if not df_status_top30.empty:
@@ -860,7 +752,6 @@ with st.expander("📊 **Detailed Analysis** (Click to expand/collapse)", expand
                 showing = len(df_status_top30)
                 
                 with st.expander(f"{status_icon} **{status}** (Top {showing} of {total_in_quadrant})", expanded=(status == "Leading")):
-                    # Display top 30 stocks in this quadrant
                     for idx, (_, row) in enumerate(df_status_top30.iterrows(), 1):
                         tv_link = row['TV Link']
                         
@@ -907,6 +798,3 @@ with st.expander("📊 **Detailed Analysis** (Click to expand/collapse)", expand
 
 else:
     st.info("⬅️ Select indices and click **Load Data** to start analysis")
-
-
-
