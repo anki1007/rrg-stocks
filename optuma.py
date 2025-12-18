@@ -1,8 +1,3 @@
-"""
-RRG Dashboard - Streamlit Multi-Index Analysis
-Minimal, Clean UI matching reference design
-"""
-
 import numpy as np
 import pandas as pd
 import yfinance as yf
@@ -15,7 +10,7 @@ import io
 import base64
 
 # ============================================================================
-# PAGE CONFIG
+# CONFIG
 # ============================================================================
 st.set_page_config(
     layout="wide",
