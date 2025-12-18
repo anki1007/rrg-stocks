@@ -1,250 +1,470 @@
-# ==========================================================
-# RRG – Stocks (FINAL | Phase-2 | Cloud-Safe)
-# ==========================================================
-
-import streamlit as st
-import pandas as pd
 import numpy as np
+import pandas as pd
 import yfinance as yf
-import matplotlib.pyplot as plt
-import time
+import streamlit as st
+import plotly.graph_objects as go
+import plotly.express as px
+import requests
+from urllib.parse import quote
+from datetime import datetime, timedelta
+import json
 
-# ---------------- PAGE CONFIG ----------------
-st.set_page_config(page_title="RRG – Stocks", layout="wide")
+# ============================================================================
+# CONFIG & SETUP
+# ============================================================================
 
-# ---------------- UI STYLE ----------------
+st.set_page_config(
+    layout="wide",
+    page_title="RRG Dashboard - Multi-Index Analysis",
+    initial_sidebar_state="expanded"
+)
+
+# Theme Configuration
 st.markdown("""
-<style>
-html, body {
-    background:#0b0f14;
-    color:#e5e7eb;
-    font-family: Inter, Segoe UI, sans-serif;
-    font-size:12px;
-}
-h1 { font-size:26px; font-weight:600; }
-</style>
+    <style>
+        :root {
+            --leading-color: #22c55e;
+            --improving-color: #3b82f6;
+            --weakening-color: #facc15;
+            --lagging-color: #ef4444;
+        }
+        [data-testid="stMetricValue"] {
+            font-size: 20px;
+        }
+        .stSelectbox > div > div {
+            font-size: 14px;
+        }
+    </style>
 """, unsafe_allow_html=True)
 
-st.title("RRG – Stocks")
-
-# ---------------- CONSTANTS ----------------
-WINDOW = 14
-TAIL = 8
-
+# Define Benchmarks
 BENCHMARKS = {
     "NIFTY 50": "^NSEI",
-    "NIFTY 200": "^CNX200",
-    "NIFTY 500": "^CRSLDX"
+    "NIFTY 200": "^CNXIT",
+    "NIFTY 500": "^CNXIT"  # Adjusted for available data
 }
 
+# Define Timeframes with intervals and yfinance periods
 TIMEFRAMES = {
-    "5 min": ("5m", "30d"),
-    "15 min": ("15m", "60d"),
-    "Daily": ("1d", "2y"),
+    "5 min close": ("5m", "60d"),
+    "15 min close": ("15m", "60d"),
+    "30 min close": ("30m", "60d"),
+    "1 hr close": ("60m", "90d"),
+    "Daily": ("1d", "5y"),
     "Weekly": ("1wk", "10y"),
     "Monthly": ("1mo", "20y")
 }
 
-RRG_COLORS = {
+# Period mapping to number of periods
+PERIOD_MAP = {
+    "6M": 126,
+    "1Y": 252,
+    "2Y": 504,
+    "3Y": 756,
+    "5Y": 1260,
+    "10Y": 2520
+}
+
+# RRG Configuration
+WINDOW = 14
+TAIL = 8
+
+# Color mapping for quadrants
+QUADRANT_COLORS = {
     "Leading": "#22c55e",
     "Improving": "#3b82f6",
     "Weakening": "#facc15",
     "Lagging": "#ef4444"
 }
 
-# ---------------- HELPERS ----------------
-def quadrant(rr, mm):
-    if rr >= 100 and mm >= 100: return "Leading"
-    if rr < 100 and mm >= 100: return "Improving"
-    if rr >= 100 and mm < 100: return "Weakening"
-    return "Lagging"
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
 
-def jdk_rs(stock, bench):
-    df = pd.concat([stock, bench], axis=1).dropna()
-    if len(df) < WINDOW * 2:
+@st.cache_data(ttl=600)
+def list_csv_from_github():
+    """Fetch CSV filenames from GitHub repository"""
+    url = "https://api.github.com/repos/anki1007/rrg-stocks/contents/ticker"
+    try:
+        response = requests.get(url)
+        files = [f['name'].replace('.csv', '').upper() for f in response.json() 
+                if f['name'].endswith('.csv')]
+        return sorted(files)
+    except Exception as e:
+        st.error(f"Error fetching CSV list: {e}")
+        return []
+
+@st.cache_data(ttl=600)
+def load_universe(csv_name):
+    """Load stock universe from GitHub CSV"""
+    url = f"https://raw.githubusercontent.com/anki1007/rrg-stocks/main/ticker/{csv_name.lower()}.csv"
+    try:
+        df = pd.read_csv(url)
+        return df
+    except Exception as e:
+        st.error(f"Error loading {csv_name} universe: {e}")
+        return pd.DataFrame()
+
+def rrg_calc(px, bench):
+    """Calculate RRG metrics: RS-Ratio and RS-Momentum"""
+    df = pd.concat([px, bench], axis=1).dropna()
+    
+    if len(df) < WINDOW + 2:
         return None, None
-    rs = 100 * df.iloc[:,0] / df.iloc[:,1]
-    rs_ratio = 100 + (rs - rs.rolling(WINDOW).mean()) / rs.rolling(WINDOW).std(ddof=0)
+    
+    # RS-Ratio: (Stock / Benchmark) - normalized
+    rs = 100 * (df.iloc[:, 0] / df.iloc[:, 1])
+    rs_ratio = 100 * (rs - rs.rolling(WINDOW).mean()) / rs.rolling(WINDOW).std(ddof=0)
+    
+    # RS-Momentum: Rate of change of RS-Ratio
     roc = rs_ratio.pct_change() * 100
-    rs_mom = 101 + (roc - roc.rolling(WINDOW).mean()) / roc.rolling(WINDOW).std(ddof=0)
-    return rs_ratio.dropna(), rs_mom.dropna()
+    rs_momentum = 101 * (roc - roc.rolling(WINDOW).mean()) / roc.rolling(WINDOW).std(ddof=0)
+    
+    return rs_ratio.dropna(), rs_momentum.dropna()
 
-# ---------------- CSV LOADER (SAFE) ----------------
-@st.cache_data(ttl=600)
-def list_csv_files():
-    base = "https://raw.githubusercontent.com/anki1007/rrg-stocks/main/ticker/"
-    idx = pd.read_csv(base + "index.csv")
-    return idx["file"].tolist()
+def quadrant(x, y):
+    """Determine RRG quadrant based on RS-Ratio and RS-Momentum"""
+    if x > 100 and y > 100:
+        return "Leading"
+    elif x < 100 and y > 100:
+        return "Improving"
+    elif x < 100 and y < 100:
+        return "Weakening"
+    else:
+        return "Lagging"
 
-@st.cache_data(ttl=600)
-def load_universe(csv):
-    url = f"https://raw.githubusercontent.com/anki1007/rrg-stocks/main/ticker/{csv}"
-    return pd.read_csv(url)
+def get_tv_link(sym):
+    """Generate TradingView chart link"""
+    return f"https://www.tradingview.com/chart/?symbol=NSE:{sym.replace('.NS', '')}"
 
-# ---------------- SIDEBAR ----------------
-st.sidebar.header("RRG — Controls")
+def format_symbol(sym):
+    """Remove .NS suffix from symbol"""
+    return sym.replace('.NS', '')
 
-csv_sel = st.sidebar.selectbox(
-    "Indices",
-    list_csv_files(),
-    format_func=lambda x: x.replace(".csv", "").replace("_", " ").title()
+def calculate_price_change(current_price, historical_price):
+    """Calculate percentage change"""
+    if historical_price == 0:
+        return 0
+    return ((current_price - historical_price) / historical_price) * 100
+
+# ============================================================================
+# SIDEBAR CONTROLS - REORDERED SEQUENCE
+# ============================================================================
+
+st.sidebar.markdown("### ⚙️ Controls")
+
+# 1. INDICES (Dropdown)
+csv_files = list_csv_from_github()
+csv_selected = st.sidebar.selectbox(
+    "📊 Indices",
+    csv_files,
+    help="Select stock universe from available CSVs"
 )
 
-benchmark_name = st.sidebar.selectbox("Benchmark", BENCHMARKS.keys())
-tf_name = st.sidebar.selectbox("Timeframe", TIMEFRAMES.keys())
+# 2. BENCHMARK (Dropdown)
+bench_name = st.sidebar.selectbox(
+    "🎯 Benchmark",
+    list(BENCHMARKS.keys()),
+    help="Select benchmark index for relative strength"
+)
+
+# 3. STRENGTH vs TIMEFRAME (Dropdown)
+tf_name = st.sidebar.selectbox(
+    "⏱️ Strength vs Timeframe",
+    list(TIMEFRAMES.keys()),
+    help="Select timeframe for RRG analysis"
+)
+
+# 4. PERIOD (Dropdown)
+period_name = st.sidebar.selectbox(
+    "📅 Period",
+    list(PERIOD_MAP.keys()),
+    help="Select analysis period"
+)
+
+# 5. RANK BY (Dropdown)
 rank_by = st.sidebar.selectbox(
-    "Rank by",
-    ["RRG Power (dist)", "RS-Ratio", "RS-Momentum"]
+    "🏆 Rank by",
+    ["RRG Power", "RS-Ratio", "RS-Momentum", "Price % Change", "Momentum Slope"],
+    help="Select ranking metric"
 )
 
-show_labels = st.sidebar.toggle("Show labels on graph", True)
+st.sidebar.markdown("---")
 
-st.sidebar.markdown("### Phase-2 Visual Controls")
-show_quadrants = st.sidebar.toggle("Show quadrant background", True)
-show_centroids = st.sidebar.toggle("Show industry centroids", True)
+# ============================================================================
+# DATA LOADING & CALCULATION
+# ============================================================================
 
-label_top_n = st.sidebar.slider("Label top N", 0, 30, 12)
-x_min, x_max = st.sidebar.slider("RS-Ratio Zoom", 90.0, 110.0, (94.0,106.0), 0.5)
-y_min, y_max = st.sidebar.slider("RS-Momentum Zoom", 90.0, 110.0, (94.0,106.0), 0.5)
-
-st.sidebar.markdown("### RRG Play Controls")
-play = st.sidebar.toggle("Play", False)
-speed = st.sidebar.slider("Speed (ms/frame)", 200, 1500, 600)
-
-# ---------------- DATA LOAD ----------------
-interval, yf_period = TIMEFRAMES[tf_name]
-universe = load_universe(csv_sel)
-
-symbols = universe["Symbol"].tolist()
-names = dict(zip(universe["Symbol"], universe["Company Name"]))
-industries = dict(zip(universe["Symbol"], universe["Industry"]))
-
-raw = yf.download(
-    symbols + [BENCHMARKS[benchmark_name]],
-    interval=interval,
-    period=yf_period,
-    auto_adjust=True,
-    progress=False
-)
-
-bench = raw["Close"][BENCHMARKS[benchmark_name]]
-
-rows, trails = [], {}
-
-for s in symbols:
-    if s not in raw["Close"]:
-        continue
-
-    rr, mm = jdk_rs(raw["Close"][s], bench)
-    if rr is None or rr.empty or mm.empty:
-        continue
-
-    rr_t = rr.iloc[-TAIL:]
-    mm_t = mm.iloc[-TAIL:]
-
-    power = np.sqrt((rr_t.iloc[-1]-100)**2 + (mm_t.iloc[-1]-100)**2)
-
-    sym = s.replace(".NS","")
-
-    rows.append({
-        "Symbol": sym,
-        "Name": names.get(s,""),
-        "Industry": industries.get(s,""),
-        "RS-Ratio": rr_t.iloc[-1],
-        "RS-Momentum": mm_t.iloc[-1],
-        "RRG Power (dist)": power,
-        "Status": quadrant(rr_t.iloc[-1], mm_t.iloc[-1])
-    })
-
-    trails[sym] = (rr_t, mm_t)
-
-df = pd.DataFrame(rows)
-if df.empty:
-    st.error("No data available.")
+try:
+    interval, yf_period = TIMEFRAMES[tf_name]
+    universe = load_universe(csv_selected)
+    
+    if universe.empty:
+        st.error("Failed to load universe data")
+        st.stop()
+    
+    symbols = universe['Symbol'].tolist()
+    names_dict = dict(zip(universe['Symbol'], universe['Company Name']))
+    industries_dict = dict(zip(universe['Symbol'], universe['Industry']))
+    
+    # Download data for benchmark and all stocks
+    raw = yf.download(
+        symbols + [BENCHMARKS[bench_name]],
+        interval=interval,
+        period=yf_period,
+        auto_adjust=True,
+        progress=False,
+        threads=True
+    )
+    
+    bench = raw['Close'][BENCHMARKS[bench_name]]
+    
+    rows = []
+    trails = {}
+    
+    for s in symbols:
+        if s not in raw['Close'].columns:
+            continue
+        
+        rr, mm = rrg_calc(raw['Close'][s], bench)
+        
+        if rr is None or mm is None:
+            continue
+        
+        rr_tail = rr.iloc[-TAIL:]
+        mm_tail = mm.iloc[-TAIL:]
+        
+        if len(rr_tail) < 3:
+            continue
+        
+        # Calculate momentum slope using polyfit
+        slope = np.polyfit(range(len(mm_tail)), mm_tail.values, 1)[0]
+        
+        # Calculate RRG Power: combined strength metric
+        power = np.sqrt((rr_tail.iloc[-1] - 100) ** 2 + (mm_tail.iloc[-1] - 100) ** 2)
+        
+        # Calculate price change
+        current_price = raw['Close'][s].iloc[-1]
+        historical_price = raw['Close'][s].iloc[max(0, len(raw['Close'][s]) - PERIOD_MAP[period_name])]
+        price_change = calculate_price_change(current_price, historical_price)
+        
+        status = quadrant(rr_tail.iloc[-1], mm_tail.iloc[-1])
+        tv_link = get_tv_link(s)
+        
+        rows.append({
+            'Symbol': s,
+            'Name': names_dict.get(s, s),
+            'Industry': industries_dict.get(s, 'N/A'),
+            'Price': round(current_price, 2),
+            'Change %': round(price_change, 2),
+            'RS-Ratio': round(rr_tail.iloc[-1], 2),
+            'RS-Momentum': round(mm_tail.iloc[-1], 2),
+            'Momentum Slope': round(slope, 2),
+            'RRG Power': round(power, 2),
+            'Status': status,
+            'TV Link': tv_link
+        })
+        
+        trails[s] = (rr_tail, mm_tail)
+    
+    df = pd.DataFrame(rows)
+    
+    if df.empty:
+        st.error("No data available. Try another combination.")
+        st.stop()
+    
+    # Rank by selected metric
+    rank_col_map = {
+        "RRG Power": "RRG Power",
+        "RS-Ratio": "RS-Ratio",
+        "RS-Momentum": "RS-Momentum",
+        "Price % Change": "Change %",
+        "Momentum Slope": "Momentum Slope"
+    }
+    
+    rank_column = rank_col_map[rank_by]
+    df['Rank'] = df[rank_column].rank(ascending=False, method='min').astype(int)
+    df = df.sort_values('Rank')
+    df['Sl No.'] = range(1, len(df) + 1)
+    
+except Exception as e:
+    st.error(f"Error in data processing: {str(e)}")
     st.stop()
 
-df["Rank"] = df[rank_by].rank(ascending=False).astype(int)
-df = df.sort_values("Rank")
+# ============================================================================
+# MAIN LAYOUT - THREE COLUMNS
+# ============================================================================
 
-# ---------------- CENTROIDS ----------------
-centroids = (
-    df.groupby("Industry")[["RS-Ratio","RS-Momentum"]]
-      .mean()
-      .reset_index()
-)
+col_left, col_main, col_right = st.columns([1, 3, 1])
 
-# ---------------- LAYOUT ----------------
-main_col, right_col = st.columns([4.5,1.5])
+# ============================================================================
+# LEFT SIDEBAR - LEGEND
+# ============================================================================
 
-# ---------------- RRG GRAPH ----------------
-with main_col:
-    fig, ax = plt.subplots(figsize=(11,7))
-    ax.axhline(100, ls=":", c="gray")
-    ax.axvline(100, ls=":", c="gray")
+with col_left:
+    st.markdown("### 📍 Legend")
+    
+    for status, color in QUADRANT_COLORS.items():
+        st.markdown(
+            f"""
+            <div style="display: flex; align-items: center; margin: 8px 0;">
+                <div style="width: 16px; height: 16px; background-color: {color}; border-radius: 50%; margin-right: 8px;"></div>
+                <span>{status}</span>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    
+    st.markdown("---")
+    st.markdown("### 📈 Stats")
+    
+    col_stat1, col_stat2 = st.columns(2)
+    with col_stat1:
+        st.metric("Total Stocks", len(df))
+        st.metric("Leading", len(df[df['Status'] == 'Leading']))
+    with col_stat2:
+        st.metric("Improving", len(df[df['Status'] == 'Improving']))
+        st.metric("Weakening", len(df[df['Status'] == 'Weakening']))
+    
+    st.metric("Lagging", len(df[df['Status'] == 'Lagging']))
 
-    if show_quadrants:
-        ax.axvspan(100, x_max, 100, y_max, color="#14532d", alpha=0.15)
-        ax.axvspan(x_min, 100, 100, y_max, color="#1e3a8a", alpha=0.15)
-        ax.axvspan(100, x_max, y_min, 100, color="#78350f", alpha=0.15)
-        ax.axvspan(x_min, 100, y_min, 100, color="#7f1d1d", alpha=0.15)
+# ============================================================================
+# MAIN AREA - RRG GRAPH & TABLE
+# ============================================================================
 
-    for _, r in df.iterrows():
-        rr_t, mm_t = trails[r["Symbol"]]
-        c = RRG_COLORS[r["Status"]]
-        ax.plot(rr_t, mm_t, lw=1, color=c)
-        ax.scatter(rr_t.iloc[-1], mm_t.iloc[-1], s=70, color=c)
-
-    if show_centroids:
-        ax.scatter(
-            centroids["RS-Ratio"], centroids["RS-Momentum"],
-            marker="D", s=220, color="white",
-            edgecolor="black", zorder=5
+with col_main:
+    # RRG SCATTER PLOT WITH PLOTLY
+    st.markdown("### 📊 Relative Rotation Graph")
+    
+    fig = go.Figure()
+    
+    # Add quadrant background rectangles
+    fig.add_shape(type="rect", x0=100, y0=100, x1=df['RS-Ratio'].max() + 10, y1=df['RS-Momentum'].max() + 10,
+                  fillcolor="#22c55e", opacity=0.05, line_width=0, name="Leading")
+    fig.add_shape(type="rect", x0=df['RS-Ratio'].min() - 10, y0=100, x1=100, y1=df['RS-Momentum'].max() + 10,
+                  fillcolor="#3b82f6", opacity=0.05, line_width=0, name="Improving")
+    fig.add_shape(type="rect", x0=df['RS-Ratio'].min() - 10, y0=df['RS-Momentum'].min() - 10, x1=100, y1=100,
+                  fillcolor="#ef4444", opacity=0.05, line_width=0, name="Lagging")
+    fig.add_shape(type="rect", x0=100, y0=df['RS-Momentum'].min() - 10, x1=df['RS-Ratio'].max() + 10, y1=100,
+                  fillcolor="#facc15", opacity=0.05, line_width=0, name="Weakening")
+    
+    # Add center lines
+    fig.add_hline(y=100, line_dash="dash", line_color="gray", opacity=0.5)
+    fig.add_vline(x=100, line_dash="dash", line_color="gray", opacity=0.5)
+    
+    # Add scatter points for each quadrant
+    for status in ["Leading", "Improving", "Weakening", "Lagging"]:
+        df_status = df[df['Status'] == status]
+        
+        fig.add_trace(go.Scatter(
+            x=df_status['RS-Ratio'],
+            y=df_status['RS-Momentum'],
+            mode='markers+text',
+            name=status,
+            marker=dict(
+                size=8,
+                color=QUADRANT_COLORS[status],
+                opacity=0.8,
+                line=dict(width=1, color='white')
+            ),
+            text=[format_symbol(s) for s in df_status['Symbol']],
+            textposition="top center",
+            textfont=dict(size=9, color="black"),
+            hovertemplate='<b>%{customdata[0]}</b><br>' +
+                         'Company: %{customdata[1]}<br>' +
+                         'RS-Ratio: %{x:.2f}<br>' +
+                         'RS-Momentum: %{y:.2f}<br>' +
+                         'Status: ' + status +
+                         '<extra></extra>',
+            customdata=df_status[['Name', 'Industry']].values
+        ))
+    
+    fig.update_layout(
+        title=f"{bench_name} | {tf_name} | {period_name}",
+        xaxis_title="RS-Ratio",
+        yaxis_title="RS-Momentum",
+        hovermode='closest',
+        height=500,
+        template="plotly_white",
+        showlegend=True,
+        legend=dict(x=0.02, y=0.98, bgcolor="rgba(255,255,255,0.8)"),
+        xaxis=dict(zeroline=False),
+        yaxis=dict(zeroline=False)
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # DATA TABLE
+    st.markdown("### 📋 Detailed Analysis")
+    
+    with st.expander("Results Table (Click to expand/collapse)", expanded=True):
+        # Create color-coded dataframe for display
+        display_df = df[['Sl No.', 'Symbol', 'Name', 'Status', 'Industry', 'Price', 'Change %', 
+                         'RS-Ratio', 'RS-Momentum', 'Momentum Slope', 'RRG Power', 'Rank']].copy()
+        
+        # Format display symbols without .NS
+        display_df['Symbol'] = display_df['Symbol'].apply(format_symbol)
+        
+        # Create styled dataframe
+        def highlight_status(val):
+            if val == 'Leading':
+                return 'background-color: #22c55e; color: white'
+            elif val == 'Improving':
+                return 'background-color: #3b82f6; color: white'
+            elif val == 'Weakening':
+                return 'background-color: #facc15; color: black'
+            elif val == 'Lagging':
+                return 'background-color: #ef4444; color: white'
+            return ''
+        
+        # Display with sorting capability
+        st.dataframe(
+            display_df.style.applymap(highlight_status, subset=['Status']),
+            use_container_width=True,
+            height=400
+        )
+        
+        # Download button
+        csv = display_df.to_csv(index=False)
+        st.download_button(
+            label="📥 Download Results (CSV)",
+            data=csv,
+            file_name=f"rrg_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            mime="text/csv"
         )
 
-    if show_labels:
-        for s in df.head(label_top_n)["Symbol"]:
-            rr_t, mm_t = trails[s]
-            ax.text(rr_t.iloc[-1]+0.15, mm_t.iloc[-1]+0.15, s, fontsize=8)
+# ============================================================================
+# RIGHT SIDEBAR - TOP 30 RS MOMENTUM
+# ============================================================================
 
-    handles = [plt.Line2D([0],[0], marker='o', color='w',
-               markerfacecolor=c, label=k) for k,c in RRG_COLORS.items()]
-    ax.legend(handles=handles, loc="upper left")
+with col_right:
+    st.markdown("### 🚀 Top 30 RS-Momentum")
+    
+    with st.expander("Top Performers", expanded=True):
+        top30 = df.nlargest(30, 'RS-Momentum')[['Sl No.', 'Symbol', 'Name', 'RS-Momentum', 'Status']].copy()
+        top30['Symbol'] = top30['Symbol'].apply(format_symbol)
+        
+        # Color code status
+        top30_styled = top30.style.applymap(
+            lambda val: 'background-color: #22c55e; color: white' if val == 'Leading' else
+                       'background-color: #3b82f6; color: white' if val == 'Improving' else
+                       'background-color: #facc15; color: black' if val == 'Weakening' else
+                       'background-color: #ef4444; color: white' if val == 'Lagging' else '',
+            subset=['Status']
+        )
+        
+        st.dataframe(top30_styled, use_container_width=True, height=600)
 
-    ax.set_xlim(x_min, x_max)
-    ax.set_ylim(y_min, y_max)
-    ax.set_xlabel("RS-Ratio")
-    ax.set_ylabel("RS-Momentum")
+# ============================================================================
+# FOOTER
+# ============================================================================
 
-    st.pyplot(fig, width="stretch")
-
-# ---------------- RIGHT PANEL ----------------
-with right_col:
-    with st.expander("Top 30 RS-Momentum", expanded=True):
-        top30 = df.sort_values("RS-Momentum", ascending=False).head(30)
-        st.dataframe(top30[["Symbol","RS-Momentum","Status"]], height=600)
-
-# ---------------- TABLE ----------------
-df["Symbol"] = df["Symbol"].apply(
-    lambda s: f"https://www.tradingview.com/chart/?symbol=NSE:{s}"
-)
-
-with st.expander("RRG Table", expanded=True):
-    st.dataframe(
-        df[[
-            "Rank","Symbol","Name","Status",
-            "Industry","RS-Ratio","RS-Momentum"
-        ]],
-        column_config={
-            "Symbol": st.column_config.LinkColumn(
-                "Symbol",
-                display_text=lambda url: url.split(":")[-1]
-            )
-        },
-        height=450,
-        width="stretch"
-    )
-
-# ---------------- PLAY LOOP ----------------
-if play:
-    time.sleep(speed/1000)
-    st.rerun()
+st.markdown("---")
+st.markdown(
+    f"""
+    <div style="text-align: center; font-size: 12px; color: gray;">
+    <b>RRG Dashboard v2.0</b> | Last Updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S IST')} |
+    Data Source: Yahoo Finance | Benchmarks: {bench_name}
+    </div>
+    """,
+    unsafe_allow_html=True
