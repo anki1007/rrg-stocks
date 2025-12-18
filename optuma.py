@@ -337,27 +337,27 @@ if st.session_state.data_loaded and st.session_state.df is not None:
     fig_rrg.add_shape(
         type="rect", x0=100, y0=100, x1=100 + quadrant_size, y1=100 + quadrant_size,
         fillcolor="rgba(34, 197, 94, 0.1)",
-        line=dict(color="rgba(34, 197, 94, 0.3)", width=2), layer="below"
+        line=dict(color="rgba(34, 197, 94, 0.3)", width=3), layer="below"
     )
     fig_rrg.add_shape(
         type="rect", x0=100 - quadrant_size, y0=100, x1=100, y1=100 + quadrant_size,
         fillcolor="rgba(59, 130, 246, 0.1)",
-        line=dict(color="rgba(59, 130, 246, 0.3)", width=2), layer="below"
+        line=dict(color="rgba(59, 130, 246, 0.3)", width=3), layer="below"
     )
     fig_rrg.add_shape(
         type="rect", x0=100 - quadrant_size, y0=100 - quadrant_size, x1=100, y1=100,
         fillcolor="rgba(251, 191, 36, 0.1)",
-        line=dict(color="rgba(251, 191, 36, 0.3)", width=2), layer="below"
+        line=dict(color="rgba(251, 191, 36, 0.3)", width=3), layer="below"
     )
     fig_rrg.add_shape(
         type="rect", x0=100, y0=100 - quadrant_size, x1=100 + quadrant_size, y1=100,
         fillcolor="rgba(239, 68, 68, 0.1)",
-        line=dict(color="rgba(239, 68, 68, 0.3)", width=2), layer="below"
+        line=dict(color="rgba(239, 68, 68, 0.3)", width=3), layer="below"
     )
 
     fig_rrg.add_annotation(
         x=100 + quadrant_size * 0.5, y=100 + quadrant_size * 0.5, text="Leading",
-        showarrow=False, font=dict(size=12, color="rgba(34, 197, 94, 0.5)")
+        showarrow=False, font=dict(size=12, color="rgba(255, 255, 255, 0.5)")
     )
     fig_rrg.add_annotation(
         x=100 - quadrant_size * 0.5, y=100 + quadrant_size * 0.5, text="Improving",
@@ -373,7 +373,7 @@ if st.session_state.data_loaded and st.session_state.df is not None:
     )
 
     fig_rrg.add_hline(y=100, line_dash="dash",
-                      line_color="rgba(150, 150, 150, 0.5)", layer="below")
+                      line_color="rgba(250, 250, 250, 0.5)", layer="below")
     fig_rrg.add_vline(x=100, line_dash="dash",
                       line_color="rgba(150, 150, 150, 0.5)", layer="below")
 
@@ -490,3 +490,4 @@ st.markdown("""
     <i>Disclaimer: For educational purposes only. Not financial advice.</i>
 </div>
 """, unsafe_allow_html=True)
+
