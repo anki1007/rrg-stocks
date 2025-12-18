@@ -469,7 +469,7 @@ if st.session_state.df_cache is not None:
         fig_rrg.add_shape(type="rect", x0=100, y0=100-quadrant_size, x1=100+quadrant_size, y1=100,
                          fillcolor="rgba(239, 68, 68, 0.12)", line=dict(color="rgba(239, 68, 68, 0.4)", width=2), layer="below")
         
-        # Quadrant labels - DARK AND BOLD
+        # Quadrant labels
         fig_rrg.add_annotation(
             x=100+quadrant_size*0.5, y=100+quadrant_size*0.5, 
             text="Leading",
@@ -555,7 +555,7 @@ if st.session_state.df_cache is not None:
                     )
                     hover_text.append(hover_info)
                 
-                # Add markers - LARGE AND VISIBLE
+                # Add markers
                 fig_rrg.add_trace(go.Scatter(
                     x=df_status['RS-Ratio'],
                     y=df_status['RS-Momentum'],
@@ -607,7 +607,7 @@ if st.session_state.df_cache is not None:
         
         st.markdown("---")
         
-        # COLLAPSIBLE TABLE WITH MAXIMUM VISIBILITY
+        # INTERACTIVE TABLE WITH SORTING, FILTERING, AND SEARCH
         with st.expander("📊 **Detailed Analysis** (Click to expand/collapse)", expanded=True):
             table_rows = ""
             for _, row in df.iterrows():
@@ -615,10 +615,10 @@ if st.session_state.df_cache is not None:
                 table_rows += f"""
                 <tr>
                     <td style="color: #ffffff !important;">{int(row['Sl No.'])}</td>
-                    <td style="color: #60a5fa !important; text-align: left;"><a href="{row['TV Link']}" target="_blank" style="color: #60a5fa !important; text-decoration: none; font-weight: bold;">{row['Symbol']}</a></td>
+                    <td style="color: #60a5fa !important; text-align: left;"><a href="{row['TV Link']}" target="_blank" style="color: #60a5fa !important; text-decoration: none; text-align: left; font-weight: bold;">{row['Symbol']}</a></td>
                     <td style="color: #e5e7eb !important; text-align: left;">{row['Industry']}</td>
-                    <td style="color: #ffffff !important;">₹{row['Price']:.2f}</td>
-                    <td style="color: #ffffff !important;">{row['Change %']:+.2f}%</td>
+                    <td style="color: #ffffff !important;">{row['Price']:.2f}</td>
+                    <td style="color: #ffffff !important;">{row['Change %']:+.2f}</td>
                     <td style="color: #ffffff !important;">{row['RRG Power']:.2f}</td>
                     <td><span class="{status_class}">{row['Status']}</span></td>
                     <td style="color: #ffffff !important;">{row['RS-Ratio']:.2f}</td>
@@ -632,12 +632,56 @@ if st.session_state.df_cache is not None:
             html_table = f"""
             <style>
                 .rrg-table-wrapper {{
-                    max-height: 600px;
+                    max-height: 650px;
                     overflow-y: auto;
                     overflow-x: auto;
                     border: 2px solid #4b5563;
                     border-radius: 8px;
                     background-color: #1f2937;
+                }}
+                .search-container {{
+                    padding: 15px;
+                    background-color: #111827;
+                    border-bottom: 2px solid #4b5563;
+                    display: flex;
+                    gap: 10px;
+                    align-items: center;
+                    flex-wrap: wrap;
+                }}
+                .search-box {{
+                    padding: 8px 12px;
+                    background-color: #374151;
+                    border: 1px solid #4b5563;
+                    border-radius: 6px;
+                    color: #ffffff;
+                    font-size: 13px;
+                    outline: none;
+                    min-width: 200px;
+                }}
+                .search-box:focus {{
+                    border-color: #60a5fa;
+                }}
+                .filter-select {{
+                    padding: 8px 12px;
+                    background-color: #374151;
+                    border: 1px solid #4b5563;
+                    border-radius: 6px;
+                    color: #ffffff;
+                    font-size: 13px;
+                    outline: none;
+                }}
+                .clear-btn {{
+                    padding: 8px 16px;
+                    background-color: #ef4444;
+                    border: none;
+                    border-radius: 6px;
+                    color: #ffffff;
+                    font-size: 13px;
+                    cursor: pointer;
+                    font-weight: bold;
+                }}
+                .clear-btn:hover {{
+                    background-color: #dc2626;
                 }}
                 .rrg-table-custom {{
                     width: 100%;
@@ -659,6 +703,15 @@ if st.session_state.df_cache is not None:
                     font-weight: bold !important;
                     border: 1px solid #4b5563 !important;
                     font-size: 13px !important;
+                    cursor: pointer;
+                    user-select: none;
+                }}
+                .rrg-table-custom th:hover {{
+                    background-color: #1f2937 !important;
+                }}
+                .rrg-table-custom th::after {{
+                    content: ' ⇅';
+                    opacity: 0.5;
                 }}
                 .rrg-table-custom td {{
                     padding: 10px !important;
@@ -707,32 +760,119 @@ if st.session_state.df_cache is not None:
                     display: inline-block !important;
                 }}
             </style>
+            
+            <div class="search-container">
+                <input type="text" id="searchBox" class="search-box" placeholder="🔍 Search by Symbol or Name..." onkeyup="filterTable()">
+                <select id="statusFilter" class="filter-select" onchange="filterTable()">
+                    <option value="">All Status</option>
+                    <option value="Leading">🟢 Leading</option>
+                    <option value="Improving">🔵 Improving</option>
+                    <option value="Weakening">🟡 Weakening</option>
+                    <option value="Lagging">🔴 Lagging</option>
+                </select>
+                <select id="industryFilter" class="filter-select" onchange="filterTable()">
+                    <option value="">All Industries</option>
+                    {' '.join([f'<option value="{ind}">{ind}</option>' for ind in sorted(df['Industry'].unique())])}
+                </select>
+                <button class="clear-btn" onclick="clearFilters()">Clear Filters</button>
+            </div>
+            
             <div class="rrg-table-wrapper">
-                <table class="rrg-table-custom">
+                <table class="rrg-table-custom" id="dataTable">
                     <thead>
                         <tr>
-                            <th>Sl No.</th>
-                            <th>Symbol</th>
-                            <th>Industry</th>
-                            <th>Price</th>
-                            <th>Change %</th>
-                            <th>Strength</th>
-                            <th>Status</th>
-                            <th>RS-Ratio</th>
-                            <th>RS-Momentum</th>
-                            <th>Distance</th>
-                            <th>Direction</th>
-                            <th>Velocity</th>
+                            <th onclick="sortTable(0)">Sl No.</th>
+                            <th onclick="sortTable(1)">Symbol</th>
+                            <th onclick="sortTable(2)">Industry</th>
+                            <th onclick="sortTable(3)">Price</th>
+                            <th onclick="sortTable(4)">Change %</th>
+                            <th onclick="sortTable(5)">Strength</th>
+                            <th onclick="sortTable(6)">Status</th>
+                            <th onclick="sortTable(7)">RS-Ratio</th>
+                            <th onclick="sortTable(8)">RS-Momentum</th>
+                            <th onclick="sortTable(9)">Distance</th>
+                            <th onclick="sortTable(10)">Direction</th>
+                            <th onclick="sortTable(11)">Velocity</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="tableBody">
                         {table_rows}
                     </tbody>
                 </table>
             </div>
+            
+            <script>
+                let sortDirection = {{}};
+                
+                function sortTable(columnIndex) {{
+                    const table = document.getElementById("dataTable");
+                    const tbody = document.getElementById("tableBody");
+                    const rows = Array.from(tbody.querySelectorAll("tr"));
+                    
+                    // Toggle sort direction
+                    sortDirection[columnIndex] = !sortDirection[columnIndex];
+                    const ascending = sortDirection[columnIndex];
+                    
+                    rows.sort((a, b) => {{
+                        let aValue = a.cells[columnIndex].textContent.trim();
+                        let bValue = b.cells[columnIndex].textContent.trim();
+                        
+                        // Remove currency symbols and parse numbers
+                        aValue = aValue.replace(/[₹,%]/g, '');
+                        bValue = bValue.replace(/[₹,%]/g, '');
+                        
+                        // Try to parse as numbers
+                        const aNum = parseFloat(aValue);
+                        const bNum = parseFloat(bValue);
+                        
+                        if (!isNaN(aNum) && !isNaN(bNum)) {{
+                            return ascending ? aNum - bNum : bNum - aNum;
+                        }}
+                        
+                        // String comparison
+                        return ascending ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
+                    }});
+                    
+                    // Clear and re-append sorted rows
+                    tbody.innerHTML = '';
+                    rows.forEach(row => tbody.appendChild(row));
+                }}
+                
+                function filterTable() {{
+                    const searchBox = document.getElementById("searchBox").value.toLowerCase();
+                    const statusFilter = document.getElementById("statusFilter").value;
+                    const industryFilter = document.getElementById("industryFilter").value;
+                    const tbody = document.getElementById("tableBody");
+                    const rows = tbody.getElementsByTagName("tr");
+                    
+                    for (let i = 0; i < rows.length; i++) {{
+                        const row = rows[i];
+                        const symbol = row.cells[1].textContent.toLowerCase();
+                        const industry = row.cells[2].textContent;
+                        const status = row.cells[6].textContent.trim();
+                        
+                        const matchesSearch = symbol.includes(searchBox);
+                        const matchesStatus = !statusFilter || status === statusFilter;
+                        const matchesIndustry = !industryFilter || industry === industryFilter;
+                        
+                        if (matchesSearch && matchesStatus && matchesIndustry) {{
+                            row.style.display = "";
+                        }} else {{
+                            row.style.display = "none";
+                        }}
+                    }}
+                }}
+                
+                function clearFilters() {{
+                    document.getElementById("searchBox").value = "";
+                    document.getElementById("statusFilter").value = "";
+                    document.getElementById("industryFilter").value = "";
+                    filterTable();
+                }}
+            </script>
             """
             
-            st.components.v1.html(html_table, height=620, scrolling=True)
+            st.components.v1.html(html_table, height=700, scrolling=True)
     
     # ========================================================================
     # RIGHT SIDEBAR - TOP 30 PER QUADRANT
@@ -798,4 +938,3 @@ if st.session_state.df_cache is not None:
 
 else:
     st.info("⬅️ Select indices and click **Load Data** to start analysis")
-
