@@ -708,58 +708,136 @@ if st.session_state.df_cache is not None:
         
         st.markdown("---")
         
-        # COLLAPSIBLE TABLE WITH BRIGHT TEXT
-        with st.expander("📊 **Detailed Analysis** (Click to expand/collapse)", expanded=True):
-            # Build HTML table rows
-            table_rows = ""
-            for _, row in df.iterrows():
-                status_class = f"status-{row['Status'].lower()}"
-                table_rows += f"""
+       # COLLAPSIBLE TABLE WITH BRIGHT TEXT - FIXED VERSION
+with st.expander("📊 **Detailed Analysis** (Click to expand/collapse)", expanded=True):
+    # Build HTML table rows
+    table_rows = ""
+    for _, row in df.iterrows():
+        status_class = f"status-{row['Status'].lower()}"
+        table_rows += f"""
+        <tr>
+            <td style="color: #ffffff !important;">{int(row['Sl No.'])}</td>
+            <td style="color: #60a5fa !important; text-align: left;"><a href="{row['TV Link']}" target="_blank" style="color: #60a5fa !important; text-decoration: none; font-weight: bold;">{row['Name']}</a></td>
+            <td style="color: #e5e7eb !important; text-align: left;">{row['Industry']}</td>
+            <td style="color: #ffffff !important;">₹{row['Price']:.2f}</td>
+            <td style="color: #ffffff !important;">{row['Change %']:+.2f}%</td>
+            <td style="color: #ffffff !important;">{row['RRG Power']:.2f}</td>
+            <td><span class="{status_class}">{row['Status']}</span></td>
+            <td style="color: #ffffff !important;">{row['RS-Ratio']:.2f}</td>
+            <td style="color: #ffffff !important;">{row['RS-Momentum']:.2f}</td>
+            <td style="color: #ffffff !important;">{row['Distance']:.2f}</td>
+            <td style="color: #fbbf24 !important;">{row['Direction']}</td>
+            <td style="color: #ffffff !important;">{row['Velocity']:.3f}</td>
+        </tr>
+        """
+    
+    # Complete HTML table with inline styles
+    html_table = f"""
+    <style>
+        .rrg-table-wrapper {{
+            max-height: 600px;
+            overflow-y: auto;
+            overflow-x: auto;
+            border: 2px solid #4b5563;
+            border-radius: 8px;
+            background-color: #1f2937;
+        }}
+        .rrg-table-custom {{
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+            font-family: 'Segoe UI', Arial, sans-serif;
+        }}
+        .rrg-table-custom thead {{
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background-color: #111827;
+        }}
+        .rrg-table-custom th {{
+            background-color: #111827 !important;
+            color: #ffffff !important;
+            padding: 14px 10px !important;
+            text-align: center !important;
+            font-weight: bold !important;
+            border: 1px solid #4b5563 !important;
+            font-size: 13px !important;
+        }}
+        .rrg-table-custom td {{
+            padding: 10px !important;
+            text-align: center !important;
+            border: 1px solid #4b5563 !important;
+            color: #ffffff !important;
+            background-color: #1f2937 !important;
+            font-size: 13px !important;
+        }}
+        .rrg-table-custom tbody tr:nth-child(even) td {{
+            background-color: #374151 !important;
+        }}
+        .rrg-table-custom tbody tr:hover td {{
+            background-color: #4b5563 !important;
+        }}
+        .status-leading {{
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.7), rgba(34, 197, 94, 0.5)) !important;
+            color: #4ade80 !important;
+            font-weight: bold !important;
+            padding: 6px 14px !important;
+            border-radius: 6px !important;
+            display: inline-block !important;
+        }}
+        .status-improving {{
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.7), rgba(59, 130, 246, 0.5)) !important;
+            color: #60a5fa !important;
+            font-weight: bold !important;
+            padding: 6px 14px !important;
+            border-radius: 6px !important;
+            display: inline-block !important;
+        }}
+        .status-weakening {{
+            background: linear-gradient(135deg, rgba(251, 191, 36, 0.7), rgba(251, 191, 36, 0.5)) !important;
+            color: #fbbf24 !important;
+            font-weight: bold !important;
+            padding: 6px 14px !important;
+            border-radius: 6px !important;
+            display: inline-block !important;
+        }}
+        .status-lagging {{
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.7), rgba(239, 68, 68, 0.5)) !important;
+            color: #f87171 !important;
+            font-weight: bold !important;
+            padding: 6px 14px !important;
+            border-radius: 6px !important;
+            display: inline-block !important;
+        }}
+    </style>
+    <div class="rrg-table-wrapper">
+        <table class="rrg-table-custom">
+            <thead>
                 <tr>
-                    <td>{int(row['Sl No.'])}</td>
-                    <td><a href="{row['TV Link']}" target="_blank" class="symbol-link">{row['Symbol']}</a></td>
-                    <td>{row['Industry']}</td>
-                    <td>₹{row['Price']:.2f}</td>
-                    <td>{row['Change %']:+.2f}%</td>
-                    <td>{row['RRG Power']:.2f}</td>
-                    <td><span class="{status_class}">{row['Status']}</span></td>
-                    <td>{row['RS-Ratio']:.2f}</td>
-                    <td>{row['RS-Momentum']:.2f}</td>
-                    <td>{row['Distance']:.2f}</td>
-                    <td>{row['Direction']}</td>
-                    <td>{row['Velocity']:.3f}</td>
+                    <th>Sl No.</th>
+                    <th>Symbol</th>
+                    <th>Industry</th>
+                    <th>Price</th>
+                    <th>Change %</th>
+                    <th>Strength</th>
+                    <th>Status</th>
+                    <th>RS-Ratio</th>
+                    <th>RS-Momentum</th>
+                    <th>Distance</th>
+                    <th>Direction</th>
+                    <th>Velocity</th>
                 </tr>
-                """
-            
-            # Complete HTML table
-            html_table = f"""
-            <div class="table-container">
-                <table class="rrg-table">
-                    <thead>
-                        <tr>
-                            <th>Sl No.</th>
-                            <th>Symbol</th>
-                            <th>Industry</th>
-                            <th>Price</th>
-                            <th>Change %</th>
-                            <th>Strength</th>
-                            <th>Status</th>
-                            <th>RS-Ratio</th>
-                            <th>RS-Momentum</th>
-                            <th>Distance</th>
-                            <th>Direction</th>
-                            <th>Velocity</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {table_rows}
-                    </tbody>
-                </table>
-            </div>
-            """
-            
-            # Render HTML
-            st.components.v1.html(html_table, height=600, scrolling=True)
+            </thead>
+            <tbody>
+                {table_rows}
+            </tbody>
+        </table>
+    </div>
+    """
+    
+    # Render HTML with proper height
+    st.components.v1.html(html_table, height=620, scrolling=True)
+
     
     # ========================================================================
     # RIGHT SIDEBAR - TOP 30 PER QUADRANT
@@ -829,5 +907,6 @@ if st.session_state.df_cache is not None:
 
 else:
     st.info("⬅️ Select indices and click **Load Data** to start analysis")
+
 
 
