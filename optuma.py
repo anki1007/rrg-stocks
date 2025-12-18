@@ -40,8 +40,8 @@ st.markdown("""
 # Define Benchmarks
 BENCHMARKS = {
     "NIFTY 50": "^NSEI",
-    "NIFTY 200": "^CNX200",
-    "NIFTY 500": "^CRSLDX"  # Adjusted for available data
+    "NIFTY 200": "^CNXIT",
+    "NIFTY 500": "^CNXIT"  # Adjusted for available data
 }
 
 # Define Timeframes with intervals and yfinance periods
@@ -94,10 +94,11 @@ def list_csv_from_github():
         st.error(f"Error fetching CSV list: {e}")
         return []
 
+
 @st.cache_data(ttl=600)
 def load_universe(csv_name):
     """Load stock universe from GitHub CSV"""
-    url = f"https://raw.githubusercontent.com/anki1007/rrg-stocks/main/ticker/{csv_name.lower()}.csv"
+    url = f"https://github.com/anki1007/rrg-stocks/main/ticker/{csv_name.lower()}.csv"
     try:
         df = pd.read_csv(url)
         return df
