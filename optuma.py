@@ -675,7 +675,7 @@ if st.session_state.df_cache is not None:
                     textfont=dict(
                         color='#000000',  # Pure black text
                         size=11,  # Larger text
-                        family='Arial Black'
+                        family='Arial'
                     )
                 ))
         
@@ -691,13 +691,13 @@ if st.session_state.df_cache is not None:
             xaxis=dict(
                 gridcolor="rgba(200, 200, 200, 0.5)", 
                 zeroline=False,
-                title_font=dict(size=14, color="#000000", family="Arial Black"),
+                title_font=dict(size=14, color="#000000", family="Arial"),
                 tickfont=dict(size=12, color="#000000")
             ),
             yaxis=dict(
                 gridcolor="rgba(200, 200, 200, 0.5)", 
                 zeroline=False,
-                title_font=dict(size=14, color="#000000", family="Arial Black"),
+                title_font=dict(size=14, color="#000000", family="Arial"),
                 tickfont=dict(size=12, color="#000000")
             ),
             showlegend=False,
@@ -829,4 +829,5 @@ if st.session_state.df_cache is not None:
 
 else:
     st.info("⬅️ Select indices and click **Load Data** to start analysis")
+
 
