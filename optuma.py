@@ -1,5 +1,5 @@
 # ==========================================================
-# ALPHA MOMENTUM SCREENER – OPTUMA-GRADE RRG (FINAL)
+# RELATIVE ROTATION GRAPHS (RRG) - STOCKS
 # ==========================================================
 
 import numpy as np
@@ -11,22 +11,22 @@ import requests
 from urllib.parse import quote
 
 # ---------------- CONFIG ----------------
-st.set_page_config(layout="wide", page_title="Alpha Momentum Screener")
+st.set_page_config(layout="wide", page_title="Relative Rotation Graphs (RRG) - Stocks")
 
 # ---------------- THEME ----------------
 st.markdown("""
 <style>
 html, body {
     background:#0b0f14;
-    color:#e5e7eb;
+    color:#e8e5eb;
     font-family: Inter, sans-serif;
 }
 h1 { color:#4da3ff; font-size:34px; font-weight:700; }
-h2 { color:#fbbf24; }
+h2 { color:#ebe5e8; }
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<h1>Alpha Momentum Screener</h1>", unsafe_allow_html=True)
+st.markdown("<h1>Relative Rotation Graphs (RRG) - Stocks</h1>", unsafe_allow_html=True)
 
 # ---------------- BENCHMARKS ----------------
 BENCHMARKS = {
@@ -195,3 +195,4 @@ with st.expander("RRG Table", expanded=True):
 with st.sidebar.expander("Top 30 RS Momentum", expanded=True):
     top30 = df.sort_values("RS-Momentum", ascending=False).head(30)
     st.dataframe(top30[["Symbol","RS-Momentum","Status"]], height=600)
+
