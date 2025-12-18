@@ -25,36 +25,6 @@ st.markdown("""
     body { background-color: #111827; }
     .main { background-color: #111827; }
     [data-testid="stSidebar"] { background-color: #1f2937; }
-    
-    /* Status color backgrounds */
-    .status-leading {
-        background: linear-gradient(135deg, rgba(34, 197, 94, 0.3), rgba(34, 197, 94, 0.15));
-        padding: 4px 8px;
-        border-radius: 4px;
-        color: #22c55e;
-        font-weight: bold;
-    }
-    .status-improving {
-        background: linear-gradient(135deg, rgba(59, 130, 246, 0.3), rgba(59, 130, 246, 0.15));
-        padding: 4px 8px;
-        border-radius: 4px;
-        color: #3b82f6;
-        font-weight: bold;
-    }
-    .status-weakening {
-        background: linear-gradient(135deg, rgba(251, 191, 36, 0.3), rgba(251, 191, 36, 0.15));
-        padding: 4px 8px;
-        border-radius: 4px;
-        color: #fbbf24;
-        font-weight: bold;
-    }
-    .status-lagging {
-        background: linear-gradient(135deg, rgba(239, 68, 68, 0.3), rgba(239, 68, 68, 0.15));
-        padding: 4px 8px;
-        border-radius: 4px;
-        color: #ef4444;
-        font-weight: bold;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -94,6 +64,7 @@ QUADRANT_COLORS = {
 }
 
 WINDOW = 12
+TAIL_LENGTH = 5  # Number of historical points for tail
 
 # ============================================================================
 # HELPER FUNCTIONS
@@ -275,6 +246,8 @@ if "load_clicked" not in st.session_state:
     st.session_state.load_clicked = False
 if "df_cache" not in st.session_state:
     st.session_state.df_cache = None
+if "rs_history_cache" not in st.session_state:
+    st.session_state.rs_history_cache = {}
 
 # ============================================================================
 # SIDEBAR
@@ -321,6 +294,7 @@ if st.sidebar.button("📥 Load Data", use_container_width=True, key="load_btn",
 if st.sidebar.button("🔄 Clear", use_container_width=True, key="clear_btn"):
     st.session_state.load_clicked = False
     st.session_state.df_cache = None
+    st.session_state.rs_history_cache = {}
     st.rerun()
 
 st.sidebar.markdown("---")
@@ -368,6 +342,7 @@ if st.session_state.load_clicked:
         
         bench = raw['Close'][BENCHMARKS[bench_name]]
         rows = []
+        rs_history = {}
         success_count = 0
         failed_count = 0
         
@@ -384,6 +359,13 @@ if st.session_state.load_clicked:
                 if rs_ratio is None or len(rs_ratio) < 3:
                     failed_count += 1
                     continue
+                
+                # Store historical tail data
+                tail_length = min(TAIL_LENGTH, len(rs_ratio))
+                rs_history[format_symbol(s)] = {
+                    'rs_ratio': rs_ratio.iloc[-tail_length:].tolist(),
+                    'rs_momentum': rs_momentum.iloc[-tail_length:].tolist()
+                }
                 
                 rsr_current = rs_ratio.iloc[-1]
                 rsm_current = rs_momentum.iloc[-1]
@@ -444,6 +426,7 @@ if st.session_state.load_clicked:
         df['Sl No.'] = range(1, len(df) + 1)
         
         st.session_state.df_cache = df
+        st.session_state.rs_history_cache = rs_history
         
     except Exception as e:
         st.error(f"❌ Error: {str(e)}")
@@ -454,6 +437,7 @@ if st.session_state.load_clicked:
 # ============================================================================
 if st.session_state.df_cache is not None:
     df = st.session_state.df_cache
+    rs_history = st.session_state.rs_history_cache
     
     col_left, col_main, col_right = st.columns([1, 3, 1], gap="medium")
     
@@ -525,15 +509,54 @@ if st.session_state.df_cache is not None:
         fig_rrg.add_hline(y=100, line_dash="dash", line_color="rgba(150, 150, 150, 0.5)", layer="below")
         fig_rrg.add_vline(x=100, line_dash="dash", line_color="rgba(150, 150, 150, 0.5)", layer="below")
         
-        # Add data points
+        # Add data points with TAILS
         for status in ["Leading", "Improving", "Weakening", "Lagging"]:
             df_status = df_graph[df_graph['Status'] == status]
             if not df_status.empty:
                 hover_text = []
                 for _, row in df_status.iterrows():
+                    # Draw tail (historical trajectory)
+                    if row['Symbol'] in rs_history:
+                        tail_data = rs_history[row['Symbol']]
+                        rs_ratio_tail = tail_data['rs_ratio']
+                        rs_momentum_tail = tail_data['rs_momentum']
+                        
+                        if len(rs_ratio_tail) > 1:
+                            fig_rrg.add_trace(go.Scatter(
+                                x=rs_ratio_tail,
+                                y=rs_momentum_tail,
+                                mode='lines',
+                                line=dict(color=QUADRANT_COLORS[status], width=2, dash='dot'),
+                                showlegend=False,
+                                hoverinfo='skip'
+                            ))
+                            
+                            # Add arrow at the head (current position)
+                            if len(rs_ratio_tail) >= 2:
+                                x_tail = rs_ratio_tail[-2]
+                                y_tail = rs_momentum_tail[-2]
+                                x_head = rs_ratio_tail[-1]
+                                y_head = rs_momentum_tail[-1]
+                                
+                                fig_rrg.add_annotation(
+                                    x=x_head,
+                                    y=y_head,
+                                    ax=x_tail,
+                                    ay=y_tail,
+                                    xref='x',
+                                    yref='y',
+                                    axref='x',
+                                    ayref='y',
+                                    showarrow=True,
+                                    arrowhead=2,
+                                    arrowsize=1,
+                                    arrowwidth=2,
+                                    arrowcolor=QUADRANT_COLORS[status]
+                                )
+                    
                     hover_info = (
-                        f"<b>{row['Symbol']}</b><br>"
                         f"<b>{row['Name']}</b><br>"
+                        f"Symbol: {row['Symbol']}<br>"
                         f"Industry: {row['Industry']}<br>"
                         f"Price: ₹{row['Price']:.2f} | {row['Change %']:+.2f}%<br>"
                         f"<b>JdK Metrics:</b><br>"
@@ -544,6 +567,7 @@ if st.session_state.df_cache is not None:
                     )
                     hover_text.append(hover_info)
                 
+                # Add markers on top of tails
                 fig_rrg.add_trace(go.Scatter(
                     x=df_status['RS-Ratio'],
                     y=df_status['RS-Momentum'],
@@ -553,10 +577,10 @@ if st.session_state.df_cache is not None:
                     textposition="top center",
                     customdata=hover_text,
                     marker=dict(
-                        size=12,
+                        size=14,
                         color=QUADRANT_COLORS[status],
                         line=dict(color='white', width=2),
-                        opacity=0.9
+                        opacity=0.95
                     ),
                     hovertemplate='%{customdata}<extra></extra>',
                     textfont=dict(color='#000000', size=9, family='Arial')
@@ -579,92 +603,135 @@ if st.session_state.df_cache is not None:
         st.plotly_chart(fig_rrg, use_container_width=True)
         
         st.markdown("---")
-        st.markdown("## 📊 Detailed Analysis")
         
-        # ONE UNIFIED TABLE WITH ALL STOCKS
-        df_display = df[['Sl No.', 'Symbol', 'Industry', 'Price', 'Change %', 
-                        'RRG Power', 'Status', 'RS-Ratio', 'RS-Momentum', 
-                        'Distance', 'Direction', 'Velocity', 'TV Link']].copy()
-        
-        # Display using st.dataframe with clickable links
-        st.dataframe(
-            df_display,
-            use_container_width=True,
-            height=600,
-            hide_index=True,
-            column_config={
-                "Sl No.": st.column_config.NumberColumn(
-                    "Sl No.",
-                    help="Serial Number",
-                    width="small"
-                ),
-                "Symbol": st.column_config.LinkColumn(
-                    "Symbol",
-                    help="Click to open TradingView chart",
-                    display_text="Symbol",
-                    width="medium"
-                ),
-                "Industry": st.column_config.TextColumn(
-                    "Industry",
-                    width="medium"
-                ),
-                "Price": st.column_config.NumberColumn(
-                    "Price",
-                    format="₹%.2f",
-                    width="small"
-                ),
-                "Change %": st.column_config.NumberColumn(
-                    "Change %",
-                    format="%.2f%%",
-                    width="small"
-                ),
-                "RRG Power": st.column_config.NumberColumn(
-                    "Strength",
-                    help="RRG Power",
-                    format="%.2f",
-                    width="small"
-                ),
-                "Status": st.column_config.TextColumn(
-                    "Status",
-                    width="small"
-                ),
-                "RS-Ratio": st.column_config.NumberColumn(
-                    "RS-Ratio",
-                    format="%.2f",
-                    width="small"
-                ),
-                "RS-Momentum": st.column_config.NumberColumn(
-                    "RS-Momentum",
-                    format="%.2f",
-                    width="small"
-                ),
-                "Distance": st.column_config.NumberColumn(
-                    "Distance",
-                    format="%.2f",
-                    width="small"
-                ),
-                "Direction": st.column_config.TextColumn(
-                    "Direction",
-                    width="small"
-                ),
-                "Velocity": st.column_config.NumberColumn(
-                    "Velocity",
-                    format="%.3f",
-                    width="small"
-                ),
-                "TV Link": None  # Hide the TV Link column but keep data for Symbol column
-            }
-        )
+        # COLLAPSIBLE TABLE
+        with st.expander("📊 **Detailed Analysis** (Click to expand/collapse)", expanded=True):
+            # Prepare HTML table with colored status backgrounds and clickable names
+            html_table = """
+            <style>
+                .rrg-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    font-size: 13px;
+                }
+                .rrg-table th {
+                    background-color: #1f2937;
+                    color: #ffffff;
+                    padding: 10px;
+                    text-align: center;
+                    font-weight: bold;
+                    border: 1px solid #374151;
+                }
+                .rrg-table td {
+                    padding: 8px;
+                    text-align: center;
+                    border: 1px solid #374151;
+                }
+                .rrg-table tr:nth-child(even) {
+                    background-color: #1f2937;
+                }
+                .rrg-table tr:nth-child(odd) {
+                    background-color: #111827;
+                }
+                .rrg-table td:nth-child(2), .rrg-table td:nth-child(3) {
+                    text-align: left;
+                }
+                .status-leading {
+                    background: linear-gradient(135deg, rgba(34, 197, 94, 0.4), rgba(34, 197, 94, 0.2));
+                    color: #22c55e;
+                    font-weight: bold;
+                    padding: 4px 8px;
+                    border-radius: 4px;
+                    display: inline-block;
+                }
+                .status-improving {
+                    background: linear-gradient(135deg, rgba(59, 130, 246, 0.4), rgba(59, 130, 246, 0.2));
+                    color: #3b82f6;
+                    font-weight: bold;
+                    padding: 4px 8px;
+                    border-radius: 4px;
+                    display: inline-block;
+                }
+                .status-weakening {
+                    background: linear-gradient(135deg, rgba(251, 191, 36, 0.4), rgba(251, 191, 36, 0.2));
+                    color: #fbbf24;
+                    font-weight: bold;
+                    padding: 4px 8px;
+                    border-radius: 4px;
+                    display: inline-block;
+                }
+                .status-lagging {
+                    background: linear-gradient(135deg, rgba(239, 68, 68, 0.4), rgba(239, 68, 68, 0.2));
+                    color: #ef4444;
+                    font-weight: bold;
+                    padding: 4px 8px;
+                    border-radius: 4px;
+                    display: inline-block;
+                }
+                .symbol-link {
+                    color: #3b82f6;
+                    text-decoration: none;
+                    font-weight: bold;
+                }
+                .symbol-link:hover {
+                    text-decoration: underline;
+                    color: #60a5fa;
+                }
+            </style>
+            <table class="rrg-table">
+                <thead>
+                    <tr>
+                        <th>Sl No.</th>
+                        <th>Symbol</th>
+                        <th>Industry</th>
+                        <th>Price</th>
+                        <th>Change %</th>
+                        <th>Strength</th>
+                        <th>Status</th>
+                        <th>RS-Ratio</th>
+                        <th>RS-Momentum</th>
+                        <th>Distance</th>
+                        <th>Direction</th>
+                        <th>Velocity</th>
+                    </tr>
+                </thead>
+                <tbody>
+            """
+            
+            for _, row in df.iterrows():
+                status_class = f"status-{row['Status'].lower()}"
+                html_table += f"""
+                    <tr>
+                        <td>{int(row['Sl No.'])}</td>
+                        <td><a href="{row['TV Link']}" target="_blank" class="symbol-link">{row['Name']}</a></td>
+                        <td>{row['Industry']}</td>
+                        <td>₹{row['Price']:.2f}</td>
+                        <td>{row['Change %']:+.2f}%</td>
+                        <td>{row['RRG Power']:.2f}</td>
+                        <td><span class="{status_class}">{row['Status']}</span></td>
+                        <td>{row['RS-Ratio']:.2f}</td>
+                        <td>{row['RS-Momentum']:.2f}</td>
+                        <td>{row['Distance']:.2f}</td>
+                        <td>{row['Direction']}</td>
+                        <td>{row['Velocity']:.3f}</td>
+                    </tr>
+                """
+            
+            html_table += """
+                </tbody>
+            </table>
+            """
+            
+            st.markdown(html_table, unsafe_allow_html=True)
     
     # ========================================================================
-    # RIGHT SIDEBAR - TOP 30 WITH SECTOR DIVERSITY
+    # RIGHT SIDEBAR
     # ========================================================================
     with col_right:
         st.markdown("### 🚀 Top RRG Power")
         
         df_top = select_top_30_with_sectors(df, top_n=30)
         
-        # Group by Status for collapsible sections
         for status in ["Leading", "Improving", "Weakening", "Lagging"]:
             df_status_group = df_top[df_top['Status'] == status]
             
@@ -705,7 +772,6 @@ if st.session_state.df_cache is not None:
     </div>
     """, unsafe_allow_html=True)
     
-    # Export CSV
     if export_csv:
         csv_buffer = io.StringIO()
         df.to_csv(csv_buffer, index=False)
@@ -720,4 +786,3 @@ if st.session_state.df_cache is not None:
 
 else:
     st.info("⬅️ Select indices and click **Load Data** to start analysis")
-
