@@ -1,6 +1,5 @@
 # ==========================================================
-# OPTUMA-GRADE RRG — INTRADAY + SECTOR CENTROIDS
-# BENCHMARK + CSV-DRIVEN SYMBOLS (FINAL)
+# ALPHA MOMENTUM SCREENER – OPTUMA-GRADE RRG (FINAL)
 # ==========================================================
 
 import numpy as np
@@ -11,21 +10,23 @@ import matplotlib.pyplot as plt
 import requests
 from urllib.parse import quote
 
-# ---------------- STREAMLIT CONFIG ----------------
-st.set_page_config(page_title="RRG Terminal", layout="wide")
+# ---------------- CONFIG ----------------
+st.set_page_config(layout="wide", page_title="Alpha Momentum Screener")
 
-# ---------------- UI THEME ----------------
+# ---------------- THEME ----------------
 st.markdown("""
 <style>
 html, body {
-    background:#0b0f14 !important;
-    color:#e5e7eb !important;
-    font-family: 'IBM Plex Mono','JetBrains Mono', monospace;
-    font-size:13px;
+    background:#0b0f14;
+    color:#e5e7eb;
+    font-family: Inter, sans-serif;
 }
-h1,h2,h3 { color:#fbbf24 !important; }
+h1 { color:#4da3ff; font-size:34px; font-weight:700; }
+h2 { color:#fbbf24; }
 </style>
 """, unsafe_allow_html=True)
+
+st.markdown("<h1>Alpha Momentum Screener</h1>", unsafe_allow_html=True)
 
 # ---------------- BENCHMARKS ----------------
 BENCHMARKS = {
@@ -34,175 +35,163 @@ BENCHMARKS = {
     "NIFTY 500": "^CRSLDX"
 }
 
-INTERVALS = {
-    "Daily": ("1d", "6mo"),
-    "15 Min": ("15m", "60d"),
-    "5 Min": ("5m", "30d")
+TIMEFRAMES = {
+    "5 min close": ("5m", "30d"),
+    "15 min close": ("15m", "60d"),
+    "30 min close": ("30m", "60d"),
+    "1 hr close": ("60m", "90d"),
+    "Daily close": ("1d", "5y"),
+    "Weekly close": ("1wk", "10y"),
+    "Monthly close": ("1mo", "20y")
+}
+
+PERIOD_MAP = {
+    "6M": 126, "1Y": 252, "2Y": 504,
+    "3Y": 756, "5Y": 1260, "10Y": 2520
 }
 
 WINDOW = 14
 TAIL = 8
 
 # ---------------- HELPERS ----------------
-def jdk_components(price, bench, win=14):
-    df = pd.concat([price, bench], axis=1).dropna()
-    rs = 100 * df.iloc[:,0] / df.iloc[:,1]
-    m = rs.rolling(win).mean()
-    s = rs.rolling(win).std(ddof=0).replace(0, 1e-9)
-    rs_ratio = 100 + (rs - m) / s
+def rrg_calc(px, bench):
+    df = pd.concat([px, bench], axis=1).dropna()
+    if len(df) < WINDOW * 2:
+        return None, None
+
+    rs = 100 * df.iloc[:, 0] / df.iloc[:, 1]
+    rs_ratio = 100 + (rs - rs.rolling(WINDOW).mean()) / rs.rolling(WINDOW).std(ddof=0)
     roc = rs_ratio.pct_change() * 100
-    m2 = roc.rolling(win).mean()
-    s2 = roc.rolling(win).std(ddof=0).replace(0, 1e-9)
-    rs_mom = 101 + (roc - m2) / s2
+    rs_mom = 101 + (roc - roc.rolling(WINDOW).mean()) / roc.rolling(WINDOW).std(ddof=0)
     return rs_ratio.dropna(), rs_mom.dropna()
 
-def get_status(x, y):
+def quadrant(x, y):
     if x >= 100 and y >= 100: return "Leading"
     if x < 100 and y >= 100: return "Improving"
     if x >= 100 and y < 100: return "Weakening"
     return "Lagging"
 
-def zscore(s):
-    return (s - s.mean()) / (s.std(ddof=0) + 1e-9)
+def tv_link(sym):
+    return f"https://www.tradingview.com/chart/?symbol=NSE:{quote(sym)}"
 
-# ---------------- CSV SYMBOL LOADER ----------------
+# ---------------- CSV LOADER ----------------
 @st.cache_data(ttl=600)
-def load_symbols_from_github(csv_name):
-    url = f"https://raw.githubusercontent.com/anki1007/rrg-stocks/main/ticker/{csv_name}"
+def list_csv():
+    url = "https://api.github.com/repos/anki1007/rrg-stocks/contents/ticker"
+    return [f["name"] for f in requests.get(url).json() if f["name"].endswith(".csv")]
+
+@st.cache_data(ttl=600)
+def load_universe(csv):
+    url = f"https://raw.githubusercontent.com/anki1007/rrg-stocks/main/ticker/{csv}"
     df = pd.read_csv(url)
-    col = [c for c in df.columns if "symbol" in c.lower()][0]
-    return df[col].dropna().unique().tolist()
-
-@st.cache_data(ttl=600)
-def list_csv_files():
-    api = "https://api.github.com/repos/anki1007/rrg-stocks/contents/ticker"
-    files = requests.get(api, timeout=15).json()
-    return sorted([f["name"] for f in files if f["name"].endswith(".csv")])
+    return df
 
 # ---------------- SIDEBAR ----------------
 st.sidebar.header("Controls")
 
-benchmark_label = st.sidebar.selectbox("Benchmark", BENCHMARKS.keys())
-benchmark = BENCHMARKS[benchmark_label]
-
-tf_label = st.sidebar.selectbox("Timeframe", INTERVALS.keys())
-interval, period = INTERVALS[tf_label]
-
-csv_files = list_csv_files()
-csv_selected = st.sidebar.selectbox("Index Constituents", csv_files)
-
-symbols = load_symbols_from_github(csv_selected)
-
-x_min, x_max = st.sidebar.slider("RS-Ratio Zoom", 90.0, 110.0, (94.0, 106.0), 0.5)
-y_min, y_max = st.sidebar.slider("RS-Momentum Zoom", 90.0, 110.0, (94.0, 106.0), 0.5)
-
-show_centroids = st.sidebar.toggle("Show Sector Centroids", True)
-
-# ---------------- DATA ----------------
-@st.cache_data(ttl=300)
-def load_prices(symbols, bench, interval, period):
-    return yf.download(
-        symbols + [bench],
-        interval=interval,
-        period=period,
-        auto_adjust=True,
-        progress=False
-    )
-
-raw = load_prices(symbols, benchmark, interval, period)
-bench = raw["Close"][benchmark]
-prices = {s: raw["Close"][s].dropna() for s in symbols if s in raw["Close"]}
-
-# ---------------- SECTOR MAP ----------------
-@st.cache_data(ttl=3600)
-def fetch_sectors(symbols):
-    out = {}
-    for s in symbols:
-        try:
-            out[s] = yf.Ticker(s).fast_info.get("sector", "Other")
-        except:
-            out[s] = "Other"
-    return out
-
-sector_map = fetch_sectors(symbols)
-
-# ---------------- RRG ----------------
-rows, rr_map, mm_map = [], {}, {}
-
-for s, px in prices.items():
-    rr, mm = jdk_components(px, bench, WINDOW)
-    rr_map[s], mm_map[s] = rr, mm
-
-    mom_series = mm.iloc[-TAIL:].dropna()
-    if len(mom_series) >= 3:
-        x = np.arange(len(mom_series))
-        slope = np.polyfit(x, mom_series.values, 1)[0]
-    else:
-        slope = 0.0
-
-    rows.append((s, rr.iloc[-1], mm.iloc[-1], slope, sector_map[s]))
-
-df = pd.DataFrame(rows, columns=[
-    "Symbol","RS-Ratio","RS-Momentum","Slope","Sector"
-])
-
-df["MomentumScore"] = (
-    0.4*zscore(df["RS-Ratio"]) +
-    0.4*zscore(df["RS-Momentum"]) +
-    0.2*zscore(df["Slope"])
+bench_name = st.sidebar.selectbox("Benchmark", BENCHMARKS.keys())
+tf_name = st.sidebar.selectbox("Strength vs Timeframe", TIMEFRAMES.keys())
+period_name = st.sidebar.selectbox("Period", PERIOD_MAP.keys())
+rank_by = st.sidebar.selectbox(
+    "Rank by",
+    ["RRG Power", "RS-Ratio", "RS-Momentum", "Price % Δ", "Momentum Slope"]
 )
 
-df["MomentumScore"] = 50 + 10*df["MomentumScore"]
-df["Status"] = df.apply(lambda r: get_status(r["RS-Ratio"], r["RS-Momentum"]), axis=1)
-df = df.sort_values("MomentumScore", ascending=False)
+csv_files = list_csv()
+csv_sel = st.sidebar.selectbox(
+    "Indices",
+    csv_files,
+    format_func=lambda x: x.replace(".csv", "").upper()
+)
 
-# ---------------- PLOT ----------------
-fig, ax = plt.subplots(figsize=(11,7))
+# ---------------- DATA ----------------
+interval, yf_period = TIMEFRAMES[tf_name]
+universe = load_universe(csv_sel)
+
+symbols = universe["Symbol"].tolist()
+names = dict(zip(universe["Symbol"], universe["Company Name"]))
+industries = dict(zip(universe["Symbol"], universe["Industry"]))
+
+raw = yf.download(symbols + [BENCHMARKS[bench_name]],
+                  interval=interval, period=yf_period,
+                  auto_adjust=True, progress=False)
+
+bench = raw["Close"][BENCHMARKS[bench_name]]
+
+rows, trails = [], {}
+
+for s in symbols:
+    if s not in raw["Close"]:
+        continue
+    rr, mm = rrg_calc(raw["Close"][s], bench)
+    if rr is None or mm is None:
+        continue
+
+    rr_tail = rr.iloc[-TAIL:]
+    mm_tail = mm.iloc[-TAIL:]
+    if len(rr_tail) < 3:
+        continue
+
+    slope = np.polyfit(range(len(mm_tail)), mm_tail.values, 1)[0]
+    power = np.sqrt((rr_tail.iloc[-1]-100)**2 + (mm_tail.iloc[-1]-100)**2)
+
+    rows.append({
+        "Symbol": s.replace(".NS",""),
+        "Name": names.get(s,""),
+        "Industry": industries.get(s,""),
+        "RS-Ratio": rr_tail.iloc[-1],
+        "RS-Momentum": mm_tail.iloc[-1],
+        "Momentum Slope": slope,
+        "RRG Power": power,
+        "Status": quadrant(rr_tail.iloc[-1], mm_tail.iloc[-1]),
+        "TV": tv_link(s.replace(".NS",""))
+    })
+    trails[s] = (rr_tail, mm_tail)
+
+df = pd.DataFrame(rows)
+if df.empty:
+    st.error("No data available. Try another timeframe.")
+    st.stop()
+
+df["Rank"] = df[rank_by].rank(ascending=False).astype(int)
+df = df.sort_values("Rank")
+
+# ---------------- GRAPH ----------------
+fig, ax = plt.subplots(figsize=(12,7))
 ax.axhline(100, ls=":", c="gray")
 ax.axvline(100, ls=":", c="gray")
 
-for s in df["Symbol"]:
-    rr = rr_map[s].iloc[-TAIL:]
-    mm = mm_map[s].iloc[-TAIL:]
-    ax.plot(rr, mm, lw=1)
-    ax.scatter(rr.iloc[-1], mm.iloc[-1], s=60)
+colors = {
+    "Leading":"#22c55e",
+    "Improving":"#3b82f6",
+    "Weakening":"#facc15",
+    "Lagging":"#ef4444"
+}
 
-if show_centroids:
-    cent = df.groupby("Sector")[["RS-Ratio","RS-Momentum"]].mean()
-    ax.scatter(cent["RS-Ratio"], cent["RS-Momentum"],
-               marker="D", s=220, color="white", edgecolor="black")
+for s, (rr_t, mm_t) in trails.items():
+    stt = df.loc[df["Symbol"]==s.replace(".NS",""),"Status"].values
+    if len(stt)==0: continue
+    ax.plot(rr_t, mm_t, lw=1, color=colors[stt[0]])
+    ax.scatter(rr_t.iloc[-1], mm_t.iloc[-1], color=colors[stt[0]], s=60)
 
-ax.set_xlim(x_min, x_max)
-ax.set_ylim(y_min, y_max)
 ax.set_xlabel("RS-Ratio")
 ax.set_ylabel("RS-Momentum")
-
-st.pyplot(fig, use_container_width=True)
+st.pyplot(fig, width="stretch")
 
 # ---------------- TABLE ----------------
-st.markdown("## RRG Table")
+with st.expander("RRG Table", expanded=True):
+    st.dataframe(
+        df[["Rank","Name","Status","Industry","RS-Ratio","RS-Momentum"]],
+        column_config={
+            "Name": st.column_config.LinkColumn(
+                "Name", display_text="Name", help="Open TradingView", 
+                )
+        },
+        height=420,
+        width="stretch"
+    )
 
-df["TV"] = df["Symbol"].str.replace(".NS","", regex=False).apply(
-    lambda s: f"https://www.tradingview.com/chart/?symbol=NSE:{quote(s)}"
-)
-
-display_df = df.copy()
-display_df["Symbol"] = display_df["Symbol"].str.replace(".NS","", regex=False)
-
-st.dataframe(
-    display_df[[
-        "Symbol","Sector","Status",
-        "MomentumScore","RS-Ratio","RS-Momentum","Slope"
-    ]],
-    use_container_width=True,
-    height=420,
-    column_config={
-        "Symbol": st.column_config.LinkColumn(
-            "Symbol",
-            display_text="Symbol",
-            url="TV"
-        )
-    }
-)
-
-st.caption("Optuma-style Intraday RRG using NSE benchmarks and GitHub CSV universe")
+# ---------------- RIGHT PANEL ----------------
+with st.sidebar.expander("Top 30 RS Momentum", expanded=True):
+    top30 = df.sort_values("RS-Momentum", ascending=False).head(30)
+    st.dataframe(top30[["Symbol","RS-Momentum","Status"]], height=600)
