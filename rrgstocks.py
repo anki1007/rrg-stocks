@@ -347,7 +347,7 @@ label_top_n = st.sidebar.slider("Label top N by distance", 3, 30, 12, 1, disable
 # ---------- Playback controls ----------
 if "playing" not in st.session_state: st.session_state.playing = False
 play_toggle = st.sidebar.toggle("Play / Pause", value=st.session_state.playing, key="playing")
-speed_ms = st.sidebar.slider("Speed (ms/frame)", 150, 1500, 300, 50)
+speed_ms = st.sidebar.slider("Speed (ms/frame)", 1000, 3000, 1500, 50)
 looping = st.sidebar.checkbox("Loop", value=True)
 
 # -------------------- Data build ---------------------
@@ -585,3 +585,4 @@ with dl2:
                        file_name=f"table_{date_str}.csv", mime="text/csv", use_container_width=True)
 
 st.caption("Names open TradingView. Use Play/Pause to watch rotation; Speed adjusts frame interval, and Loop wraps frames.")
+
