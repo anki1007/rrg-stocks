@@ -25,6 +25,97 @@ st.markdown("""
     body { background-color: #111827; }
     .main { background-color: #111827; }
     [data-testid="stSidebar"] { background-color: #1f2937; }
+    
+    /* Custom table styling */
+    .rrg-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+        margin-top: 10px;
+    }
+    .rrg-table th {
+        background-color: #1f2937;
+        color: #ffffff;
+        padding: 10px;
+        text-align: center;
+        font-weight: bold;
+        border: 1px solid #374151;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+    .rrg-table td {
+        padding: 8px;
+        text-align: center;
+        border: 1px solid #374151;
+        color: #e5e7eb;
+    }
+    .rrg-table tr:nth-child(even) {
+        background-color: #1f2937;
+    }
+    .rrg-table tr:nth-child(odd) {
+        background-color: #111827;
+    }
+    .rrg-table tr:hover {
+        background-color: #374151;
+    }
+    .rrg-table td:nth-child(2), .rrg-table td:nth-child(3) {
+        text-align: left;
+    }
+    
+    /* Status badges */
+    .status-leading {
+        background: linear-gradient(135deg, rgba(34, 197, 94, 0.5), rgba(34, 197, 94, 0.3));
+        color: #22c55e;
+        font-weight: bold;
+        padding: 5px 12px;
+        border-radius: 5px;
+        display: inline-block;
+    }
+    .status-improving {
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.5), rgba(59, 130, 246, 0.3));
+        color: #60a5fa;
+        font-weight: bold;
+        padding: 5px 12px;
+        border-radius: 5px;
+        display: inline-block;
+    }
+    .status-weakening {
+        background: linear-gradient(135deg, rgba(251, 191, 36, 0.5), rgba(251, 191, 36, 0.3));
+        color: #fbbf24;
+        font-weight: bold;
+        padding: 5px 12px;
+        border-radius: 5px;
+        display: inline-block;
+    }
+    .status-lagging {
+        background: linear-gradient(135deg, rgba(239, 68, 68, 0.5), rgba(239, 68, 68, 0.3));
+        color: #f87171;
+        font-weight: bold;
+        padding: 5px 12px;
+        border-radius: 5px;
+        display: inline-block;
+    }
+    
+    /* Symbol link styling */
+    .symbol-link {
+        color: #60a5fa;
+        text-decoration: none;
+        font-weight: bold;
+    }
+    .symbol-link:hover {
+        text-decoration: underline;
+        color: #93c5fd;
+    }
+    
+    /* Table container */
+    .table-container {
+        max-height: 600px;
+        overflow-y: auto;
+        overflow-x: auto;
+        border: 1px solid #374151;
+        border-radius: 8px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -64,7 +155,7 @@ QUADRANT_COLORS = {
 }
 
 WINDOW = 12
-TAIL_LENGTH = 5  # Number of historical points for tail
+TAIL_LENGTH = 5
 
 # ============================================================================
 # HELPER FUNCTIONS
@@ -215,29 +306,6 @@ def select_graph_stocks(df, min_stocks=40):
         graph_stocks.extend(additional_stocks.index.tolist())
     
     return df.loc[graph_stocks]
-
-def select_top_30_with_sectors(df, top_n=30):
-    """Select top 30 ensuring sector diversity"""
-    df_top = df.nlargest(top_n, 'RRG Power').copy()
-    
-    all_sectors = df['Industry'].unique()
-    top_sectors = df_top['Industry'].unique()
-    
-    missing_sectors = set(all_sectors) - set(top_sectors)
-    
-    if missing_sectors:
-        additional_stocks = []
-        for sector in missing_sectors:
-            df_sector = df[df['Industry'] == sector]
-            if len(df_sector) > 0:
-                top_5_sector = df_sector.nlargest(5, 'RRG Power')
-                additional_stocks.append(top_5_sector)
-        
-        if additional_stocks:
-            df_additional = pd.concat(additional_stocks)
-            df_top = pd.concat([df_top, df_additional]).drop_duplicates()
-    
-    return df_top
 
 # ============================================================================
 # SESSION STATE
@@ -583,7 +651,7 @@ if st.session_state.df_cache is not None:
                         opacity=0.95
                     ),
                     hovertemplate='%{customdata}<extra></extra>',
-                    textfont=dict(color='#000000', size=9, family='Arial')
+                    textfont=dict(color='#000000', size=9, family='Arial Black')
                 ))
         
         fig_rrg.update_layout(
@@ -604,154 +672,93 @@ if st.session_state.df_cache is not None:
         
         st.markdown("---")
         
-        # COLLAPSIBLE TABLE
+        # COLLAPSIBLE TABLE WITH PROPER HTML RENDERING
         with st.expander("📊 **Detailed Analysis** (Click to expand/collapse)", expanded=True):
-            # Prepare HTML table with colored status backgrounds and clickable names
-            html_table = """
-            <style>
-                .rrg-table {
-                    width: 100%;
-                    border-collapse: collapse;
-                    font-size: 13px;
-                }
-                .rrg-table th {
-                    background-color: #1f2937;
-                    color: #ffffff;
-                    padding: 10px;
-                    text-align: center;
-                    font-weight: bold;
-                    border: 1px solid #374151;
-                }
-                .rrg-table td {
-                    padding: 8px;
-                    text-align: center;
-                    border: 1px solid #374151;
-                }
-                .rrg-table tr:nth-child(even) {
-                    background-color: #1f2937;
-                }
-                .rrg-table tr:nth-child(odd) {
-                    background-color: #111827;
-                }
-                .rrg-table td:nth-child(2), .rrg-table td:nth-child(3) {
-                    text-align: left;
-                }
-                .status-leading {
-                    background: linear-gradient(135deg, rgba(34, 197, 94, 0.4), rgba(34, 197, 94, 0.2));
-                    color: #22c55e;
-                    font-weight: bold;
-                    padding: 4px 8px;
-                    border-radius: 4px;
-                    display: inline-block;
-                }
-                .status-improving {
-                    background: linear-gradient(135deg, rgba(59, 130, 246, 0.4), rgba(59, 130, 246, 0.2));
-                    color: #3b82f6;
-                    font-weight: bold;
-                    padding: 4px 8px;
-                    border-radius: 4px;
-                    display: inline-block;
-                }
-                .status-weakening {
-                    background: linear-gradient(135deg, rgba(251, 191, 36, 0.4), rgba(251, 191, 36, 0.2));
-                    color: #fbbf24;
-                    font-weight: bold;
-                    padding: 4px 8px;
-                    border-radius: 4px;
-                    display: inline-block;
-                }
-                .status-lagging {
-                    background: linear-gradient(135deg, rgba(239, 68, 68, 0.4), rgba(239, 68, 68, 0.2));
-                    color: #ef4444;
-                    font-weight: bold;
-                    padding: 4px 8px;
-                    border-radius: 4px;
-                    display: inline-block;
-                }
-                .symbol-link {
-                    color: #3b82f6;
-                    text-decoration: none;
-                    font-weight: bold;
-                }
-                .symbol-link:hover {
-                    text-decoration: underline;
-                    color: #60a5fa;
-                }
-            </style>
-            <table class="rrg-table">
-                <thead>
-                    <tr>
-                        <th>Sl No.</th>
-                        <th>Symbol</th>
-                        <th>Industry</th>
-                        <th>Price</th>
-                        <th>Change %</th>
-                        <th>Strength</th>
-                        <th>Status</th>
-                        <th>RS-Ratio</th>
-                        <th>RS-Momentum</th>
-                        <th>Distance</th>
-                        <th>Direction</th>
-                        <th>Velocity</th>
-                    </tr>
-                </thead>
-                <tbody>
-            """
-            
+            # Build HTML table rows
+            table_rows = ""
             for _, row in df.iterrows():
                 status_class = f"status-{row['Status'].lower()}"
-                html_table += f"""
-                    <tr>
-                        <td>{int(row['Sl No.'])}</td>
-                        <td><a href="{row['TV Link']}" target="_blank" class="symbol-link">{row['Name']}</a></td>
-                        <td>{row['Industry']}</td>
-                        <td>₹{row['Price']:.2f}</td>
-                        <td>{row['Change %']:+.2f}%</td>
-                        <td>{row['RRG Power']:.2f}</td>
-                        <td><span class="{status_class}">{row['Status']}</span></td>
-                        <td>{row['RS-Ratio']:.2f}</td>
-                        <td>{row['RS-Momentum']:.2f}</td>
-                        <td>{row['Distance']:.2f}</td>
-                        <td>{row['Direction']}</td>
-                        <td>{row['Velocity']:.3f}</td>
-                    </tr>
+                table_rows += f"""
+                <tr>
+                    <td>{int(row['Sl No.'])}</td>
+                    <td><a href="{row['TV Link']}" target="_blank" class="symbol-link">{row['Name']}</a></td>
+                    <td>{row['Industry']}</td>
+                    <td>₹{row['Price']:.2f}</td>
+                    <td>{row['Change %']:+.2f}%</td>
+                    <td>{row['RRG Power']:.2f}</td>
+                    <td><span class="{status_class}">{row['Status']}</span></td>
+                    <td>{row['RS-Ratio']:.2f}</td>
+                    <td>{row['RS-Momentum']:.2f}</td>
+                    <td>{row['Distance']:.2f}</td>
+                    <td>{row['Direction']}</td>
+                    <td>{row['Velocity']:.3f}</td>
+                </tr>
                 """
             
-            html_table += """
-                </tbody>
-            </table>
+            # Complete HTML table
+            html_table = f"""
+            <div class="table-container">
+                <table class="rrg-table">
+                    <thead>
+                        <tr>
+                            <th>Sl No.</th>
+                            <th>Symbol</th>
+                            <th>Industry</th>
+                            <th>Price</th>
+                            <th>Change %</th>
+                            <th>Strength</th>
+                            <th>Status</th>
+                            <th>RS-Ratio</th>
+                            <th>RS-Momentum</th>
+                            <th>Distance</th>
+                            <th>Direction</th>
+                            <th>Velocity</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {table_rows}
+                    </tbody>
+                </table>
+            </div>
             """
             
-            st.markdown(html_table, unsafe_allow_html=True)
+            # Render HTML
+            st.components.v1.html(html_table, height=600, scrolling=True)
     
     # ========================================================================
-    # RIGHT SIDEBAR
+    # RIGHT SIDEBAR - TOP 30 PER QUADRANT
     # ========================================================================
     with col_right:
-        st.markdown("### 🚀 Top RRG Power")
+        st.markdown("### 🚀 Top 30 Per Quadrant")
         
-        df_top = select_top_30_with_sectors(df, top_n=30)
-        
+        # Display TOP 30 stocks per quadrant, sorted by RRG Power
         for status in ["Leading", "Improving", "Weakening", "Lagging"]:
-            df_status_group = df_top[df_top['Status'] == status]
+            df_status_all = df[df['Status'] == status].sort_values('RRG Power', ascending=False)
             
-            if not df_status_group.empty:
+            # Take top 30 from this quadrant
+            df_status_top30 = df_status_all.head(30)
+            
+            if not df_status_top30.empty:
                 status_color = QUADRANT_COLORS.get(status, "#808080")
                 status_icon = {"Leading": "🟢", "Improving": "🔵", "Weakening": "🟡", "Lagging": "🔴"}[status]
                 
-                with st.expander(f"{status_icon} **{status}** ({len(df_status_group)})", expanded=(status == "Leading")):
-                    for idx, (_, row) in enumerate(df_status_group.iterrows(), 1):
+                total_in_quadrant = len(df_status_all)
+                showing = len(df_status_top30)
+                
+                with st.expander(f"{status_icon} **{status}** (Top {showing} of {total_in_quadrant})", expanded=(status == "Leading")):
+                    # Display top 30 stocks in this quadrant
+                    for idx, (_, row) in enumerate(df_status_top30.iterrows(), 1):
                         tv_link = row['TV Link']
                         
                         st.markdown(f"""
-                        <div style="padding: 8px; margin-bottom: 6px; background: rgba(200,200,200,0.1); 
+                        <div style="padding: 6px; margin-bottom: 4px; background: rgba(200,200,200,0.05); 
                                     border-left: 3px solid {status_color}; border-radius: 4px;">
                             <small><b><a href="{tv_link}" target="_blank" 
-                                style="color: #0066cc; text-decoration: none;">#{int(row['Sl No.'])}</a></b></small>
-                            <br><b style="color: {status_color};">{row['Symbol']}</b>
-                            <br><small>{row['Industry'][:20]}</small>
-                            <br><small style="color: {status_color};">⚡ Power: {row['RRG Power']:.2f}</small>
-                            <br><small style="color: {status_color};">📏 Dist: {row['Distance']:.2f}</small>
+                                style="color: #60a5fa; text-decoration: none;">#{int(row['Sl No.'])}</a></b></small>
+                            <br><b style="color: {status_color}; font-size: 12px;">{row['Symbol']}</b>
+                            <br><small style="font-size: 10px;">{row['Industry'][:18]}</small>
+                            <br><small style="color: {status_color}; font-size: 10px;">⚡ {row['RRG Power']:.2f}</small>
+                            <small style="color: #9ca3af; font-size: 10px;"> | 📏 {row['Distance']:.2f}</small>
                         </div>
                         """, unsafe_allow_html=True)
         
@@ -765,7 +772,7 @@ if st.session_state.df_cache is not None:
     <div style="text-align: center; color: #888; font-size: 10px;">
         <b>RRG Analysis Dashboard</b><br>
         Data: Yahoo Finance | Charts: TradingView<br>
-        Displaying {len(df_graph)} stocks on graph | Total {len(df)} stocks in table<br>
+        Displaying {len(df_graph)} stocks on graph | Total {len(df)} stocks analyzed<br>
         Reference: <a href="https://www.optuma.com/blog/scripting-for-rrgs" target="_blank" 
                       style="color: #0066cc;">Optuma RRG Scripting Guide</a><br>
         <i>Disclaimer: For educational purposes only. Not financial advice.</i>
