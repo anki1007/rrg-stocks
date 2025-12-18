@@ -40,8 +40,8 @@ st.markdown("""
 # Define Benchmarks
 BENCHMARKS = {
     "NIFTY 50": "^NSEI",
-    "NIFTY 200": "^CNXIT",
-    "NIFTY 500": "^CNXIT"  # Adjusted for available data
+    "NIFTY 200": "^CNX200",
+    "NIFTY 500": "^CRSLDX"  # Adjusted for available data
 }
 
 # Define Timeframes with intervals and yfinance periods
@@ -469,3 +469,4 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+
