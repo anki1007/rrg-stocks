@@ -19,7 +19,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Dark theme with status color styling
+# Dark theme with enhanced styling
 st.markdown("""
 <style>
     body { background-color: #111827; }
@@ -55,11 +55,23 @@ st.markdown("""
         color: #ef4444;
         font-weight: bold;
     }
+    
+    /* Center align dataframe headers and cells */
+    .dataframe th {
+        text-align: center !important;
+        font-weight: bold;
+    }
+    .dataframe td {
+        text-align: center !important;
+    }
+    .dataframe td:nth-child(2), .dataframe td:nth-child(3) {
+        text-align: left !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # ============================================================================
-# CONFIGURATION - FIXED BENCHMARKS
+# CONFIGURATION
 # ============================================================================
 BENCHMARKS = {
     "NIFTY 50": "^NSEI",
@@ -93,7 +105,7 @@ QUADRANT_COLORS = {
     "Lagging": "#ef4444"
 }
 
-WINDOW = 12  # Standard RRG window
+WINDOW = 12
 
 # ============================================================================
 # HELPER FUNCTIONS
@@ -205,7 +217,7 @@ def get_heading_direction(heading):
         return "→ E"
 
 def get_tv_link(sym):
-    """Generate TradingView link (without .NS suffix)"""
+    """Generate TradingView link"""
     clean_sym = sym.replace('.NS', '')
     return f"https://www.tradingview.com/chart/?symbol=NSE:{clean_sym}"
 
@@ -219,13 +231,65 @@ def calculate_price_change(current_price, historical_price):
         return 0
     return ((current_price - historical_price) / historical_price) * 100
 
-def get_status_html(status):
-    """Return HTML styled status badge"""
-    status_class = f"status-{status.lower()}"
-    return f'<span class="{status_class}">{status}</span>'
+def select_graph_stocks(df, min_stocks=40):
+    """Select stocks for graph display with quadrant balancing"""
+    graph_stocks = []
+    
+    # First, try to get at least 10 from each quadrant
+    for status in ["Leading", "Improving", "Weakening", "Lagging"]:
+        df_quad = df[df['Status'] == status].copy()
+        
+        if len(df_quad) == 0:
+            continue
+        elif len(df_quad) < 10:
+            # If less than 10, take all from this quadrant
+            graph_stocks.extend(df_quad.index.tolist())
+        else:
+            # Get strongest 10 from Leading/Improving, weakest 10 from Weakening/Lagging
+            if status in ["Leading", "Improving"]:
+                top_10 = df_quad.nlargest(10, 'RRG Power')
+            else:
+                top_10 = df_quad.nsmallest(10, 'RRG Power')
+            graph_stocks.extend(top_10.index.tolist())
+    
+    # If we have less than min_stocks, add more based on RRG Power
+    if len(graph_stocks) < min_stocks:
+        remaining_indices = df.index.difference(graph_stocks)
+        additional_needed = min_stocks - len(graph_stocks)
+        additional_stocks = df.loc[remaining_indices].nlargest(additional_needed, 'RRG Power')
+        graph_stocks.extend(additional_stocks.index.tolist())
+    
+    return df.loc[graph_stocks]
+
+def select_top_30_with_sectors(df, top_n=30):
+    """Select top 30 ensuring sector diversity"""
+    # Start with top 30 by RRG Power
+    df_top = df.nlargest(top_n, 'RRG Power').copy()
+    
+    # Get all unique sectors in the full dataset
+    all_sectors = df['Industry'].unique()
+    top_sectors = df_top['Industry'].unique()
+    
+    # Find missing sectors
+    missing_sectors = set(all_sectors) - set(top_sectors)
+    
+    if missing_sectors:
+        additional_stocks = []
+        for sector in missing_sectors:
+            df_sector = df[df['Industry'] == sector]
+            if len(df_sector) > 0:
+                # Get strongest 5 from this sector
+                top_5_sector = df_sector.nlargest(5, 'RRG Power')
+                additional_stocks.append(top_5_sector)
+        
+        if additional_stocks:
+            df_additional = pd.concat(additional_stocks)
+            df_top = pd.concat([df_top, df_additional]).drop_duplicates()
+    
+    return df_top
 
 # ============================================================================
-# SESSION STATE & INITIALIZATION
+# SESSION STATE
 # ============================================================================
 if "load_clicked" not in st.session_state:
     st.session_state.load_clicked = False
@@ -235,11 +299,10 @@ if "df_top_cache" not in st.session_state:
     st.session_state.df_top_cache = None
 
 # ============================================================================
-# SIDEBAR - CONTROLS WITH LOAD BUTTON
+# SIDEBAR
 # ============================================================================
 st.sidebar.markdown("### ⚙️ Controls")
 
-# Get CSV files list
 csv_files = list_csv_from_github()
 if not csv_files:
     st.sidebar.warning("⚠️ Unable to fetch indices from GitHub. Check connection.")
@@ -252,21 +315,11 @@ if csv_files:
             default_csv_index = i
             break
 
-csv_selected = st.sidebar.selectbox(
-    "Indices",
-    csv_files,
-    index=default_csv_index,
-    key="csv_select"
-)
+csv_selected = st.sidebar.selectbox("Indices", csv_files, index=default_csv_index, key="csv_select")
 
 bench_list = list(BENCHMARKS.keys())
 default_bench_index = 2
-bench_name = st.sidebar.selectbox(
-    "Benchmark",
-    bench_list,
-    index=default_bench_index,
-    key="bench_select"
-)
+bench_name = st.sidebar.selectbox("Benchmark", bench_list, index=default_bench_index, key="bench_select")
 
 tf_name = st.sidebar.selectbox("Strength vs Timeframe", list(TIMEFRAMES.keys()), key="tf_select")
 period_name = st.sidebar.selectbox("Period", list(PERIOD_MAP.keys()), index=0, key="period_select")
@@ -282,16 +335,11 @@ top_n = st.sidebar.slider("Show Top N", min_value=5, max_value=50, value=15)
 st.sidebar.markdown("---")
 export_csv = st.sidebar.checkbox("Export CSV", value=True)
 
-# ============================================================================
-# LOAD & CLEAR BUTTONS - HORIZONTAL LAYOUT
-# ============================================================================
 st.sidebar.markdown("---")
 
-# Horizontal Load Button (full width)
 if st.sidebar.button("📥 Load Data", use_container_width=True, key="load_btn", type="primary"):
     st.session_state.load_clicked = True
 
-# Horizontal Clear Button (full width below Load)
 if st.sidebar.button("🔄 Clear", use_container_width=True, key="clear_btn"):
     st.session_state.load_clicked = False
     st.session_state.df_cache = None
@@ -304,7 +352,7 @@ st.sidebar.markdown("🟢 **Leading**: Strong RS, ↑ Momentum")
 st.sidebar.markdown("🔵 **Improving**: Weak RS, ↑ Momentum")
 st.sidebar.markdown("🟡 **Weakening**: Weak RS, ↓ Momentum")
 st.sidebar.markdown("🔴 **Lagging**: Strong RS, ↓ Momentum")
-st.sidebar.markdown(f"**Benchmark: {bench_name}**")  # Display benchmark name
+st.sidebar.markdown(f"**Benchmark: {bench_name}**")
 st.sidebar.markdown(f"**Window: {WINDOW} periods**")
 
 if tf_name in ["Weekly", "Monthly"]:
@@ -312,7 +360,7 @@ if tf_name in ["Weekly", "Monthly"]:
     st.sidebar.markdown(f"**Adj Close Date: {adj_date}**")
 
 # ============================================================================
-# DATA LOADING - ONLY WHEN LOAD BUTTON CLICKED
+# DATA LOADING
 # ============================================================================
 if st.session_state.load_clicked:
     try:
@@ -417,10 +465,8 @@ if st.session_state.load_clicked:
         df['Rank'] = df[rank_column].rank(ascending=False, method='min').astype(int)
         df = df.sort_values('Rank')
         df['Sl No.'] = range(1, len(df) + 1)
-        df_top = df.head(top_n).copy()
         
         st.session_state.df_cache = df
-        st.session_state.df_top_cache = df_top
         
     except Exception as e:
         st.error(f"❌ Error: {str(e)}")
@@ -431,15 +477,11 @@ if st.session_state.load_clicked:
 # ============================================================================
 if st.session_state.df_cache is not None:
     df = st.session_state.df_cache
-    df_top = st.session_state.df_top_cache
     
-    # ========================================================================
-    # MAIN LAYOUT - THREE COLUMNS
-    # ========================================================================
     col_left, col_main, col_right = st.columns([1, 3, 1], gap="medium")
     
     # ========================================================================
-    # LEFT SIDEBAR - LEGEND & STATS
+    # LEFT SIDEBAR
     # ========================================================================
     with col_left:
         st.markdown("### 📍 Legend")
@@ -465,13 +507,15 @@ if st.session_state.df_cache is not None:
         st.metric("Lagging", len(df[df['Status'] == 'Lagging']))
     
     # ========================================================================
-    # MAIN CONTENT - RRG CHART & DETAILED TABLE
+    # MAIN CONTENT
     # ========================================================================
     with col_main:
         st.markdown("## Relative Rotation Graph")
         st.markdown(f"**{csv_selected} | {tf_name} | {period_name} | Benchmark: {bench_name}**")
         
-        # Create RRG chart with dark labels for better visualization
+        # Select stocks for graph (at least 40)
+        df_graph = select_graph_stocks(df, min_stocks=40)
+        
         fig_rrg = go.Figure()
         
         x_min = df['RS-Ratio'].min() - 5
@@ -490,7 +534,7 @@ if st.session_state.df_cache is not None:
         fig_rrg.add_shape(type="rect", x0=100, y0=100-quadrant_size, x1=100+quadrant_size, y1=100,
                          fillcolor="rgba(239, 68, 68, 0.1)", line=dict(color="rgba(239, 68, 68, 0.3)", width=2), layer="below")
         
-        # Quadrant labels with DARK colors for visualization
+        # Quadrant labels (dark colors)
         fig_rrg.add_annotation(x=100+quadrant_size*0.5, y=100+quadrant_size*0.5, text="Leading",
                               showarrow=False, font=dict(size=14, color="#166534", family="Arial Black"))
         fig_rrg.add_annotation(x=100-quadrant_size*0.5, y=100+quadrant_size*0.5, text="Improving",
@@ -506,7 +550,7 @@ if st.session_state.df_cache is not None:
         
         # Add data points
         for status in ["Leading", "Improving", "Weakening", "Lagging"]:
-            df_status = df_top[df_top['Status'] == status]
+            df_status = df_graph[df_graph['Status'] == status]
             if not df_status.empty:
                 hover_text = []
                 for _, row in df_status.iterrows():
@@ -532,17 +576,17 @@ if st.session_state.df_cache is not None:
                     textposition="top center",
                     customdata=hover_text,
                     marker=dict(
-                        size=14,
+                        size=12,
                         color=QUADRANT_COLORS[status],
                         line=dict(color='white', width=2),
                         opacity=0.9
                     ),
                     hovertemplate='%{customdata}<extra></extra>',
-                    textfont=dict(color='#000000', size=10, family='Arial Black')  # Dark text for symbols
+                    textfont=dict(color='#000000', size=9, family='Arial Black')
                 ))
         
         fig_rrg.update_layout(
-            height=500,
+            height=550,
             xaxis_title="RS-Ratio (X-axis)",
             yaxis_title="RS-Momentum (Y-axis)",
             plot_bgcolor="rgba(240, 240, 245, 0.9)",
@@ -558,51 +602,82 @@ if st.session_state.df_cache is not None:
         st.plotly_chart(fig_rrg, use_container_width=True)
         
         st.markdown("---")
-        st.markdown("## Detailed Analysis")
+        st.markdown("## 📊 Detailed Analysis by Quadrant")
         
-        # Create table with clickable symbols and colored status
-        display_data = []
-        for _, row in df_top.iterrows():
-            # Create clickable TradingView link for symbol
-            symbol_link = f'<a href="{row["TV Link"]}" target="_blank" style="color: #0066cc; text-decoration: none; font-weight: bold;">{row["Symbol"]}</a>'
-            status_html = get_status_html(row['Status'])
+        # COLLAPSIBLE QUADRANT TABLES
+        for status in ["Leading", "Improving", "Weakening", "Lagging"]:
+            df_status = df[df['Status'] == status].copy()
             
-            display_data.append({
-                'Sl No.': int(row['Sl No.']),
-                'Symbol': symbol_link,
-                'Industry': row['Industry'],
-                'Price': f"₹{row['Price']:.2f}",
-                'Change %': f"{row['Change %']:+.2f}%",
-                'Strength': f"{row['RRG Power']:.2f}",
-                'Status': status_html,
-                'RS-Ratio': f"{row['RS-Ratio']:.2f}",
-                'RS-Momentum': f"{row['RS-Momentum']:.2f}",
-                'Distance': f"{row['Distance']:.2f}",
-                'Direction': row['Direction'],
-                'Velocity': f"{row['Velocity']:.3f}"
-            })
-        
-        # Display as HTML table for proper rendering
-        table_html = pd.DataFrame(display_data).to_html(escape=False, index=False)
-        st.markdown(table_html, unsafe_allow_html=True)
+            if not df_status.empty:
+                status_icon = {"Leading": "🟢", "Improving": "🔵", "Weakening": "🟡", "Lagging": "🔴"}[status]
+                
+                with st.expander(f"{status_icon} **{status}** ({len(df_status)} stocks)", expanded=(status == "Leading")):
+                    # Prepare display dataframe
+                    df_display = df_status[['Sl No.', 'Symbol', 'Industry', 'Price', 'Change %', 
+                                           'RRG Power', 'RS-Ratio', 'RS-Momentum', 'Distance', 
+                                           'Direction', 'Velocity']].copy()
+                    
+                    # Format numeric columns
+                    df_display['Price'] = df_display['Price'].apply(lambda x: f"₹{x:.2f}")
+                    df_display['Change %'] = df_display['Change %'].apply(lambda x: f"{x:+.2f}%")
+                    df_display['RRG Power'] = df_display['RRG Power'].apply(lambda x: f"{x:.2f}")
+                    df_display['RS-Ratio'] = df_display['RS-Ratio'].apply(lambda x: f"{x:.2f}")
+                    df_display['RS-Momentum'] = df_display['RS-Momentum'].apply(lambda x: f"{x:.2f}")
+                    df_display['Distance'] = df_display['Distance'].apply(lambda x: f"{x:.2f}")
+                    df_display['Velocity'] = df_display['Velocity'].apply(lambda x: f"{x:.3f}")
+                    
+                    # Rename columns for display
+                    df_display.columns = ['Sl No.', 'Symbol', 'Industry', 'Price', 'Change %', 
+                                         'Strength', 'RS-Ratio', 'RS-Momentum', 'Distance', 
+                                         'Direction', 'Velocity']
+                    
+                    # Display with filtering and sorting
+                    st.dataframe(
+                        df_display,
+                        use_container_width=True,
+                        height=400,
+                        hide_index=True,
+                        column_config={
+                            "Sl No.": st.column_config.NumberColumn("Sl No.", width="small"),
+                            "Symbol": st.column_config.TextColumn("Symbol", width="medium"),
+                            "Industry": st.column_config.TextColumn("Industry", width="large"),
+                            "Price": st.column_config.TextColumn("Price", width="small"),
+                            "Change %": st.column_config.TextColumn("Change %", width="small"),
+                            "Strength": st.column_config.TextColumn("Strength", width="small"),
+                            "RS-Ratio": st.column_config.TextColumn("RS-Ratio", width="small"),
+                            "RS-Momentum": st.column_config.TextColumn("RS-Momentum", width="small"),
+                            "Distance": st.column_config.TextColumn("Distance", width="small"),
+                            "Direction": st.column_config.TextColumn("Direction", width="small"),
+                            "Velocity": st.column_config.TextColumn("Velocity", width="small"),
+                        }
+                    )
+                    
+                    # Download button for this quadrant
+                    csv_quad = df_status.to_csv(index=False)
+                    st.download_button(
+                        label=f"📥 Download {status} Data",
+                        data=csv_quad,
+                        file_name=f"RRG_{status}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        mime="text/csv",
+                        key=f"download_{status}"
+                    )
     
     # ========================================================================
-    # RIGHT SIDEBAR - TOP 30 RRG POWER (COLLAPSIBLE)
+    # RIGHT SIDEBAR - TOP 30 WITH SECTOR DIVERSITY
     # ========================================================================
     with col_right:
-        st.markdown("### 🚀 Top 30 RRG Power")
+        st.markdown("### 🚀 Top RRG Power")
         
-        df_ranked = df.nlargest(30, 'RRG Power')[['Sl No.', 'Symbol', 'Industry', 'RRG Power', 'Distance', 'Status']]
+        df_top = select_top_30_with_sectors(df, top_n=30)
         
         # Group by Status for collapsible sections
         for status in ["Leading", "Improving", "Weakening", "Lagging"]:
-            df_status_group = df_ranked[df_ranked['Status'] == status]
+            df_status_group = df_top[df_top['Status'] == status]
             
             if not df_status_group.empty:
                 status_color = QUADRANT_COLORS.get(status, "#808080")
                 status_icon = {"Leading": "🟢", "Improving": "🔵", "Weakening": "🟡", "Lagging": "🔴"}[status]
                 
-                # Collapsible expander for each quadrant
                 with st.expander(f"{status_icon} **{status}** ({len(df_status_group)})", expanded=(status == "Leading")):
                     for idx, (_, row) in enumerate(df_status_group.iterrows(), 1):
                         tv_link = df[df['Symbol'] == row['Symbol']]['TV Link'].values[0]
@@ -613,7 +688,7 @@ if st.session_state.df_cache is not None:
                             <small><b><a href="{tv_link}" target="_blank" 
                                 style="color: #0066cc; text-decoration: none;">#{int(row['Sl No.'])}</a></b></small>
                             <br><b style="color: {status_color};">{row['Symbol']}</b>
-                            <br><small>{row['Industry'][:18]}</small>
+                            <br><small>{row['Industry'][:20]}</small>
                             <br><small style="color: {status_color};">⚡ Power: {row['RRG Power']:.2f}</small>
                             <br><small style="color: {status_color};">📏 Dist: {row['Distance']:.2f}</small>
                         </div>
@@ -622,15 +697,14 @@ if st.session_state.df_cache is not None:
         st.markdown("---")
     
     # ========================================================================
-    # FOOTER & EXPORT
+    # FOOTER
     # ========================================================================
     st.markdown("---")
     st.markdown(f"""
     <div style="text-align: center; color: #888; font-size: 10px;">
         <b>RRG Analysis Dashboard</b><br>
         Data: Yahoo Finance | Charts: TradingView<br>
-        JdK Metrics: RS-Ratio (X) • RS-Momentum (Y) • Distance • Heading • Velocity<br>
-        Weekly: Last Friday Close | Monthly: Last Day of Month Close | Daily: Day Close<br>
+        Displaying {len(df_graph)} stocks on graph | Top {len(df_top)} with sector diversity<br>
         Reference: <a href="https://www.optuma.com/blog/scripting-for-rrgs" target="_blank" 
                       style="color: #0066cc;">Optuma RRG Scripting Guide</a><br>
         <i>Disclaimer: For educational purposes only. Not financial advice.</i>
@@ -639,23 +713,16 @@ if st.session_state.df_cache is not None:
     
     # Export CSV
     if export_csv:
-        df_export = df_top[['Sl No.', 'Symbol', 'Industry', 'Price', 'Change %', 'RRG Power', 
-                            'RS-Ratio', 'RS-Momentum', 'Distance', 'Heading', 'Direction', 
-                            'Velocity', 'Status']].copy()
         csv_buffer = io.StringIO()
-        df_export.to_csv(csv_buffer, index=False)
+        df.to_csv(csv_buffer, index=False)
         csv_data = csv_buffer.getvalue()
-        b64_csv = base64.b64encode(csv_data.encode()).decode()
         
-        st.markdown(f"""
-        <a href="data:file/csv;base64,{b64_csv}" 
-           download="RRG_Analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv" 
-           style="display: inline-block; padding: 10px 12px; background: #22c55e; color: #000; 
-                  border-radius: 6px; text-decoration: none; font-weight: 600; width: 100%; 
-                  text-align: center; font-size: 12px;">
-           📥 Download CSV
-        </a>
-        """, unsafe_allow_html=True)
+        st.download_button(
+            label="📥 Download Complete Data",
+            data=csv_data,
+            file_name=f"RRG_Complete_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            mime="text/csv"
+        )
 
 else:
     st.info("⬅️ Select indices and click **Load Data** to start analysis")
