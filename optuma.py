@@ -559,7 +559,7 @@ if st.session_state.df_cache is not None:
                         opacity=0.9
                     ),
                     hovertemplate='%{customdata}<extra></extra>',
-                    textfont=dict(color='#000000', size=9, family='Arial Black')
+                    textfont=dict(color='#000000', size=9, family='Arial')
                 ))
         
         fig_rrg.update_layout(
@@ -720,3 +720,4 @@ if st.session_state.df_cache is not None:
 
 else:
     st.info("⬅️ Select indices and click **Load Data** to start analysis")
+
