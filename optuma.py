@@ -19,93 +19,97 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Dark theme with enhanced styling
+# Dark theme with enhanced styling - FIXED FOR VISIBILITY
 st.markdown("""
 <style>
     body { background-color: #111827; }
     .main { background-color: #111827; }
     [data-testid="stSidebar"] { background-color: #1f2937; }
     
-    /* Custom table styling */
+    /* Custom table styling with BRIGHT TEXT */
     .rrg-table {
         width: 100%;
         border-collapse: collapse;
-        font-size: 13px;
+        font-size: 14px;
         margin-top: 10px;
     }
     .rrg-table th {
         background-color: #1f2937;
-        color: #ffffff;
-        padding: 10px;
+        color: #ffffff !important;
+        padding: 12px;
         text-align: center;
         font-weight: bold;
-        border: 1px solid #374151;
+        border: 1px solid #4b5563;
         position: sticky;
         top: 0;
         z-index: 10;
     }
     .rrg-table td {
-        padding: 8px;
+        padding: 10px;
         text-align: center;
-        border: 1px solid #374151;
-        color: #e5e7eb;
-    }
-    .rrg-table tr:nth-child(even) {
+        border: 1px solid #4b5563;
+        color: #f3f4f6 !important;
         background-color: #1f2937;
     }
-    .rrg-table tr:nth-child(odd) {
-        background-color: #111827;
-    }
-    .rrg-table tr:hover {
+    .rrg-table tr:nth-child(even) td {
         background-color: #374151;
+        color: #f3f4f6 !important;
+    }
+    .rrg-table tr:nth-child(odd) td {
+        background-color: #1f2937;
+        color: #f3f4f6 !important;
+    }
+    .rrg-table tr:hover td {
+        background-color: #4b5563;
+        color: #ffffff !important;
     }
     .rrg-table td:nth-child(2), .rrg-table td:nth-child(3) {
         text-align: left;
     }
     
-    /* Status badges */
+    /* Status badges with bright colors */
     .status-leading {
-        background: linear-gradient(135deg, rgba(34, 197, 94, 0.5), rgba(34, 197, 94, 0.3));
-        color: #22c55e;
+        background: linear-gradient(135deg, rgba(34, 197, 94, 0.6), rgba(34, 197, 94, 0.4));
+        color: #4ade80 !important;
         font-weight: bold;
-        padding: 5px 12px;
-        border-radius: 5px;
+        padding: 6px 14px;
+        border-radius: 6px;
         display: inline-block;
     }
     .status-improving {
-        background: linear-gradient(135deg, rgba(59, 130, 246, 0.5), rgba(59, 130, 246, 0.3));
-        color: #60a5fa;
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.6), rgba(59, 130, 246, 0.4));
+        color: #60a5fa !important;
         font-weight: bold;
-        padding: 5px 12px;
-        border-radius: 5px;
+        padding: 6px 14px;
+        border-radius: 6px;
         display: inline-block;
     }
     .status-weakening {
-        background: linear-gradient(135deg, rgba(251, 191, 36, 0.5), rgba(251, 191, 36, 0.3));
-        color: #fbbf24;
+        background: linear-gradient(135deg, rgba(251, 191, 36, 0.6), rgba(251, 191, 36, 0.4));
+        color: #fbbf24 !important;
         font-weight: bold;
-        padding: 5px 12px;
-        border-radius: 5px;
+        padding: 6px 14px;
+        border-radius: 6px;
         display: inline-block;
     }
     .status-lagging {
-        background: linear-gradient(135deg, rgba(239, 68, 68, 0.5), rgba(239, 68, 68, 0.3));
-        color: #f87171;
+        background: linear-gradient(135deg, rgba(239, 68, 68, 0.6), rgba(239, 68, 68, 0.4));
+        color: #f87171 !important;
         font-weight: bold;
-        padding: 5px 12px;
-        border-radius: 5px;
+        padding: 6px 14px;
+        border-radius: 6px;
         display: inline-block;
     }
     
-    /* Symbol link styling */
+    /* Symbol link styling - BRIGHT BLUE */
     .symbol-link {
-        color: #60a5fa;
+        color: #60a5fa !important;
         text-decoration: none;
         font-weight: bold;
     }
     .symbol-link:hover {
         text-decoration: underline;
-        color: #93c5fd;
+        color: #93c5fd !important;
     }
     
     /* Table container */
@@ -113,8 +117,9 @@ st.markdown("""
         max-height: 600px;
         overflow-y: auto;
         overflow-x: auto;
-        border: 1px solid #374151;
+        border: 1px solid #4b5563;
         border-radius: 8px;
+        background-color: #1f2937;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -536,7 +541,7 @@ if st.session_state.df_cache is not None:
         st.metric("Lagging", len(df[df['Status'] == 'Lagging']))
     
     # ========================================================================
-    # MAIN CONTENT
+    # MAIN CONTENT - RRG GRAPH WITH ENHANCED VISIBILITY
     # ========================================================================
     with col_main:
         st.markdown("## Relative Rotation Graph")
@@ -555,27 +560,43 @@ if st.session_state.df_cache is not None:
         
         # Quadrant backgrounds
         fig_rrg.add_shape(type="rect", x0=100, y0=100, x1=100+quadrant_size, y1=100+quadrant_size,
-                         fillcolor="rgba(34, 197, 94, 0.1)", line=dict(color="rgba(34, 197, 94, 0.3)", width=2), layer="below")
+                         fillcolor="rgba(34, 197, 94, 0.12)", line=dict(color="rgba(34, 197, 94, 0.4)", width=2), layer="below")
         fig_rrg.add_shape(type="rect", x0=100-quadrant_size, y0=100, x1=100, y1=100+quadrant_size,
-                         fillcolor="rgba(59, 130, 246, 0.1)", line=dict(color="rgba(59, 130, 246, 0.3)", width=2), layer="below")
+                         fillcolor="rgba(59, 130, 246, 0.12)", line=dict(color="rgba(59, 130, 246, 0.4)", width=2), layer="below")
         fig_rrg.add_shape(type="rect", x0=100-quadrant_size, y0=100-quadrant_size, x1=100, y1=100,
-                         fillcolor="rgba(251, 191, 36, 0.1)", line=dict(color="rgba(251, 191, 36, 0.3)", width=2), layer="below")
+                         fillcolor="rgba(251, 191, 36, 0.12)", line=dict(color="rgba(251, 191, 36, 0.4)", width=2), layer="below")
         fig_rrg.add_shape(type="rect", x0=100, y0=100-quadrant_size, x1=100+quadrant_size, y1=100,
-                         fillcolor="rgba(239, 68, 68, 0.1)", line=dict(color="rgba(239, 68, 68, 0.3)", width=2), layer="below")
+                         fillcolor="rgba(239, 68, 68, 0.12)", line=dict(color="rgba(239, 68, 68, 0.4)", width=2), layer="below")
         
-        # Quadrant labels (dark colors)
-        fig_rrg.add_annotation(x=100+quadrant_size*0.5, y=100+quadrant_size*0.5, text="Leading",
-                              showarrow=False, font=dict(size=14, color="#166534", family="Arial Black"))
-        fig_rrg.add_annotation(x=100-quadrant_size*0.5, y=100+quadrant_size*0.5, text="Improving",
-                              showarrow=False, font=dict(size=14, color="#1e3a8a", family="Arial Black"))
-        fig_rrg.add_annotation(x=100-quadrant_size*0.5, y=100-quadrant_size*0.5, text="Weakening",
-                              showarrow=False, font=dict(size=14, color="#92400e", family="Arial Black"))
-        fig_rrg.add_annotation(x=100+quadrant_size*0.5, y=100-quadrant_size*0.5, text="Lagging",
-                              showarrow=False, font=dict(size=14, color="#7f1d1d", family="Arial Black"))
+        # Quadrant labels - DARKER AND LARGER FOR VISIBILITY
+        fig_rrg.add_annotation(
+            x=100+quadrant_size*0.5, y=100+quadrant_size*0.5, 
+            text="Leading",
+            showarrow=False, 
+            font=dict(size=18, color="#0d4a1f", family="Arial Black")
+        )
+        fig_rrg.add_annotation(
+            x=100-quadrant_size*0.5, y=100+quadrant_size*0.5, 
+            text="Improving",
+            showarrow=False, 
+            font=dict(size=18, color="#1e3a8a", family="Arial Black")
+        )
+        fig_rrg.add_annotation(
+            x=100-quadrant_size*0.5, y=100-quadrant_size*0.5, 
+            text="Weakening",
+            showarrow=False, 
+            font=dict(size=18, color="#713f12", family="Arial Black")
+        )
+        fig_rrg.add_annotation(
+            x=100+quadrant_size*0.5, y=100-quadrant_size*0.5, 
+            text="Lagging",
+            showarrow=False, 
+            font=dict(size=18, color="#7f1d1d", family="Arial Black")
+        )
         
         # Center lines
-        fig_rrg.add_hline(y=100, line_dash="dash", line_color="rgba(150, 150, 150, 0.5)", layer="below")
-        fig_rrg.add_vline(x=100, line_dash="dash", line_color="rgba(150, 150, 150, 0.5)", layer="below")
+        fig_rrg.add_hline(y=100, line_dash="dash", line_color="rgba(100, 100, 100, 0.6)", line_width=2, layer="below")
+        fig_rrg.add_vline(x=100, line_dash="dash", line_color="rgba(100, 100, 100, 0.6)", line_width=2, layer="below")
         
         # Add data points with TAILS
         for status in ["Leading", "Improving", "Weakening", "Lagging"]:
@@ -594,7 +615,7 @@ if st.session_state.df_cache is not None:
                                 x=rs_ratio_tail,
                                 y=rs_momentum_tail,
                                 mode='lines',
-                                line=dict(color=QUADRANT_COLORS[status], width=2, dash='dot'),
+                                line=dict(color=QUADRANT_COLORS[status], width=2.5, dash='dot'),
                                 showlegend=False,
                                 hoverinfo='skip'
                             ))
@@ -617,8 +638,8 @@ if st.session_state.df_cache is not None:
                                     ayref='y',
                                     showarrow=True,
                                     arrowhead=2,
-                                    arrowsize=1,
-                                    arrowwidth=2,
+                                    arrowsize=1.2,
+                                    arrowwidth=2.5,
                                     arrowcolor=QUADRANT_COLORS[status]
                                 )
                     
@@ -635,7 +656,7 @@ if st.session_state.df_cache is not None:
                     )
                     hover_text.append(hover_info)
                 
-                # Add markers on top of tails
+                # Add markers on top of tails - ENHANCED VISIBILITY
                 fig_rrg.add_trace(go.Scatter(
                     x=df_status['RS-Ratio'],
                     y=df_status['RS-Momentum'],
@@ -645,25 +666,40 @@ if st.session_state.df_cache is not None:
                     textposition="top center",
                     customdata=hover_text,
                     marker=dict(
-                        size=14,
+                        size=16,  # Larger markers
                         color=QUADRANT_COLORS[status],
-                        line=dict(color='white', width=2),
+                        line=dict(color='white', width=2.5),  # Thicker border
                         opacity=0.95
                     ),
                     hovertemplate='%{customdata}<extra></extra>',
-                    textfont=dict(color='#000000', size=9, family='Arial Black')
+                    textfont=dict(
+                        color='#000000',  # Pure black text
+                        size=11,  # Larger text
+                        family='Arial Black'
+                    )
                 ))
         
+        # Enhanced layout for visibility
         fig_rrg.update_layout(
             height=550,
             xaxis_title="RS-Ratio (X-axis)",
             yaxis_title="RS-Momentum (Y-axis)",
-            plot_bgcolor="rgba(240, 240, 245, 0.9)",
-            paper_bgcolor="rgba(240, 240, 245, 0.9)",
-            font=dict(color="#000000", size=11),
+            plot_bgcolor="rgba(255, 255, 255, 0.95)",  # Bright white background
+            paper_bgcolor="rgba(255, 255, 255, 0.95)",
+            font=dict(color="#000000", size=13, family="Arial"),
             hovermode="closest",
-            xaxis=dict(gridcolor="rgba(200, 200, 200, 0.3)", zeroline=False),
-            yaxis=dict(gridcolor="rgba(200, 200, 200, 0.3)", zeroline=False),
+            xaxis=dict(
+                gridcolor="rgba(200, 200, 200, 0.5)", 
+                zeroline=False,
+                title_font=dict(size=14, color="#000000", family="Arial Black"),
+                tickfont=dict(size=12, color="#000000")
+            ),
+            yaxis=dict(
+                gridcolor="rgba(200, 200, 200, 0.5)", 
+                zeroline=False,
+                title_font=dict(size=14, color="#000000", family="Arial Black"),
+                tickfont=dict(size=12, color="#000000")
+            ),
             showlegend=False,
             margin=dict(l=80, r=80, t=100, b=80)
         )
@@ -672,7 +708,7 @@ if st.session_state.df_cache is not None:
         
         st.markdown("---")
         
-        # COLLAPSIBLE TABLE WITH PROPER HTML RENDERING
+        # COLLAPSIBLE TABLE WITH BRIGHT TEXT
         with st.expander("📊 **Detailed Analysis** (Click to expand/collapse)", expanded=True):
             # Build HTML table rows
             table_rows = ""
