@@ -37,8 +37,8 @@ st.markdown("""
 # ============================================================================
 BENCHMARKS = {
     "NIFTY 50": "^NSEI",
-    "NIFTY 200": "^CNXIT",
-    "NIFTY 500": "^CNXIT"
+    "NIFTY 200": "^CNX200",
+    "NIFTY 500": "^CRSLDX"
 }
 
 TIMEFRAMES = {
@@ -445,3 +445,4 @@ st.markdown("""
     <i>Disclaimer: For educational purposes only. Not financial advice.</i>
 </div>
 """, unsafe_allow_html=True)
+
