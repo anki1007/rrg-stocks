@@ -260,6 +260,11 @@ rank_by = st.sidebar.selectbox(
 st.sidebar.markdown("---")
 top_n = st.sidebar.slider("Show Top N", min_value=5, max_value=50, value=15)
 st.sidebar.markdown("---")
+# Animation Controls
+st.sidebar.markdown("---")
+trail_length = st.sidebar.slider("Trail Length", min_value=5, max_value=14, value=5)
+enable_animation = st.sidebar.checkbox("🎬 Enable Animation", value=False)
+st.sidebar.markdown("---")
 export_csv = st.sidebar.checkbox("Export CSV", value=True)
 
 st.sidebar.markdown("---")
@@ -336,7 +341,7 @@ if st.session_state.load_clicked:
                     failed_count += 1
                     continue
                 
-                tail_length = min(TAIL_LENGTH, len(rs_ratio))
+                tail_length = min(14, len(rs_ratio))  # Store up to 14 periods for animation
                 rs_history[format_symbol(s)] = {
                     'rs_ratio': rs_ratio.iloc[-tail_length:].tolist(),
                     'rs_momentum': rs_momentum.iloc[-tail_length:].tolist()
@@ -604,6 +609,162 @@ if st.session_state.df_cache is not None:
         )
         
         st.plotly_chart(fig_rrg, use_container_width=True)
+
+        # ====================================================================
+        # ANIMATION (if enabled in sidebar)
+        # ====================================================================
+
+        if enable_animation:
+            st.markdown("---")
+            st.markdown("### 🎬 Rotation Animation")
+
+            # Prepare animation data
+            animation_history = {}
+            for sym in df_graph['Symbol']:
+                if sym in rs_history:
+                    tail_data = rs_history[sym]
+                    max_len = min(trail_length, len(tail_data['rs_ratio']))
+                    animation_history[sym] = {
+                        'rs_ratio': tail_data['rs_ratio'][-max_len:],
+                        'rs_momentum': tail_data['rs_momentum'][-max_len:]
+                    }
+
+            max_frames = max([len(animation_history[sym]['rs_ratio']) 
+                            for sym in animation_history if animation_history[sym]['rs_ratio']], default=1)
+
+            # Build animation frames
+            anim_frames = []
+            for frame_idx in range(1, max_frames + 1):
+                frame_data = []
+                for status in ["Leading", "Improving", "Weakening", "Lagging"]:
+                    df_status = df_graph[df_graph['Status'] == status]
+                    for _, row in df_status.iterrows():
+                        if row['Symbol'] in animation_history:
+                            hist = animation_history[row['Symbol']]
+                            if frame_idx <= len(hist['rs_ratio']):
+                                frame_data.append({
+                                    'symbol': row['Symbol'],
+                                    'x': hist['rs_ratio'][frame_idx - 1],
+                                    'y': hist['rs_momentum'][frame_idx - 1],
+                                    'status': status
+                                })
+                anim_frames.append(frame_data)
+
+            # Create animated figure
+            fig_anim = go.Figure()
+
+            # Quadrant backgrounds
+            fig_anim.add_shape(type="rect", x0=100, y0=100, x1=100+quadrant_size, y1=100+quadrant_size,
+                fillcolor="rgba(34, 197, 94, 0.12)", line=dict(color="rgba(34, 197, 94, 0.4)", width=2), layer="below")
+            fig_anim.add_shape(type="rect", x0=100-quadrant_size, y0=100, x1=100, y1=100+quadrant_size,
+                fillcolor="rgba(59, 130, 246, 0.12)", line=dict(color="rgba(59, 130, 246, 0.4)", width=2), layer="below")
+            fig_anim.add_shape(type="rect", x0=100-quadrant_size, y0=100-quadrant_size, x1=100, y1=100,
+                fillcolor="rgba(251, 191, 36, 0.12)", line=dict(color="rgba(251, 191, 36, 0.4)", width=2), layer="below")
+            fig_anim.add_shape(type="rect", x0=100, y0=100-quadrant_size, x1=100+quadrant_size, y1=100,
+                fillcolor="rgba(239, 68, 68, 0.12)", line=dict(color="rgba(239, 68, 68, 0.4)", width=2), layer="below")
+
+            # Quadrant labels
+            fig_anim.add_annotation(x=100+quadrant_size*0.5, y=100+quadrant_size*0.5, text="Leading",
+                showarrow=False, font=dict(size=18, color="#0d4a1f", family="Arial"))
+            fig_anim.add_annotation(x=100-quadrant_size*0.5, y=100+quadrant_size*0.5, text="Improving",
+                showarrow=False, font=dict(size=18, color="#1e3a8a", family="Arial"))
+            fig_anim.add_annotation(x=100-quadrant_size*0.5, y=100-quadrant_size*0.5, text="Weakening",
+                showarrow=False, font=dict(size=18, color="#713f12", family="Arial"))
+            fig_anim.add_annotation(x=100+quadrant_size*0.5, y=100-quadrant_size*0.5, text="Lagging",
+                showarrow=False, font=dict(size=18, color="#7f1d1d", family="Arial"))
+
+            # Center lines
+            fig_anim.add_hline(y=100, line_dash="dash", line_color="rgba(100, 100, 100, 0.6)", line_width=2)
+            fig_anim.add_vline(x=100, line_dash="dash", line_color="rgba(100, 100, 100, 0.6)", line_width=2)
+
+            # Initial frame
+            if anim_frames:
+                initial = anim_frames[0]
+                for status in ["Leading", "Improving", "Weakening", "Lagging"]:
+                    status_pts = [p for p in initial if p['status'] == status]
+                    if status_pts:
+                        fig_anim.add_trace(go.Scatter(
+                            x=[p['x'] for p in status_pts],
+                            y=[p['y'] for p in status_pts],
+                            mode='markers+text',
+                            name=status,
+                            text=[p['symbol'] for p in status_pts],
+                            textposition="top center",
+                            marker=dict(size=16, color=QUADRANT_COLORS[status],
+                                       line=dict(color='white', width=2.5), opacity=0.95),
+                            hovertemplate='<b>%{text}</b><br>RS-Ratio: %{x:.2f}<br>RS-Momentum: %{y:.2f}<extra></extra>'
+                        ))
+
+                # Create plotly animation frames
+                plotly_frames = []
+                for idx, frame_data in enumerate(anim_frames):
+                    traces = []
+                    for status in ["Leading", "Improving", "Weakening", "Lagging"]:
+                        status_pts = [p for p in frame_data if p['status'] == status]
+                        if status_pts:
+                            traces.append(go.Scatter(
+                                x=[p['x'] for p in status_pts],
+                                y=[p['y'] for p in status_pts],
+                                mode='markers+text',
+                                name=status,
+                                text=[p['symbol'] for p in status_pts],
+                                textposition="top center",
+                                marker=dict(size=16, color=QUADRANT_COLORS[status],
+                                           line=dict(color='white', width=2.5), opacity=0.95),
+                                hovertemplate='<b>%{text}</b><br>RS-Ratio: %{x:.2f}<br>RS-Momentum: %{y:.2f}<extra></extra>'
+                            ))
+                    plotly_frames.append(go.Frame(data=traces, name=str(idx)))
+
+                fig_anim.frames = plotly_frames
+
+                # Animation controls (Play/Pause + Slider)
+                fig_anim.update_layout(
+                    updatemenus=[{
+                        'type': 'buttons',
+                        'showactive': False,
+                        'buttons': [
+                            {'label': '▶ Play', 'method': 'animate',
+                             'args': [None, {'frame': {'duration': 800, 'redraw': True},
+                                            'fromcurrent': True, 'mode': 'immediate',
+                                            'transition': {'duration': 300, 'easing': 'cubic-in-out'}}]},
+                            {'label': '⏸ Pause', 'method': 'animate',
+                             'args': [[None], {'frame': {'duration': 0, 'redraw': False},
+                                              'mode': 'immediate', 'transition': {'duration': 0}}]}
+                        ],
+                        'x': 0.1, 'y': 1.15, 'xanchor': 'left', 'yanchor': 'top'
+                    }],
+                    sliders=[{
+                        'active': 0,
+                        'steps': [{'args': [[f.name], {'frame': {'duration': 0, 'redraw': True},
+                                                       'mode': 'immediate', 'transition': {'duration': 0}}],
+                                  'label': f"Period {i+1}/{len(plotly_frames)}", 'method': 'animate'}
+                                 for i, f in enumerate(plotly_frames)],
+                        'x': 0.1, 'len': 0.85, 'xanchor': 'left', 'y': 0,
+                        'yanchor': 'top', 'pad': {'b': 10, 't': 50},
+                        'currentvalue': {'visible': True, 'prefix': 'Period: ', 'xanchor': 'right'},
+                        'transition': {'duration': 300, 'easing': 'cubic-in-out'}
+                    }]
+                )
+
+                fig_anim.update_layout(
+                    height=700,
+                    plot_bgcolor='rgba(18, 18, 18, 0.95)',
+                    paper_bgcolor='rgba(10, 10, 10, 0.98)',
+                    font=dict(color='#e0e0e0', size=12, family='Inter, sans-serif'),
+                    xaxis=dict(title="RS-Ratio →", gridcolor='rgba(50, 50, 50, 0.5)',
+                              range=[x_min, x_max], zeroline=False),
+                    yaxis=dict(title="RS-Momentum →", gridcolor='rgba(50, 50, 50, 0.5)',
+                              range=[y_min, y_max], zeroline=False),
+                    legend=dict(x=1.02, y=1, bgcolor='rgba(30, 30, 30, 0.8)',
+                               bordercolor='rgba(100, 100, 100, 0.3)', borderwidth=1),
+                    hovermode='closest',
+                    title=dict(text=f"Animated RRG: {csv_selected} | {tf_name} | {bench_name}",
+                              font=dict(size=16, color='#ffffff'), x=0.5, xanchor='center')
+                )
+
+                st.plotly_chart(fig_anim, use_container_width=True, config={'displayModeBar': True})
+                st.info(f"✅ Animation: {len(anim_frames)} periods | Trail Length: {trail_length}")
+
         
         st.markdown("---")
         
