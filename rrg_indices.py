@@ -172,6 +172,7 @@ def _to_yahoo_symbol(raw_sym: str) -> str:
     if s.endswith(".NS") or s.startswith("^"):
         return s
     return "^" + s  # map index codes like CNXIT -> ^CNXIT
+
 # ---- CSV loaders (GitHub with cache-bust, or uploaded override) ----
 @st.cache_data(ttl=600)
 def load_universe_from_github_csv(basename: str, cache_bust: str) -> Tuple[List[str], Dict[str, Dict[str, str]]]:
@@ -200,7 +201,6 @@ def load_universe_from_github_csv(basename: str, cache_bust: str) -> Tuple[List[
             "raw_symbol": r["Symbol"],
             "is_equity": r["Yahoo"].endswith(".NS"),
         }
-
         for _, r in sel.iterrows()
     }
     # cache_bust is unused in code but varies the cache key
@@ -536,7 +536,7 @@ start_idx = max(end_idx - tail_len, 0)
 date_str = format_bar_date(idx[end_idx], interval)
 
 # -------- Title --------
-st.markdown(f"###{date_str}")
+st.markdown(f"### Relative Rotation Graphs – Indices – {date_str}")
 
 # -------------------- Ranking Metric (1 = strongest) --------------------
 def ranking_value(t: str) -> float:
