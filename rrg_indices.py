@@ -172,7 +172,34 @@ def _to_yahoo_symbol(raw_sym: str) -> str:
     if s.endswith(".NS") or s.startswith("^"):
         return s
     return "^" + s  # map index codes like CNXIT -> ^CNXIT
+# ---- CSV loaders (GitHub with cache-bust, or uploaded override) ----
+@st.cache_data(ttl=600)
+def load_universe_from_github_csv(basename: str, cache_bust: str) -> Tuple[List[str], Dict[str, Dict[str, str]]]:
+    url = RAW_BASE + basename
+    df = pd.read_csv(url)
+    mapping = _normalize_cols(df.columns.tolist())
+    sym_col = next((c for c,k in mapping.items() if k in ("symbol","ticker","symbols")), None)
+    if sym_col is None:
+        raise ValueError("CSV must contain 'Symbol' column.")
+    name_col = next((c for c,k in mapping.items() if k in ("companyname","name","company","companyfullname")), sym_col)
+    ind_col  = next((c for c,k in mapping.items() if k in ("industry","sector","industries")), None)
+    if ind_col is None:
+        ind_col = "Industry"
+        df[ind_col] = "-"
 
+    sel = df[[sym_col, name_col, ind_col]].copy()
+    sel.columns = ["Symbol","Company Name","Industry"]
+    sel = sel[sel["Symbol"].astype(str).str.strip() != ""].drop_duplicates(subset=["Symbol"])
+
+    sel["Yahoo"] = sel["Symbol"].apply(_to_yahoo_symbol)
+    universe = sel["Yahoo"].tolist()
+    meta = {
+        r["Yahoo"]: {
+            "name": (r["Company Name"] or r["Yahoo"]),
+            "industry": (r["Industry"] or "-"),
+            "raw_symbol": r["Symbol"],
+            "is_equity": r["Yahoo"].endswith(".NS"),
+        }
 
         for _, r in sel.iterrows()
     }
@@ -509,7 +536,7 @@ start_idx = max(end_idx - tail_len, 0)
 date_str = format_bar_date(idx[end_idx], interval)
 
 # -------- Title --------
-st.markdown(f"### Relative Rotation Graphs – Indices – {date_str}")
+st.markdown(f"###{date_str}")
 
 # -------------------- Ranking Metric (1 = strongest) --------------------
 def ranking_value(t: str) -> float:
