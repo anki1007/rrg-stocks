@@ -263,7 +263,6 @@ st.sidebar.markdown("---")
 # Animation Controls
 st.sidebar.markdown("---")
 trail_length = st.sidebar.slider("Trail Length", min_value=5, max_value=14, value=5)
-enable_animation = st.sidebar.checkbox("🎬 Enable Animation", value=False)
 st.sidebar.markdown("---")
 export_csv = st.sidebar.checkbox("Export CSV", value=True)
 
@@ -341,7 +340,7 @@ if st.session_state.load_clicked:
                     failed_count += 1
                     continue
                 
-                tail_length = min(14, len(rs_ratio))  # Store up to 14 periods for animation
+                tail_length = min(14, len(rs_ratio))  # Store up to 14 periods
                 rs_history[format_symbol(s)] = {
                     'rs_ratio': rs_ratio.iloc[-tail_length:].tolist(),
                     'rs_momentum': rs_momentum.iloc[-tail_length:].tolist()
@@ -451,172 +450,443 @@ if st.session_state.df_cache is not None:
     # MAIN CONTENT - RRG GRAPH
     # ========================================================================
     with col_main:
-        st.markdown("## Relative Rotation Graph")
-        st.markdown(f"**{csv_selected} | {tf_name} | {period_name} | Benchmark: {bench_name}**")
-        
-        df_graph = select_graph_stocks(df, min_stocks=40)
-        
-        fig_rrg = go.Figure()
-        
-        x_min = df['RS-Ratio'].min() - 5
-        x_max = df['RS-Ratio'].max() + 5
-        y_min = df['RS-Momentum'].min() - 5
-        y_max = df['RS-Momentum'].max() + 5
-        quadrant_size = max(abs(100 - x_min), abs(x_max - 100), abs(100 - y_min), abs(y_max - 100))
-        
-        # Quadrant backgrounds
-        fig_rrg.add_shape(type="rect", x0=100, y0=100, x1=100+quadrant_size, y1=100+quadrant_size,
-                         fillcolor="rgba(34, 197, 94, 0.12)", line=dict(color="rgba(34, 197, 94, 0.4)", width=2), layer="below")
-        fig_rrg.add_shape(type="rect", x0=100-quadrant_size, y0=100, x1=100, y1=100+quadrant_size,
-                         fillcolor="rgba(59, 130, 246, 0.12)", line=dict(color="rgba(59, 130, 246, 0.4)", width=2), layer="below")
-        fig_rrg.add_shape(type="rect", x0=100-quadrant_size, y0=100-quadrant_size, x1=100, y1=100,
-                         fillcolor="rgba(251, 191, 36, 0.12)", line=dict(color="rgba(251, 191, 36, 0.4)", width=2), layer="below")
-        fig_rrg.add_shape(type="rect", x0=100, y0=100-quadrant_size, x1=100+quadrant_size, y1=100,
-                         fillcolor="rgba(239, 68, 68, 0.12)", line=dict(color="rgba(239, 68, 68, 0.4)", width=2), layer="below")
-        
-        # Quadrant labels
-        fig_rrg.add_annotation(
-            x=100+quadrant_size*0.5, y=100+quadrant_size*0.5, 
-            text="Leading",
-            showarrow=False, 
-            font=dict(size=18, color="#0d4a1f", family="Arial")
-        )
-        fig_rrg.add_annotation(
-            x=100-quadrant_size*0.5, y=100+quadrant_size*0.5, 
-            text="Improving",
-            showarrow=False, 
-            font=dict(size=18, color="#1e3a8a", family="Arial")
-        )
-        fig_rrg.add_annotation(
-            x=100-quadrant_size*0.5, y=100-quadrant_size*0.5, 
-            text="Weakening",
-            showarrow=False, 
-            font=dict(size=18, color="#713f12", family="Arial")
-        )
-        fig_rrg.add_annotation(
-            x=100+quadrant_size*0.5, y=100-quadrant_size*0.5, 
-            text="Lagging",
-            showarrow=False, 
-            font=dict(size=18, color="#7f1d1d", family="Arial")
-        )
-        
-        # Center lines
-        fig_rrg.add_hline(y=100, line_dash="dash", line_color="rgba(100, 100, 100, 0.6)", line_width=2, layer="below")
-        fig_rrg.add_vline(x=100, line_dash="dash", line_color="rgba(100, 100, 100, 0.6)", line_width=2, layer="below")
-        
-        # Add data points with TAILS
-        for status in ["Leading", "Improving", "Weakening", "Lagging"]:
-            df_status = df_graph[df_graph['Status'] == status]
-            if not df_status.empty:
-                hover_text = []
-                for _, row in df_status.iterrows():
-                    if row['Symbol'] in rs_history:
-                        tail_data = rs_history[row['Symbol']]
-                        rs_ratio_tail = tail_data['rs_ratio']
-                        rs_momentum_tail = tail_data['rs_momentum']
-                        
-                        if len(rs_ratio_tail) > 1:
-                            fig_rrg.add_trace(go.Scatter(
-                                x=rs_ratio_tail,
-                                y=rs_momentum_tail,
-                                mode='lines',
-                                line=dict(color=QUADRANT_COLORS[status], width=2.5, dash='dot'),
-                                showlegend=False,
-                                hoverinfo='skip'
-                            ))
+        # Create tabs for Static and Animation
+        tab1, tab2 = st.tabs(["📊 Static RRG", "🎬 Rotation Animation"])
+
+        with tab1:
+            st.markdown("## Relative Rotation Graph")
+            st.markdown(f"**{csv_selected} | {tf_name} | {period_name} | Benchmark: {bench_name}**")
+            
+            df_graph = select_graph_stocks(df, min_stocks=40)
+            
+            fig_rrg = go.Figure()
+            
+            x_min = df['RS-Ratio'].min() - 5
+            x_max = df['RS-Ratio'].max() + 5
+            y_min = df['RS-Momentum'].min() - 5
+            y_max = df['RS-Momentum'].max() + 5
+            quadrant_size = max(abs(100 - x_min), abs(x_max - 100), abs(100 - y_min), abs(y_max - 100))
+            
+            # Quadrant backgrounds
+            fig_rrg.add_shape(type="rect", x0=100, y0=100, x1=100+quadrant_size, y1=100+quadrant_size,
+                             fillcolor="rgba(34, 197, 94, 0.12)", line=dict(color="rgba(34, 197, 94, 0.4)", width=2), layer="below")
+            fig_rrg.add_shape(type="rect", x0=100-quadrant_size, y0=100, x1=100, y1=100+quadrant_size,
+                             fillcolor="rgba(59, 130, 246, 0.12)", line=dict(color="rgba(59, 130, 246, 0.4)", width=2), layer="below")
+            fig_rrg.add_shape(type="rect", x0=100-quadrant_size, y0=100-quadrant_size, x1=100, y1=100,
+                             fillcolor="rgba(251, 191, 36, 0.12)", line=dict(color="rgba(251, 191, 36, 0.4)", width=2), layer="below")
+            fig_rrg.add_shape(type="rect", x0=100, y0=100-quadrant_size, x1=100+quadrant_size, y1=100,
+                             fillcolor="rgba(239, 68, 68, 0.12)", line=dict(color="rgba(239, 68, 68, 0.4)", width=2), layer="below")
+            
+            # Quadrant labels
+            fig_rrg.add_annotation(
+                x=100+quadrant_size*0.5, y=100+quadrant_size*0.5, 
+                text="Leading",
+                showarrow=False, 
+                font=dict(size=18, color="#0d4a1f", family="Arial")
+            )
+            fig_rrg.add_annotation(
+                x=100-quadrant_size*0.5, y=100+quadrant_size*0.5, 
+                text="Improving",
+                showarrow=False, 
+                font=dict(size=18, color="#1e3a8a", family="Arial")
+            )
+            fig_rrg.add_annotation(
+                x=100-quadrant_size*0.5, y=100-quadrant_size*0.5, 
+                text="Weakening",
+                showarrow=False, 
+                font=dict(size=18, color="#713f12", family="Arial")
+            )
+            fig_rrg.add_annotation(
+                x=100+quadrant_size*0.5, y=100-quadrant_size*0.5, 
+                text="Lagging",
+                showarrow=False, 
+                font=dict(size=18, color="#7f1d1d", family="Arial")
+            )
+            
+            # Center lines
+            fig_rrg.add_hline(y=100, line_dash="dash", line_color="rgba(100, 100, 100, 0.6)", line_width=2, layer="below")
+            fig_rrg.add_vline(x=100, line_dash="dash", line_color="rgba(100, 100, 100, 0.6)", line_width=2, layer="below")
+            
+            # Add data points with TAILS
+            for status in ["Leading", "Improving", "Weakening", "Lagging"]:
+                df_status = df_graph[df_graph['Status'] == status]
+                if not df_status.empty:
+                    hover_text = []
+                    for _, row in df_status.iterrows():
+                        if row['Symbol'] in rs_history:
+                            tail_data = rs_history[row['Symbol']]
+                            rs_ratio_tail = tail_data['rs_ratio']
+                            rs_momentum_tail = tail_data['rs_momentum']
                             
-                            if len(rs_ratio_tail) >= 2:
-                                x_tail = rs_ratio_tail[-2]
-                                y_tail = rs_momentum_tail[-2]
-                                x_head = rs_ratio_tail[-1]
-                                y_head = rs_momentum_tail[-1]
+                            if len(rs_ratio_tail) > 1:
+                                fig_rrg.add_trace(go.Scatter(
+                                    x=rs_ratio_tail,
+                                    y=rs_momentum_tail,
+                                    mode='lines',
+                                    line=dict(color=QUADRANT_COLORS[status], width=2.5, dash='dot'),
+                                    showlegend=False,
+                                    hoverinfo='skip'
+                                ))
                                 
-                                fig_rrg.add_annotation(
-                                    x=x_head,
-                                    y=y_head,
-                                    ax=x_tail,
-                                    ay=y_tail,
-                                    xref='x',
-                                    yref='y',
-                                    axref='x',
-                                    ayref='y',
-                                    showarrow=True,
-                                    arrowhead=2,
-                                    arrowsize=1.2,
-                                    arrowwidth=2.5,
-                                    arrowcolor=QUADRANT_COLORS[status]
-                                )
+                                if len(rs_ratio_tail) >= 2:
+                                    x_tail = rs_ratio_tail[-2]
+                                    y_tail = rs_momentum_tail[-2]
+                                    x_head = rs_ratio_tail[-1]
+                                    y_head = rs_momentum_tail[-1]
+                                    
+                                    fig_rrg.add_annotation(
+                                        x=x_head,
+                                        y=y_head,
+                                        ax=x_tail,
+                                        ay=y_tail,
+                                        xref='x',
+                                        yref='y',
+                                        axref='x',
+                                        ayref='y',
+                                        showarrow=True,
+                                        arrowhead=2,
+                                        arrowsize=1.2,
+                                        arrowwidth=2.5,
+                                        arrowcolor=QUADRANT_COLORS[status]
+                                    )
+                        
+                        hover_info = (
+                            f"<b>{row['Name']}</b><br>"
+                            f"Symbol: {row['Symbol']}<br>"
+                            f"Industry: {row['Industry']}<br>"
+                            f"Price: ₹{row['Price']:.2f} | {row['Change %']:+.2f}%<br>"
+                            f"<b>JdK Metrics:</b><br>"
+                            f"RS-Ratio: {row['RS-Ratio']:.2f} | RS-Momentum: {row['RS-Momentum']:.2f}<br>"
+                            f"Distance: {row['Distance']:.2f} | Velocity: {row['Velocity']:.3f}<br>"
+                            f"Heading: {row['Heading']:.1f}° {row['Direction']}<br>"
+                            f"Status: <b>{row['Status']}</b>"
+                        )
+                        hover_text.append(hover_info)
                     
-                    hover_info = (
-                        f"<b>{row['Name']}</b><br>"
-                        f"Symbol: {row['Symbol']}<br>"
-                        f"Industry: {row['Industry']}<br>"
-                        f"Price: ₹{row['Price']:.2f} | {row['Change %']:+.2f}%<br>"
-                        f"<b>JdK Metrics:</b><br>"
-                        f"RS-Ratio: {row['RS-Ratio']:.2f} | RS-Momentum: {row['RS-Momentum']:.2f}<br>"
-                        f"Distance: {row['Distance']:.2f} | Velocity: {row['Velocity']:.3f}<br>"
-                        f"Heading: {row['Heading']:.1f}° {row['Direction']}<br>"
-                        f"Status: <b>{row['Status']}</b>"
-                    )
-                    hover_text.append(hover_info)
-                
-                # Add markers
-                fig_rrg.add_trace(go.Scatter(
-                    x=df_status['RS-Ratio'],
-                    y=df_status['RS-Momentum'],
-                    mode='markers+text',
-                    name=status,
-                    text=df_status['Symbol'],
-                    textposition="top center",
-                    customdata=hover_text,
-                    marker=dict(
-                        size=16,
-                        color=QUADRANT_COLORS[status],
-                        line=dict(color='white', width=2.5),
-                        opacity=0.95
-                    ),
-                    hovertemplate='%{customdata}<extra></extra>',
-                    textfont=dict(
-                        color='#000000',
-                        size=11,
-                        family='Arial'
-                    )
-                ))
-        
-        # Enhanced layout
-        fig_rrg.update_layout(
-            height=550,
-            xaxis_title="RS-Ratio (X-axis)",
-            yaxis_title="RS-Momentum (Y-axis)",
-            plot_bgcolor="rgba(255, 255, 255, 0.95)",
-            paper_bgcolor="rgba(255, 255, 255, 0.95)",
-            font=dict(color="#000000", size=13, family="Arial"),
-            hovermode="closest",
-            xaxis=dict(
-                gridcolor="rgba(200, 200, 200, 0.5)", 
-                zeroline=False,
-                title_font=dict(size=14, color="#000000", family="Arial"),
-                tickfont=dict(size=12, color="#000000")
-            ),
-            yaxis=dict(
-                gridcolor="rgba(200, 200, 200, 0.5)", 
-                zeroline=False,
-                title_font=dict(size=14, color="#000000", family="Arial"),
-                tickfont=dict(size=12, color="#000000")
-            ),
-            showlegend=False,
-            margin=dict(l=80, r=80, t=100, b=80)
-        )
-        
-        st.plotly_chart(fig_rrg, use_container_width=True)
-
-        # ====================================================================
-        # ANIMATION (if enabled in sidebar)
-        # ====================================================================
-
-        if enable_animation:
+                    # Add markers
+                    fig_rrg.add_trace(go.Scatter(
+                        x=df_status['RS-Ratio'],
+                        y=df_status['RS-Momentum'],
+                        mode='markers+text',
+                        name=status,
+                        text=df_status['Symbol'],
+                        textposition="top center",
+                        customdata=hover_text,
+                        marker=dict(
+                            size=16,
+                            color=QUADRANT_COLORS[status],
+                            line=dict(color='white', width=2.5),
+                            opacity=0.95
+                        ),
+                        hovertemplate='%{customdata}<extra></extra>',
+                        textfont=dict(
+                            color='#000000',
+                            size=11,
+                            family='Arial'
+                        )
+                    ))
+            
+            # Enhanced layout
+            fig_rrg.update_layout(
+                height=550,
+                xaxis_title="RS-Ratio (X-axis)",
+                yaxis_title="RS-Momentum (Y-axis)",
+                plot_bgcolor="rgba(255, 255, 255, 0.95)",
+                paper_bgcolor="rgba(255, 255, 255, 0.95)",
+                font=dict(color="#000000", size=13, family="Arial"),
+                hovermode="closest",
+                xaxis=dict(
+                    gridcolor="rgba(200, 200, 200, 0.5)", 
+                    zeroline=False,
+                    title_font=dict(size=14, color="#000000", family="Arial"),
+                    tickfont=dict(size=12, color="#000000")
+                ),
+                yaxis=dict(
+                    gridcolor="rgba(200, 200, 200, 0.5)", 
+                    zeroline=False,
+                    title_font=dict(size=14, color="#000000", family="Arial"),
+                    tickfont=dict(size=12, color="#000000")
+                ),
+                showlegend=False,
+                margin=dict(l=80, r=80, t=100, b=80)
+            )
+            
+            st.plotly_chart(fig_rrg, use_container_width=True)
+            
             st.markdown("---")
-            st.markdown("### 🎬 Rotation Animation")
+            
+            # INTERACTIVE TABLE WITH SORTING, FILTERING, AND SEARCH
+            with st.expander("📊 **Detailed Analysis** (Click to expand/collapse)", expanded=True):
+                table_rows = ""
+                for _, row in df.iterrows():
+                    status_class = f"status-{row['Status'].lower()}"
+                    table_rows += f"""
+                    <tr>
+                        <td style="color: #ffffff !important;">{int(row['Sl No.'])}</td>
+                        <td style="color: #60a5fa !important; text-align: left;"><a href="{row['TV Link']}" target="_blank" style="color: #60a5fa !important; text-decoration: none; text-align: left; font-weight: bold;">{row['Symbol']}</a></td>
+                        <td style="color: #e5e7eb !important; text-align: left;">{row['Industry']}</td>
+                        <td style="color: #ffffff !important;">{row['Price']:.2f}</td>
+                        <td style="color: #ffffff !important;">{row['Change %']:+.2f}</td>
+                        <td style="color: #ffffff !important;">{row['RRG Power']:.2f}</td>
+                        <td><span class="{status_class}">{row['Status']}</span></td>
+                        <td style="color: #ffffff !important;">{row['RS-Ratio']:.2f}</td>
+                        <td style="color: #ffffff !important;">{row['RS-Momentum']:.2f}</td>
+                        <td style="color: #ffffff !important;">{row['Distance']:.2f}</td>
+                        <td style="color: #fbbf24 !important;">{row['Direction']}</td>
+                        <td style="color: #ffffff !important;">{row['Velocity']:.3f}</td>
+                    </tr>
+                    """
+                
+                html_table = f"""
+                <style>
+                    .rrg-table-wrapper {{
+                        max-height: 650px;
+                        overflow-y: auto;
+                        overflow-x: auto;
+                        border: 2px solid #4b5563;
+                        border-radius: 8px;
+                        background-color: #1f2937;
+                    }}
+                    .search-container {{
+                        padding: 15px;
+                        background-color: #111827;
+                        border-bottom: 2px solid #4b5563;
+                        display: flex;
+                        gap: 10px;
+                        align-items: center;
+                        flex-wrap: wrap;
+                    }}
+                    .search-box {{
+                        padding: 8px 12px;
+                        background-color: #374151;
+                        border: 1px solid #4b5563;
+                        border-radius: 6px;
+                        color: #ffffff;
+                        font-size: 13px;
+                        outline: none;
+                        min-width: 200px;
+                    }}
+                    .search-box:focus {{
+                        border-color: #60a5fa;
+                    }}
+                    .filter-select {{
+                        padding: 8px 12px;
+                        background-color: #374151;
+                        border: 1px solid #4b5563;
+                        border-radius: 6px;
+                        color: #ffffff;
+                        font-size: 13px;
+                        outline: none;
+                    }}
+                    .clear-btn {{
+                        padding: 8px 16px;
+                        background-color: #ef4444;
+                        border: none;
+                        border-radius: 6px;
+                        color: #ffffff;
+                        font-size: 13px;
+                        cursor: pointer;
+                        font-weight: bold;
+                    }}
+                    .clear-btn:hover {{
+                        background-color: #dc2626;
+                    }}
+                    .rrg-table-custom {{
+                        width: 100%;
+                        border-collapse: collapse;
+                        font-size: 14px;
+                        font-family: 'Segoe UI', Arial, sans-serif;
+                    }}
+                    .rrg-table-custom thead {{
+                        position: sticky;
+                        top: 0;
+                        z-index: 100;
+                        background-color: #111827;
+                    }}
+                    .rrg-table-custom th {{
+                        background-color: #111827 !important;
+                        color: #ffffff !important;
+                        padding: 14px 10px !important;
+                        text-align: center !important;
+                        font-weight: bold !important;
+                        border: 1px solid #4b5563 !important;
+                        font-size: 13px !important;
+                        cursor: pointer;
+                        user-select: none;
+                    }}
+                    .rrg-table-custom th:hover {{
+                        background-color: #1f2937 !important;
+                    }}
+                    .rrg-table-custom th::after {{
+                        content: ' ⇅';
+                        opacity: 0.5;
+                    }}
+                    .rrg-table-custom td {{
+                        padding: 10px !important;
+                        text-align: center !important;
+                        border: 1px solid #4b5563 !important;
+                        color: #ffffff !important;
+                        background-color: #1f2937 !important;
+                        font-size: 13px !important;
+                    }}
+                    .rrg-table-custom tbody tr:nth-child(even) td {{
+                        background-color: #374151 !important;
+                    }}
+                    .rrg-table-custom tbody tr:hover td {{
+                        background-color: #4b5563 !important;
+                    }}
+                    .status-leading {{
+                        background: linear-gradient(135deg, rgba(34, 197, 94, 0.7), rgba(34, 197, 94, 0.5)) !important;
+                        color: #4ade80 !important;
+                        font-weight: bold !important;
+                        padding: 6px 14px !important;
+                        border-radius: 6px !important;
+                        display: inline-block !important;
+                    }}
+                    .status-improving {{
+                        background: linear-gradient(135deg, rgba(59, 130, 246, 0.7), rgba(59, 130, 246, 0.5)) !important;
+                        color: #60a5fa !important;
+                        font-weight: bold !important;
+                        padding: 6px 14px !important;
+                        border-radius: 6px !important;
+                        display: inline-block !important;
+                    }}
+                    .status-weakening {{
+                        background: linear-gradient(135deg, rgba(251, 191, 36, 0.7), rgba(251, 191, 36, 0.5)) !important;
+                        color: #fbbf24 !important;
+                        font-weight: bold !important;
+                        padding: 6px 14px !important;
+                        border-radius: 6px !important;
+                        display: inline-block !important;
+                    }}
+                    .status-lagging {{
+                        background: linear-gradient(135deg, rgba(239, 68, 68, 0.7), rgba(239, 68, 68, 0.5)) !important;
+                        color: #f87171 !important;
+                        font-weight: bold !important;
+                        padding: 6px 14px !important;
+                        border-radius: 6px !important;
+                        display: inline-block !important;
+                    }}
+                </style>
+                
+                <div class="search-container">
+                    <input type="text" id="searchBox" class="search-box" placeholder="🔍 Search by Symbol or Name..." onkeyup="filterTable()">
+                    <select id="statusFilter" class="filter-select" onchange="filterTable()">
+                        <option value="">All Status</option>
+                        <option value="Leading">🟢 Leading</option>
+                        <option value="Improving">🔵 Improving</option>
+                        <option value="Weakening">🟡 Weakening</option>
+                        <option value="Lagging">🔴 Lagging</option>
+                    </select>
+                    <select id="industryFilter" class="filter-select" onchange="filterTable()">
+                        <option value="">All Industries</option>
+                        {' '.join([f'<option value="{ind}">{ind}</option>' for ind in sorted(df['Industry'].unique())])}
+                    </select>
+                    <button class="clear-btn" onclick="clearFilters()">Clear Filters</button>
+                </div>
+                
+                <div class="rrg-table-wrapper">
+                    <table class="rrg-table-custom" id="dataTable">
+                        <thead>
+                            <tr>
+                                <th onclick="sortTable(0)">Sl No.</th>
+                                <th onclick="sortTable(1)">Symbol</th>
+                                <th onclick="sortTable(2)">Industry</th>
+                                <th onclick="sortTable(3)">Price</th>
+                                <th onclick="sortTable(4)">Change %</th>
+                                <th onclick="sortTable(5)">Strength</th>
+                                <th onclick="sortTable(6)">Status</th>
+                                <th onclick="sortTable(7)">RS-Ratio</th>
+                                <th onclick="sortTable(8)">RS-Momentum</th>
+                                <th onclick="sortTable(9)">Distance</th>
+                                <th onclick="sortTable(10)">Direction</th>
+                                <th onclick="sortTable(11)">Velocity</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            {table_rows}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <script>
+                    let sortDirection = {{}};
+                    
+                    function sortTable(columnIndex) {{
+                        const table = document.getElementById("dataTable");
+                        const tbody = document.getElementById("tableBody");
+                        const rows = Array.from(tbody.querySelectorAll("tr"));
+                        
+                        // Toggle sort direction
+                        sortDirection[columnIndex] = !sortDirection[columnIndex];
+                        const ascending = sortDirection[columnIndex];
+                        
+                        rows.sort((a, b) => {{
+                            let aValue = a.cells[columnIndex].textContent.trim();
+                            let bValue = b.cells[columnIndex].textContent.trim();
+                            
+                            // Remove currency symbols and parse numbers
+                            aValue = aValue.replace(/[₹,%]/g, '');
+                            bValue = bValue.replace(/[₹,%]/g, '');
+                            
+                            // Try to parse as numbers
+                            const aNum = parseFloat(aValue);
+                            const bNum = parseFloat(bValue);
+                            
+                            if (!isNaN(aNum) && !isNaN(bNum)) {{
+                                return ascending ? aNum - bNum : bNum - aNum;
+                            }}
+                            
+                            // String comparison
+                            return ascending ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
+                        }});
+                        
+                        // Clear and re-append sorted rows
+                        tbody.innerHTML = '';
+                        rows.forEach(row => tbody.appendChild(row));
+                    }}
+                    
+                    function filterTable() {{
+                        const searchBox = document.getElementById("searchBox").value.toLowerCase();
+                        const statusFilter = document.getElementById("statusFilter").value;
+                        const industryFilter = document.getElementById("industryFilter").value;
+                        const tbody = document.getElementById("tableBody");
+                        const rows = tbody.getElementsByTagName("tr");
+                        
+                        for (let i = 0; i < rows.length; i++) {{
+                            const row = rows[i];
+                            const symbol = row.cells[1].textContent.toLowerCase();
+                            const industry = row.cells[2].textContent;
+                            const status = row.cells[6].textContent.trim();
+                            
+                            const matchesSearch = symbol.includes(searchBox);
+                            const matchesStatus = !statusFilter || status === statusFilter;
+                            const matchesIndustry = !industryFilter || industry === industryFilter;
+                            
+                            if (matchesSearch && matchesStatus && matchesIndustry) {{
+                                row.style.display = "";
+                            }} else {{
+                                row.style.display = "none";
+                            }}
+                        }}
+                    }}
+                    
+                    function clearFilters() {{
+                        document.getElementById("searchBox").value = "";
+                        document.getElementById("statusFilter").value = "";
+                        document.getElementById("industryFilter").value = "";
+                        filterTable();
+                    }}
+                </script>
+                """
+                
+                st.components.v1.html(html_table, height=700, scrolling=True)
+    
+    
+
+        with tab2:
+            st.markdown("### 🎬 Stock Rotation Animation")
+            st.info(f"Analyze rotation patterns over {trail_length} periods")
 
             # Prepare animation data
             animation_history = {}
@@ -629,80 +899,62 @@ if st.session_state.df_cache is not None:
                         'rs_momentum': tail_data['rs_momentum'][-max_len:]
                     }
 
-            max_frames = max([len(animation_history[sym]['rs_ratio']) 
-                            for sym in animation_history if animation_history[sym]['rs_ratio']], default=1)
+            if animation_history:
+                max_frames = max([len(animation_history[sym]['rs_ratio']) 
+                                for sym in animation_history if animation_history[sym]['rs_ratio']], default=1)
 
-            # Build animation frames
-            anim_frames = []
-            for frame_idx in range(1, max_frames + 1):
-                frame_data = []
-                for status in ["Leading", "Improving", "Weakening", "Lagging"]:
-                    df_status = df_graph[df_graph['Status'] == status]
-                    for _, row in df_status.iterrows():
-                        if row['Symbol'] in animation_history:
-                            hist = animation_history[row['Symbol']]
-                            if frame_idx <= len(hist['rs_ratio']):
-                                frame_data.append({
-                                    'symbol': row['Symbol'],
-                                    'x': hist['rs_ratio'][frame_idx - 1],
-                                    'y': hist['rs_momentum'][frame_idx - 1],
-                                    'status': status
-                                })
-                anim_frames.append(frame_data)
-
-            # Create animated figure
-            fig_anim = go.Figure()
-
-            # Quadrant backgrounds
-            fig_anim.add_shape(type="rect", x0=100, y0=100, x1=100+quadrant_size, y1=100+quadrant_size,
-                fillcolor="rgba(34, 197, 94, 0.12)", line=dict(color="rgba(34, 197, 94, 0.4)", width=2), layer="below")
-            fig_anim.add_shape(type="rect", x0=100-quadrant_size, y0=100, x1=100, y1=100+quadrant_size,
-                fillcolor="rgba(59, 130, 246, 0.12)", line=dict(color="rgba(59, 130, 246, 0.4)", width=2), layer="below")
-            fig_anim.add_shape(type="rect", x0=100-quadrant_size, y0=100-quadrant_size, x1=100, y1=100,
-                fillcolor="rgba(251, 191, 36, 0.12)", line=dict(color="rgba(251, 191, 36, 0.4)", width=2), layer="below")
-            fig_anim.add_shape(type="rect", x0=100, y0=100-quadrant_size, x1=100+quadrant_size, y1=100,
-                fillcolor="rgba(239, 68, 68, 0.12)", line=dict(color="rgba(239, 68, 68, 0.4)", width=2), layer="below")
-
-            # Quadrant labels
-            fig_anim.add_annotation(x=100+quadrant_size*0.5, y=100+quadrant_size*0.5, text="Leading",
-                showarrow=False, font=dict(size=18, color="#0d4a1f", family="Arial"))
-            fig_anim.add_annotation(x=100-quadrant_size*0.5, y=100+quadrant_size*0.5, text="Improving",
-                showarrow=False, font=dict(size=18, color="#1e3a8a", family="Arial"))
-            fig_anim.add_annotation(x=100-quadrant_size*0.5, y=100-quadrant_size*0.5, text="Weakening",
-                showarrow=False, font=dict(size=18, color="#713f12", family="Arial"))
-            fig_anim.add_annotation(x=100+quadrant_size*0.5, y=100-quadrant_size*0.5, text="Lagging",
-                showarrow=False, font=dict(size=18, color="#7f1d1d", family="Arial"))
-
-            # Center lines
-            fig_anim.add_hline(y=100, line_dash="dash", line_color="rgba(100, 100, 100, 0.6)", line_width=2)
-            fig_anim.add_vline(x=100, line_dash="dash", line_color="rgba(100, 100, 100, 0.6)", line_width=2)
-
-            # Initial frame
-            if anim_frames:
-                initial = anim_frames[0]
-                for status in ["Leading", "Improving", "Weakening", "Lagging"]:
-                    status_pts = [p for p in initial if p['status'] == status]
-                    if status_pts:
-                        fig_anim.add_trace(go.Scatter(
-                            x=[p['x'] for p in status_pts],
-                            y=[p['y'] for p in status_pts],
-                            mode='markers+text',
-                            name=status,
-                            text=[p['symbol'] for p in status_pts],
-                            textposition="top center",
-                            marker=dict(size=16, color=QUADRANT_COLORS[status],
-                                       line=dict(color='white', width=2.5), opacity=0.95),
-                            hovertemplate='<b>%{text}</b><br>RS-Ratio: %{x:.2f}<br>RS-Momentum: %{y:.2f}<extra></extra>'
-                        ))
-
-                # Create plotly animation frames
-                plotly_frames = []
-                for idx, frame_data in enumerate(anim_frames):
-                    traces = []
+                # Build frames
+                anim_frames = []
+                for frame_idx in range(1, max_frames + 1):
+                    frame_data = []
                     for status in ["Leading", "Improving", "Weakening", "Lagging"]:
-                        status_pts = [p for p in frame_data if p['status'] == status]
+                        df_status = df_graph[df_graph['Status'] == status]
+                        for _, row in df_status.iterrows():
+                            if row['Symbol'] in animation_history:
+                                hist = animation_history[row['Symbol']]
+                                if frame_idx <= len(hist['rs_ratio']):
+                                    frame_data.append({
+                                        'symbol': row['Symbol'],
+                                        'x': hist['rs_ratio'][frame_idx - 1],
+                                        'y': hist['rs_momentum'][frame_idx - 1],
+                                        'status': status
+                                    })
+                    anim_frames.append(frame_data)
+
+                # Create animated figure
+                fig_anim = go.Figure()
+
+                # Quadrant backgrounds
+                fig_anim.add_shape(type="rect", x0=100, y0=100, x1=100+quadrant_size, y1=100+quadrant_size,
+                    fillcolor="rgba(34, 197, 94, 0.12)", line=dict(color="rgba(34, 197, 94, 0.4)", width=2), layer="below")
+                fig_anim.add_shape(type="rect", x0=100-quadrant_size, y0=100, x1=100, y1=100+quadrant_size,
+                    fillcolor="rgba(59, 130, 246, 0.12)", line=dict(color="rgba(59, 130, 246, 0.4)", width=2), layer="below")
+                fig_anim.add_shape(type="rect", x0=100-quadrant_size, y0=100-quadrant_size, x1=100, y1=100,
+                    fillcolor="rgba(251, 191, 36, 0.12)", line=dict(color="rgba(251, 191, 36, 0.4)", width=2), layer="below")
+                fig_anim.add_shape(type="rect", x0=100, y0=100-quadrant_size, x1=100+quadrant_size, y1=100,
+                    fillcolor="rgba(239, 68, 68, 0.12)", line=dict(color="rgba(239, 68, 68, 0.4)", width=2), layer="below")
+
+                # Quadrant labels
+                fig_anim.add_annotation(x=100+quadrant_size*0.5, y=100+quadrant_size*0.5, text="Leading",
+                    showarrow=False, font=dict(size=18, color="#0d4a1f", family="Arial"))
+                fig_anim.add_annotation(x=100-quadrant_size*0.5, y=100+quadrant_size*0.5, text="Improving",
+                    showarrow=False, font=dict(size=18, color="#1e3a8a", family="Arial"))
+                fig_anim.add_annotation(x=100-quadrant_size*0.5, y=100-quadrant_size*0.5, text="Weakening",
+                    showarrow=False, font=dict(size=18, color="#713f12", family="Arial"))
+                fig_anim.add_annotation(x=100+quadrant_size*0.5, y=100-quadrant_size*0.5, text="Lagging",
+                    showarrow=False, font=dict(size=18, color="#7f1d1d", family="Arial"))
+
+                # Center lines
+                fig_anim.add_hline(y=100, line_dash="dash", line_color="rgba(100, 100, 100, 0.6)", line_width=2)
+                fig_anim.add_vline(x=100, line_dash="dash", line_color="rgba(100, 100, 100, 0.6)", line_width=2)
+
+                # Initial frame
+                if anim_frames:
+                    initial = anim_frames[0]
+                    for status in ["Leading", "Improving", "Weakening", "Lagging"]:
+                        status_pts = [p for p in initial if p['status'] == status]
                         if status_pts:
-                            traces.append(go.Scatter(
+                            fig_anim.add_trace(go.Scatter(
                                 x=[p['x'] for p in status_pts],
                                 y=[p['y'] for p in status_pts],
                                 mode='markers+text',
@@ -713,328 +965,79 @@ if st.session_state.df_cache is not None:
                                            line=dict(color='white', width=2.5), opacity=0.95),
                                 hovertemplate='<b>%{text}</b><br>RS-Ratio: %{x:.2f}<br>RS-Momentum: %{y:.2f}<extra></extra>'
                             ))
-                    plotly_frames.append(go.Frame(data=traces, name=str(idx)))
 
-                fig_anim.frames = plotly_frames
+                    # Create plotly frames
+                    plotly_frames = []
+                    for idx, frame_data in enumerate(anim_frames):
+                        traces = []
+                        for status in ["Leading", "Improving", "Weakening", "Lagging"]:
+                            status_pts = [p for p in frame_data if p['status'] == status]
+                            if status_pts:
+                                traces.append(go.Scatter(
+                                    x=[p['x'] for p in status_pts],
+                                    y=[p['y'] for p in status_pts],
+                                    mode='markers+text',
+                                    name=status,
+                                    text=[p['symbol'] for p in status_pts],
+                                    textposition="top center",
+                                    marker=dict(size=16, color=QUADRANT_COLORS[status],
+                                               line=dict(color='white', width=2.5), opacity=0.95),
+                                    hovertemplate='<b>%{text}</b><br>RS-Ratio: %{x:.2f}<br>RS-Momentum: %{y:.2f}<extra></extra>'
+                                ))
+                        plotly_frames.append(go.Frame(data=traces, name=str(idx)))
 
-                # Animation controls (Play/Pause + Slider)
-                fig_anim.update_layout(
-                    updatemenus=[{
-                        'type': 'buttons',
-                        'showactive': False,
-                        'buttons': [
-                            {'label': '▶ Play', 'method': 'animate',
-                             'args': [None, {'frame': {'duration': 800, 'redraw': True},
-                                            'fromcurrent': True, 'mode': 'immediate',
-                                            'transition': {'duration': 300, 'easing': 'cubic-in-out'}}]},
-                            {'label': '⏸ Pause', 'method': 'animate',
-                             'args': [[None], {'frame': {'duration': 0, 'redraw': False},
-                                              'mode': 'immediate', 'transition': {'duration': 0}}]}
-                        ],
-                        'x': 0.1, 'y': 1.15, 'xanchor': 'left', 'yanchor': 'top'
-                    }],
-                    sliders=[{
-                        'active': 0,
-                        'steps': [{'args': [[f.name], {'frame': {'duration': 0, 'redraw': True},
-                                                       'mode': 'immediate', 'transition': {'duration': 0}}],
-                                  'label': f"Period {i+1}/{len(plotly_frames)}", 'method': 'animate'}
-                                 for i, f in enumerate(plotly_frames)],
-                        'x': 0.1, 'len': 0.85, 'xanchor': 'left', 'y': 0,
-                        'yanchor': 'top', 'pad': {'b': 10, 't': 50},
-                        'currentvalue': {'visible': True, 'prefix': 'Period: ', 'xanchor': 'right'},
-                        'transition': {'duration': 300, 'easing': 'cubic-in-out'}
-                    }]
-                )
+                    fig_anim.frames = plotly_frames
 
-                fig_anim.update_layout(
-                    height=700,
-                    plot_bgcolor='rgba(18, 18, 18, 0.95)',
-                    paper_bgcolor='rgba(10, 10, 10, 0.98)',
-                    font=dict(color='#e0e0e0', size=12, family='Inter, sans-serif'),
-                    xaxis=dict(title="RS-Ratio →", gridcolor='rgba(50, 50, 50, 0.5)',
-                              range=[x_min, x_max], zeroline=False),
-                    yaxis=dict(title="RS-Momentum →", gridcolor='rgba(50, 50, 50, 0.5)',
-                              range=[y_min, y_max], zeroline=False),
-                    legend=dict(x=1.02, y=1, bgcolor='rgba(30, 30, 30, 0.8)',
-                               bordercolor='rgba(100, 100, 100, 0.3)', borderwidth=1),
-                    hovermode='closest',
-                    title=dict(text=f"Animated RRG: {csv_selected} | {tf_name} | {bench_name}",
-                              font=dict(size=16, color='#ffffff'), x=0.5, xanchor='center')
-                )
+                    # Animation controls
+                    fig_anim.update_layout(
+                        updatemenus=[{
+                            'type': 'buttons',
+                            'showactive': False,
+                            'buttons': [
+                                {'label': '▶ Play', 'method': 'animate',
+                                 'args': [None, {'frame': {'duration': 800, 'redraw': True},
+                                                'fromcurrent': True, 'mode': 'immediate',
+                                                'transition': {'duration': 300, 'easing': 'cubic-in-out'}}]},
+                                {'label': '⏸ Pause', 'method': 'animate',
+                                 'args': [[None], {'frame': {'duration': 0, 'redraw': False},
+                                                  'mode': 'immediate', 'transition': {'duration': 0}}]}
+                            ],
+                            'x': 0.1, 'y': 1.15, 'xanchor': 'left', 'yanchor': 'top'
+                        }],
+                        sliders=[{
+                            'active': 0,
+                            'steps': [{'args': [[f.name], {'frame': {'duration': 0, 'redraw': True},
+                                                           'mode': 'immediate', 'transition': {'duration': 0}}],
+                                      'label': f"Period {i+1}/{len(plotly_frames)}", 'method': 'animate'}
+                                     for i, f in enumerate(plotly_frames)],
+                            'x': 0.1, 'len': 0.85, 'xanchor': 'left', 'y': 0,
+                            'yanchor': 'top', 'pad': {'b': 10, 't': 50},
+                            'currentvalue': {'visible': True, 'prefix': 'Period: ', 'xanchor': 'right'},
+                            'transition': {'duration': 300, 'easing': 'cubic-in-out'}
+                        }]
+                    )
 
-                st.plotly_chart(fig_anim, use_container_width=True, config={'displayModeBar': True})
-                st.info(f"✅ Animation: {len(anim_frames)} periods | Trail Length: {trail_length}")
+                    fig_anim.update_layout(
+                        height=700,
+                        plot_bgcolor='rgba(18, 18, 18, 0.95)',
+                        paper_bgcolor='rgba(10, 10, 10, 0.98)',
+                        font=dict(color='#e0e0e0', size=12, family='Inter, sans-serif'),
+                        xaxis=dict(title="RS-Ratio →", gridcolor='rgba(50, 50, 50, 0.5)',
+                                  range=[x_min, x_max], zeroline=False),
+                        yaxis=dict(title="RS-Momentum →", gridcolor='rgba(50, 50, 50, 0.5)',
+                                  range=[y_min, y_max], zeroline=False),
+                        legend=dict(x=1.02, y=1, bgcolor='rgba(30, 30, 30, 0.8)',
+                                   bordercolor='rgba(100, 100, 100, 0.3)', borderwidth=1),
+                        hovermode='closest',
+                        title=dict(text=f"Animated RRG: {csv_selected} | {tf_name} | {bench_name}",
+                                  font=dict(size=16, color='#ffffff'), x=0.5, xanchor='center')
+                    )
 
-        
-        st.markdown("---")
-        
-        # INTERACTIVE TABLE WITH SORTING, FILTERING, AND SEARCH
-        with st.expander("📊 **Detailed Analysis** (Click to expand/collapse)", expanded=True):
-            table_rows = ""
-            for _, row in df.iterrows():
-                status_class = f"status-{row['Status'].lower()}"
-                table_rows += f"""
-                <tr>
-                    <td style="color: #ffffff !important;">{int(row['Sl No.'])}</td>
-                    <td style="color: #60a5fa !important; text-align: left;"><a href="{row['TV Link']}" target="_blank" style="color: #60a5fa !important; text-decoration: none; text-align: left; font-weight: bold;">{row['Symbol']}</a></td>
-                    <td style="color: #e5e7eb !important; text-align: left;">{row['Industry']}</td>
-                    <td style="color: #ffffff !important;">{row['Price']:.2f}</td>
-                    <td style="color: #ffffff !important;">{row['Change %']:+.2f}</td>
-                    <td style="color: #ffffff !important;">{row['RRG Power']:.2f}</td>
-                    <td><span class="{status_class}">{row['Status']}</span></td>
-                    <td style="color: #ffffff !important;">{row['RS-Ratio']:.2f}</td>
-                    <td style="color: #ffffff !important;">{row['RS-Momentum']:.2f}</td>
-                    <td style="color: #ffffff !important;">{row['Distance']:.2f}</td>
-                    <td style="color: #fbbf24 !important;">{row['Direction']}</td>
-                    <td style="color: #ffffff !important;">{row['Velocity']:.3f}</td>
-                </tr>
-                """
-            
-            html_table = f"""
-            <style>
-                .rrg-table-wrapper {{
-                    max-height: 650px;
-                    overflow-y: auto;
-                    overflow-x: auto;
-                    border: 2px solid #4b5563;
-                    border-radius: 8px;
-                    background-color: #1f2937;
-                }}
-                .search-container {{
-                    padding: 15px;
-                    background-color: #111827;
-                    border-bottom: 2px solid #4b5563;
-                    display: flex;
-                    gap: 10px;
-                    align-items: center;
-                    flex-wrap: wrap;
-                }}
-                .search-box {{
-                    padding: 8px 12px;
-                    background-color: #374151;
-                    border: 1px solid #4b5563;
-                    border-radius: 6px;
-                    color: #ffffff;
-                    font-size: 13px;
-                    outline: none;
-                    min-width: 200px;
-                }}
-                .search-box:focus {{
-                    border-color: #60a5fa;
-                }}
-                .filter-select {{
-                    padding: 8px 12px;
-                    background-color: #374151;
-                    border: 1px solid #4b5563;
-                    border-radius: 6px;
-                    color: #ffffff;
-                    font-size: 13px;
-                    outline: none;
-                }}
-                .clear-btn {{
-                    padding: 8px 16px;
-                    background-color: #ef4444;
-                    border: none;
-                    border-radius: 6px;
-                    color: #ffffff;
-                    font-size: 13px;
-                    cursor: pointer;
-                    font-weight: bold;
-                }}
-                .clear-btn:hover {{
-                    background-color: #dc2626;
-                }}
-                .rrg-table-custom {{
-                    width: 100%;
-                    border-collapse: collapse;
-                    font-size: 14px;
-                    font-family: 'Segoe UI', Arial, sans-serif;
-                }}
-                .rrg-table-custom thead {{
-                    position: sticky;
-                    top: 0;
-                    z-index: 100;
-                    background-color: #111827;
-                }}
-                .rrg-table-custom th {{
-                    background-color: #111827 !important;
-                    color: #ffffff !important;
-                    padding: 14px 10px !important;
-                    text-align: center !important;
-                    font-weight: bold !important;
-                    border: 1px solid #4b5563 !important;
-                    font-size: 13px !important;
-                    cursor: pointer;
-                    user-select: none;
-                }}
-                .rrg-table-custom th:hover {{
-                    background-color: #1f2937 !important;
-                }}
-                .rrg-table-custom th::after {{
-                    content: ' ⇅';
-                    opacity: 0.5;
-                }}
-                .rrg-table-custom td {{
-                    padding: 10px !important;
-                    text-align: center !important;
-                    border: 1px solid #4b5563 !important;
-                    color: #ffffff !important;
-                    background-color: #1f2937 !important;
-                    font-size: 13px !important;
-                }}
-                .rrg-table-custom tbody tr:nth-child(even) td {{
-                    background-color: #374151 !important;
-                }}
-                .rrg-table-custom tbody tr:hover td {{
-                    background-color: #4b5563 !important;
-                }}
-                .status-leading {{
-                    background: linear-gradient(135deg, rgba(34, 197, 94, 0.7), rgba(34, 197, 94, 0.5)) !important;
-                    color: #4ade80 !important;
-                    font-weight: bold !important;
-                    padding: 6px 14px !important;
-                    border-radius: 6px !important;
-                    display: inline-block !important;
-                }}
-                .status-improving {{
-                    background: linear-gradient(135deg, rgba(59, 130, 246, 0.7), rgba(59, 130, 246, 0.5)) !important;
-                    color: #60a5fa !important;
-                    font-weight: bold !important;
-                    padding: 6px 14px !important;
-                    border-radius: 6px !important;
-                    display: inline-block !important;
-                }}
-                .status-weakening {{
-                    background: linear-gradient(135deg, rgba(251, 191, 36, 0.7), rgba(251, 191, 36, 0.5)) !important;
-                    color: #fbbf24 !important;
-                    font-weight: bold !important;
-                    padding: 6px 14px !important;
-                    border-radius: 6px !important;
-                    display: inline-block !important;
-                }}
-                .status-lagging {{
-                    background: linear-gradient(135deg, rgba(239, 68, 68, 0.7), rgba(239, 68, 68, 0.5)) !important;
-                    color: #f87171 !important;
-                    font-weight: bold !important;
-                    padding: 6px 14px !important;
-                    border-radius: 6px !important;
-                    display: inline-block !important;
-                }}
-            </style>
-            
-            <div class="search-container">
-                <input type="text" id="searchBox" class="search-box" placeholder="🔍 Search by Symbol or Name..." onkeyup="filterTable()">
-                <select id="statusFilter" class="filter-select" onchange="filterTable()">
-                    <option value="">All Status</option>
-                    <option value="Leading">🟢 Leading</option>
-                    <option value="Improving">🔵 Improving</option>
-                    <option value="Weakening">🟡 Weakening</option>
-                    <option value="Lagging">🔴 Lagging</option>
-                </select>
-                <select id="industryFilter" class="filter-select" onchange="filterTable()">
-                    <option value="">All Industries</option>
-                    {' '.join([f'<option value="{ind}">{ind}</option>' for ind in sorted(df['Industry'].unique())])}
-                </select>
-                <button class="clear-btn" onclick="clearFilters()">Clear Filters</button>
-            </div>
-            
-            <div class="rrg-table-wrapper">
-                <table class="rrg-table-custom" id="dataTable">
-                    <thead>
-                        <tr>
-                            <th onclick="sortTable(0)">Sl No.</th>
-                            <th onclick="sortTable(1)">Symbol</th>
-                            <th onclick="sortTable(2)">Industry</th>
-                            <th onclick="sortTable(3)">Price</th>
-                            <th onclick="sortTable(4)">Change %</th>
-                            <th onclick="sortTable(5)">Strength</th>
-                            <th onclick="sortTable(6)">Status</th>
-                            <th onclick="sortTable(7)">RS-Ratio</th>
-                            <th onclick="sortTable(8)">RS-Momentum</th>
-                            <th onclick="sortTable(9)">Distance</th>
-                            <th onclick="sortTable(10)">Direction</th>
-                            <th onclick="sortTable(11)">Velocity</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tableBody">
-                        {table_rows}
-                    </tbody>
-                </table>
-            </div>
-            
-            <script>
-                let sortDirection = {{}};
-                
-                function sortTable(columnIndex) {{
-                    const table = document.getElementById("dataTable");
-                    const tbody = document.getElementById("tableBody");
-                    const rows = Array.from(tbody.querySelectorAll("tr"));
-                    
-                    // Toggle sort direction
-                    sortDirection[columnIndex] = !sortDirection[columnIndex];
-                    const ascending = sortDirection[columnIndex];
-                    
-                    rows.sort((a, b) => {{
-                        let aValue = a.cells[columnIndex].textContent.trim();
-                        let bValue = b.cells[columnIndex].textContent.trim();
-                        
-                        // Remove currency symbols and parse numbers
-                        aValue = aValue.replace(/[₹,%]/g, '');
-                        bValue = bValue.replace(/[₹,%]/g, '');
-                        
-                        // Try to parse as numbers
-                        const aNum = parseFloat(aValue);
-                        const bNum = parseFloat(bValue);
-                        
-                        if (!isNaN(aNum) && !isNaN(bNum)) {{
-                            return ascending ? aNum - bNum : bNum - aNum;
-                        }}
-                        
-                        // String comparison
-                        return ascending ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
-                    }});
-                    
-                    // Clear and re-append sorted rows
-                    tbody.innerHTML = '';
-                    rows.forEach(row => tbody.appendChild(row));
-                }}
-                
-                function filterTable() {{
-                    const searchBox = document.getElementById("searchBox").value.toLowerCase();
-                    const statusFilter = document.getElementById("statusFilter").value;
-                    const industryFilter = document.getElementById("industryFilter").value;
-                    const tbody = document.getElementById("tableBody");
-                    const rows = tbody.getElementsByTagName("tr");
-                    
-                    for (let i = 0; i < rows.length; i++) {{
-                        const row = rows[i];
-                        const symbol = row.cells[1].textContent.toLowerCase();
-                        const industry = row.cells[2].textContent;
-                        const status = row.cells[6].textContent.trim();
-                        
-                        const matchesSearch = symbol.includes(searchBox);
-                        const matchesStatus = !statusFilter || status === statusFilter;
-                        const matchesIndustry = !industryFilter || industry === industryFilter;
-                        
-                        if (matchesSearch && matchesStatus && matchesIndustry) {{
-                            row.style.display = "";
-                        }} else {{
-                            row.style.display = "none";
-                        }}
-                    }}
-                }}
-                
-                function clearFilters() {{
-                    document.getElementById("searchBox").value = "";
-                    document.getElementById("statusFilter").value = "";
-                    document.getElementById("industryFilter").value = "";
-                    filterTable();
-                }}
-            </script>
-            """
-            
-            st.components.v1.html(html_table, height=700, scrolling=True)
-    
+                    st.plotly_chart(fig_anim, use_container_width=True, config={'displayModeBar': True})
+                    st.success(f"✅ Animation: {len(anim_frames)} periods | Trail: {trail_length}")
+            else:
+                st.warning("No animation data available. Load data first.")
+
     # ========================================================================
     # RIGHT SIDEBAR - TOP 30 PER QUADRANT
     # ========================================================================
