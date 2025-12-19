@@ -39,7 +39,7 @@ TF_TO_INTERVAL = {"Daily": "1d", "Weekly": "1wk", "Monthly": "1mo"}
 BENCH_CHOICES = {"Nifty 500": "^CRSLDX", "Nifty 200": "^CNX200", "Nifty 50": "^NSEI"}
 
 IST_TZ = "Asia/Kolkata"
-BAR_CUTOFF_HOUR = 18
+BAR_CUTOFF_HOUR = 16
 NET_TIME_MAX_AGE = 300
 
 CACHE_DIR = pathlib.Path("cache")
