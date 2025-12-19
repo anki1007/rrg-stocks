@@ -199,7 +199,7 @@ def status_bg_color(x,y):
     return {"Lagging":"#e06a6a","Leading":"#3fa46a","Improving":"#5d86d1","Weakening":"#e2d06b"}.get(m,"#aaaaaa")
 
 # -------------------- Closed-bar enforcement --------
-IST_TZ="Asia/Kolkata"; BAR_CUTOFF_HOUR=10; NET_TIME_MAX_AGE=300
+IST_TZ="Asia/Kolkata"; BAR_CUTOFF_HOUR=16; NET_TIME_MAX_AGE=300
 def _utc_now_from_network(timeout=2.5) -> pd.Timestamp:
     try:
         import ntplib
@@ -585,5 +585,6 @@ with dl2:
                        file_name=f"table_{date_str}.csv", mime="text/csv", use_container_width=True)
 
 st.caption("Names open TradingView. Use Play/Pause to watch rotation; Speed adjusts frame interval, and Loop wraps frames.")
+
 
 
