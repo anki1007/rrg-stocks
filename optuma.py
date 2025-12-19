@@ -62,8 +62,8 @@ QUADRANT_COLORS = {
     "Lagging": "#ef4444"
 }
 
-WINDOW = 12
-TAIL_LENGTH = 5
+WINDOW = 14
+TAIL_LENGTH = 8
 
 # ============================================================================
 # HELPER FUNCTIONS
@@ -1102,3 +1102,4 @@ if st.session_state.df_cache is not None:
 
 else:
     st.info("⬅️ Select indices and click **Load Data** to start analysis")
+
