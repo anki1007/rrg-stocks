@@ -37,10 +37,11 @@ BENCHMARKS = {
 }
 
 TIMEFRAMES = {
-    "5 min close": ("5m", "60d"),
-    "15 min close": ("15m", "60d"),
-    "30 min close": ("30m", "60d"),
-    "1 hr close": ("60m", "90d"),
+    "5 min": ("5m", "60d"),
+    "15 min": ("15m", "60d"),
+    "30 min": ("30m", "60d"),
+    "1 hr": ("60m", "90d"),
+    "4 hr": ("240m", "120d"),
     "Daily": ("1d", "5y"),
     "Weekly": ("1wk", "10y"),
     "Monthly": ("1mo", "20y")
@@ -189,7 +190,7 @@ def calculate_price_change(current_price, historical_price):
         return 0
     return ((current_price - historical_price) / historical_price) * 100
 
-def select_graph_stocks(df, min_stocks=40):
+def select_graph_stocks(df, min_stocks=60):
     """Select stocks for graph display with quadrant balancing"""
     graph_stocks = []
     
@@ -258,11 +259,11 @@ rank_by = st.sidebar.selectbox(
 )
 
 st.sidebar.markdown("---")
-top_n = st.sidebar.slider("Show Top N", min_value=5, max_value=50, value=15)
+top_n = st.sidebar.slider("Show Top N", min_value=5, max_value=100, value=50)
 st.sidebar.markdown("---")
 # Animation Controls
 st.sidebar.markdown("---")
-trail_length = st.sidebar.slider("Trail Length", min_value=5, max_value=14, value=5)
+trail_length = st.sidebar.slider("Trail Length", min_value=1, max_value=14, value=5)
 st.sidebar.markdown("---")
 export_csv = st.sidebar.checkbox("Export CSV", value=True)
 
@@ -1102,4 +1103,5 @@ if st.session_state.df_cache is not None:
 
 else:
     st.info("⬅️ Select indices and click **Load Data** to start analysis")
+
 
