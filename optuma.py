@@ -1,28 +1,16 @@
 import numpy as np
-
 import pandas as pd
-
 import yfinance as yf
-
 import streamlit as st
-
 import plotly.graph_objects as go
-
 import requests
-
 from datetime import datetime, timedelta
-
 import io
-
 import warnings
-
 import matplotlib.pyplot as plt
-
 from matplotlib.animation import FuncAnimation
-
-from streamlit_lottie import st_lottie
-
 warnings.filterwarnings('ignore')
+
 
 # ============================================================================
 
@@ -1440,3 +1428,4 @@ if st.session_state.df_cache is not None:
                     use_container_width=True
 
                 )
+
