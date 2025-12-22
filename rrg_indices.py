@@ -433,8 +433,8 @@ def symbol_color_map(symbols):
 st.sidebar.header("RRG — Controls")
 
 # Data source controls
-uploaded = st.sidebar.file_uploader("Upload indices CSV (optional override)", type=["csv"])
-if st.sidebar.button("Reload universe"):
+#uploaded = st.sidebar.file_uploader("Upload indices CSV (optional override)", type=["csv"])
+#if st.sidebar.button("Reload universe"):
     st.cache_data.clear()
     st.rerun()
 
