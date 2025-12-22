@@ -504,9 +504,22 @@ period = PERIOD_MAP[period_label]
 rank_modes = ["Momentum Score", "RS-Ratio", "RS-Momentum", "Price %Δ (tail)", "Momentum Slope (tail)"]
 rank_mode = st.sidebar.selectbox("Rank by", rank_modes, index=0)
 tail_len = st.sidebar.slider("Trail Length", 1, 20, DEFAULT_TAIL, 1)
+
+# Quadrant filtering
+st.sidebar.markdown("---")
+st.sidebar.markdown("**Quadrant Filters**")
+top_per_quadrant = st.sidebar.slider("Top N per quadrant", 5, 50, 25, 5, help="Show top N stocks from each quadrant by Momentum Score")
+show_quadrants = {
+    "Leading": st.sidebar.checkbox("Leading", value=True),
+    "Improving": st.sidebar.checkbox("Improving", value=True),
+    "Weakening": st.sidebar.checkbox("Weakening", value=True),
+    "Lagging": st.sidebar.checkbox("Lagging", value=True),
+}
+st.sidebar.markdown("---")
+
 show_labels = st.sidebar.toggle("Show labels on chart", value=False)
 label_top_n = st.sidebar.slider("Label top N by distance", 3, 30, 12, 1, disabled=not show_labels)
-max_rank_display = st.sidebar.slider("Max items in ranking panel", 10, 35, 22, 1)
+max_rank_display = st.sidebar.slider("Max items in ranking panel", 10, 50, 30, 1)
 
 diag = st.sidebar.checkbox("Show diagnostics", value=False)
 
@@ -560,6 +573,45 @@ SYMBOL_COLORS = symbol_color_map(tickers)
 idx = bench_idx
 idx_len = len(idx)
 
+# -------------------- Quadrant-based filtering --------------------
+def get_quadrant(t):
+    """Get the quadrant for a ticker at current end_idx"""
+    rr = rs_ratio_map[t].iloc[st.session_state.end_idx if "end_idx" in st.session_state else -1]
+    mm = rs_mom_map[t].iloc[st.session_state.end_idx if "end_idx" in st.session_state else -1]
+    return get_status(rr, mm)
+
+def get_momentum_score(t, idx_pos):
+    """Calculate momentum score (distance from center) for a ticker"""
+    rr = rs_ratio_map[t].iloc[idx_pos]
+    mm = rs_mom_map[t].iloc[idx_pos]
+    if pd.isna(rr) or pd.isna(mm):
+        return 0.0
+    return float(np.hypot(rr - 100.0, mm - 100.0))
+
+def filter_top_per_quadrant(all_tickers, idx_pos, top_n, quadrant_filter):
+    """Filter to top N stocks per quadrant by momentum score"""
+    # Group tickers by quadrant
+    quadrants = {"Leading": [], "Improving": [], "Weakening": [], "Lagging": []}
+    
+    for t in all_tickers:
+        rr = rs_ratio_map[t].iloc[idx_pos]
+        mm = rs_mom_map[t].iloc[idx_pos]
+        if pd.isna(rr) or pd.isna(mm):
+            continue
+        status = get_status(rr, mm)
+        if status in quadrants:
+            score = float(np.hypot(rr - 100.0, mm - 100.0))
+            quadrants[status].append((t, score))
+    
+    # Sort each quadrant by momentum score (descending) and take top N
+    filtered = []
+    for quadrant, stocks in quadrants.items():
+        if quadrant_filter.get(quadrant, True):  # Only include if quadrant is enabled
+            sorted_stocks = sorted(stocks, key=lambda x: x[1], reverse=True)[:top_n]
+            filtered.extend([t for t, _ in sorted_stocks])
+    
+    return set(filtered)
+
 # -------------------- Date index + Animation --------------------
 if "end_idx" not in st.session_state:
     st.session_state.end_idx = idx_len - 1
@@ -592,6 +644,14 @@ end_idx = st.slider(
 
 start_idx = max(end_idx - tail_len, 0)
 date_str = format_bar_date(idx[end_idx], interval)
+
+# Apply quadrant-based filtering
+st.session_state.visible_set = filter_top_per_quadrant(tickers, end_idx, top_per_quadrant, show_quadrants)
+
+# Show filter summary
+active_quadrants = [q for q, enabled in show_quadrants.items() if enabled]
+visible_count = len(st.session_state.visible_set)
+st.caption(f"Showing top {top_per_quadrant} per quadrant × {len(active_quadrants)} quadrants = **{visible_count} stocks** | Quadrants: {', '.join(active_quadrants)}")
 
 # -------- Title --------
 st.markdown(f"### {bench_label} — {period_label} — {interval_label} — {csv_disp} — {date_str}")
@@ -790,20 +850,140 @@ with plot_col:
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": True, "modeBarButtonsToRemove": ["lasso2d", "select2d"], "displaylogo": False})
 
 with rank_col:
-    st.markdown("### Ranking")
-    if ranked_syms:
-        rows_html = []
-        for sym in ranked_syms[:max_rank_display]:
-            rr = float(rs_ratio_map[sym].iloc[end_idx])
-            mm = float(rs_mom_map[sym].iloc[end_idx])
-            stat = get_status(rr, mm)
-            color = SYMBOL_COLORS.get(sym, "#333")
+    st.markdown("### Ranking by Quadrant")
+    
+    # Group by quadrant with momentum scores
+    quadrant_stocks = {"Leading": [], "Improving": [], "Weakening": [], "Lagging": []}
+    for sym in ranked_syms:
+        rr = float(rs_ratio_map[sym].iloc[end_idx])
+        mm = float(rs_mom_map[sym].iloc[end_idx])
+        status = get_status(rr, mm)
+        mom_score = float(np.hypot(rr - 100.0, mm - 100.0))
+        if status in quadrant_stocks:
+            quadrant_stocks[status].append((sym, mom_score, rr, mm))
+    
+    # Sort each quadrant by momentum score
+    for quadrant in quadrant_stocks:
+        quadrant_stocks[quadrant].sort(key=lambda x: x[1], reverse=True)
+    
+    # Quadrant colors and icons
+    q_config = {
+        "Leading": {"color": "#3fa46a", "bg": "rgba(63, 164, 106, 0.15)", "icon": "🟢"},
+        "Improving": {"color": "#5d86d1", "bg": "rgba(93, 134, 209, 0.15)", "icon": "🔵"},
+        "Weakening": {"color": "#e2d06b", "bg": "rgba(226, 208, 107, 0.15)", "icon": "🟡"},
+        "Lagging": {"color": "#e06a6a", "bg": "rgba(224, 106, 106, 0.15)", "icon": "🔴"},
+    }
+    
+    # Build collapsible HTML sections
+    ranking_html = """
+    <style>
+    .quadrant-section {
+        margin-bottom: 8px;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .quadrant-header {
+        padding: 10px 12px;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-weight: 800;
+        font-size: 14px;
+        user-select: none;
+        transition: filter 0.2s;
+    }
+    .quadrant-header:hover {
+        filter: brightness(1.1);
+    }
+    .quadrant-header .arrow {
+        transition: transform 0.2s;
+        font-size: 12px;
+    }
+    .quadrant-header.collapsed .arrow {
+        transform: rotate(-90deg);
+    }
+    .quadrant-content {
+        max-height: 2000px;
+        overflow: hidden;
+        transition: max-height 0.3s ease-out;
+    }
+    .quadrant-content.collapsed {
+        max-height: 0;
+    }
+    .stock-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 6px 12px;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+        font-size: 13px;
+    }
+    .stock-row:hover {
+        background: rgba(255,255,255,0.05);
+    }
+    .stock-name {
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin-right: 8px;
+    }
+    .stock-rank {
+        color: #8b949e;
+        font-weight: 700;
+        min-width: 28px;
+        margin-right: 8px;
+    }
+    .mom-score {
+        font-weight: 700;
+        font-size: 12px;
+        padding: 2px 6px;
+        border-radius: 4px;
+        background: rgba(255,255,255,0.1);
+    }
+    </style>
+    """
+    
+    for quadrant in ["Leading", "Improving", "Weakening", "Lagging"]:
+        if not show_quadrants.get(quadrant, True):
+            continue
+        
+        stocks = quadrant_stocks[quadrant]
+        if not stocks:
+            continue
+        
+        cfg = q_config[quadrant]
+        count = len(stocks)
+        
+        ranking_html += f"""
+        <div class="quadrant-section">
+            <div class="quadrant-header" style="background:{cfg['bg']}; color:{cfg['color']}" onclick="this.classList.toggle('collapsed'); this.nextElementSibling.classList.toggle('collapsed');">
+                <span>{cfg['icon']} {quadrant} ({count})</span>
+                <span class="arrow">▼</span>
+            </div>
+            <div class="quadrant-content" style="background: rgba(0,0,0,0.2);">
+        """
+        
+        for sym, mom_score, rr, mm in stocks:
             name = META.get(sym, {}).get("name", sym)
-            rows_html.append(
-                f'<div class="row" style="color:{color}"><span>{rank_dict[sym]}.</span>'
-                f'<span class="name">{name}</span><span>[{stat}]</span></div>'
-            )
-        st.markdown(f'<div class="rrg-rank">{"".join(rows_html)}</div>', unsafe_allow_html=True)
+            # Truncate long names
+            display_name = name[:30] + "..." if len(name) > 30 else name
+            ranking_html += f"""
+                <div class="stock-row">
+                    <span class="stock-rank">{rank_dict.get(sym, '-')}</span>
+                    <span class="stock-name" style="color:{cfg['color']}" title="{name}">{display_name}</span>
+                    <span class="mom-score" style="color:{cfg['color']}">{mom_score:.1f}</span>
+                </div>
+            """
+        
+        ranking_html += """
+            </div>
+        </div>
+        """
+    
+    if ranking_html:
+        components.html(ranking_html, height=500, scrolling=True)
     else:
         st.write("—")
 
