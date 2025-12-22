@@ -450,7 +450,7 @@ rank_mode = st.sidebar.selectbox("Rank by", rank_modes, index=0)
 tail_len = st.sidebar.slider("Trail Length", 1, 20, DEFAULT_TAIL, 1)
 show_labels = st.sidebar.toggle("Show labels on chart", value=False)
 label_top_n = st.sidebar.slider("Label top N by distance", 3, 30, 12, 1, disabled=not show_labels)
-max_rank_display = st.sidebar.slider("Max items in ranking panel", 10, 200, 50, 1)
+max_rank_display = st.sidebar.slider("Max items in ranking panel", 10, 35, 20, 1)
 
 diag = st.sidebar.checkbox("Show diagnostics", value=False)
 
