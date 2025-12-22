@@ -827,7 +827,7 @@ with plot_col:
         height=550
     )
     
-    st.plotly_chart(fig, use_container_width=True, config={
+    st.plotly_chart(fig, width='stretch', config={
         'displayModeBar': True,
         'modeBarButtonsToRemove': ['lasso2d', 'select2d'],
         'displaylogo': False
@@ -852,9 +852,9 @@ with rank_col:
         st.write("—")
 
 # -------------------- Table --------------------
-def make_table_html(rows):
-    # Generate unique table ID
-    table_id = "rrg_table_" + str(hash(str(len(rows))) % 10000)
+def make_interactive_table(rows):
+    """Generate a fully self-contained interactive HTML table with sorting and filtering"""
+    table_id = "rrg_table_" + str(abs(hash(str(len(rows)))) % 10000)
     
     headers = ["Ranking", "Name", "Status", "Industry", "RS-Ratio", "RS-Momentum", "Price", "Change %"]
     header_keys = ["rank", "name", "status", "industry", "rs_ratio", "rs_mom", "price", "chg"]
@@ -862,30 +862,33 @@ def make_table_html(rows):
     # Build header with sort icons
     th_cells = []
     for i, h in enumerate(headers):
-        sort_class = "sort-desc" if i == 0 else ""  # Default sort by ranking
+        sort_class = "sort-asc" if i == 0 else ""
         th_cells.append(f'<th class="{sort_class}" data-col="{i}" data-key="{header_keys[i]}"><span>{h}</span><span class="sort-icon"></span></th>')
     th = "<tr>" + "".join(th_cells) + "</tr>"
     
     # Build rows with data attributes for filtering/sorting
-    tr = []
+    tr_list = []
     for r in rows:
         rr_val = r["rs_ratio"] if not pd.isna(r["rs_ratio"]) else 0
         mm_val = r["rs_mom"] if not pd.isna(r["rs_mom"]) else 0
         price_val = r["price"] if not pd.isna(r["price"]) else 0
         chg_val = r["chg"] if not pd.isna(r["chg"]) else 0
         
-        rr_txt  = "-" if pd.isna(r["rs_ratio"]) else f"{r['rs_ratio']:.2f}"
-        mm_txt  = "-" if pd.isna(r["rs_mom"])  else f"{r['rs_mom']:.2f}"
+        rr_txt = "-" if pd.isna(r["rs_ratio"]) else f"{r['rs_ratio']:.2f}"
+        mm_txt = "-" if pd.isna(r["rs_mom"]) else f"{r['rs_mom']:.2f}"
         price_txt = "-" if pd.isna(r["price"]) else f"₹{r['price']:,.2f}"
-        chg_txt   = "-" if pd.isna(r["chg"])   else f"{r['chg']:+.2f}%"
+        chg_txt = "-" if pd.isna(r["chg"]) else f"{r['chg']:+.2f}%"
         
-        # Color code change
-        chg_color = "#3fa46a" if r.get("chg", 0) > 0 else "#e06a6a" if r.get("chg", 0) < 0 else "inherit"
+        chg_color = "#3fa46a" if r.get("chg", 0) and r.get("chg", 0) > 0 else "#e06a6a" if r.get("chg", 0) and r.get("chg", 0) < 0 else "inherit"
         
-        tr.append(
+        # Escape single quotes in name for data attribute
+        safe_name = r['name'].replace("'", "&#39;").lower()
+        safe_industry = r['industry'].replace("'", "&#39;").lower()
+        
+        tr_list.append(
             f"<tr class='rrg-row' style='background:{r['bg']}; color:{r['fg']}' " +
-            f"data-rank='{r['rank']}' data-name='{r['name'].lower()}' data-status='{r['status'].lower()}' " +
-            f"data-industry='{r['industry'].lower()}' data-rs_ratio='{rr_val}' data-rs_mom='{mm_val}' " +
+            f"data-rank='{r['rank']}' data-name='{safe_name}' data-status='{r['status'].lower()}' " +
+            f"data-industry='{safe_industry}' data-rs_ratio='{rr_val}' data-rs_mom='{mm_val}' " +
             f"data-price='{price_val}' data-chg='{chg_val}'>" +
             f"<td>{r['rank']}</td>" +
             f"<td class='rrg-name'><a href='{r['tv']}' target='_blank'>{r['name']}</a></td>" +
@@ -898,127 +901,247 @@ def make_table_html(rows):
             "</tr>"
         )
     
-    # Get unique statuses and industries for filter dropdowns
+    # Get unique values for dropdowns
     statuses = sorted(set(r['status'] for r in rows))
     industries = sorted(set(r['industry'] for r in rows if r['industry'] != '-'))
     
     status_options = '<option value="">All Statuses</option>' + ''.join(f'<option value="{s.lower()}">{s}</option>' for s in statuses)
     industry_options = '<option value="">All Industries</option>' + ''.join(f'<option value="{ind.lower()}">{ind}</option>' for ind in industries)
     
-    # JavaScript for sorting and filtering
-    js_code = f"""
-    <script>
-    (function() {{
-        const tableId = '{table_id}';
-        const table = document.getElementById(tableId);
-        if (!table) return;
-        
-        const headers = table.querySelectorAll('th');
-        const tbody = table.querySelector('tbody');
-        const rows = Array.from(tbody.querySelectorAll('tr'));
-        const searchInput = document.getElementById(tableId + '_search');
-        const statusFilter = document.getElementById(tableId + '_status');
-        const industryFilter = document.getElementById(tableId + '_industry');
-        const countBadge = document.getElementById(tableId + '_count');
-        
-        let currentSort = {{ col: 0, asc: true }};
-        
-        function updateCount() {{
-            const visible = rows.filter(r => !r.classList.contains('hidden-row')).length;
-            countBadge.textContent = visible + ' / ' + rows.length;
-        }}
-        
-        function sortTable(colIndex, key) {{
-            const isNumeric = ['rank', 'rs_ratio', 'rs_mom', 'price', 'chg'].includes(key);
-            const asc = currentSort.col === colIndex ? !currentSort.asc : (colIndex === 0);
-            currentSort = {{ col: colIndex, asc: asc }};
-            
-            // Update header classes
-            headers.forEach((h, i) => {{
-                h.classList.remove('sort-asc', 'sort-desc');
-                if (i === colIndex) {{
-                    h.classList.add(asc ? 'sort-asc' : 'sort-desc');
-                }}
-            }});
-            
-            rows.sort((a, b) => {{
-                let aVal = a.dataset[key] || '';
-                let bVal = b.dataset[key] || '';
-                
-                if (isNumeric) {{
-                    aVal = parseFloat(aVal) || 0;
-                    bVal = parseFloat(bVal) || 0;
-                    return asc ? aVal - bVal : bVal - aVal;
-                }} else {{
-                    return asc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
-                }}
-            }});
-            
-            rows.forEach(row => tbody.appendChild(row));
-        }}
-        
-        function filterTable() {{
-            const searchTerm = searchInput.value.toLowerCase();
-            const statusTerm = statusFilter.value;
-            const industryTerm = industryFilter.value;
-            
-            rows.forEach(row => {{
-                const name = row.dataset.name || '';
-                const status = row.dataset.status || '';
-                const industry = row.dataset.industry || '';
-                
-                const matchesSearch = !searchTerm || name.includes(searchTerm);
-                const matchesStatus = !statusTerm || status === statusTerm;
-                const matchesIndustry = !industryTerm || industry === industryTerm;
-                
-                if (matchesSearch && matchesStatus && matchesIndustry) {{
-                    row.classList.remove('hidden-row');
-                }} else {{
-                    row.classList.add('hidden-row');
-                }}
-            }});
-            
-            updateCount();
-        }}
-        
-        // Attach event listeners
-        headers.forEach((header, index) => {{
-            header.addEventListener('click', () => {{
-                const key = header.dataset.key;
-                sortTable(index, key);
-            }});
-        }});
-        
-        searchInput.addEventListener('input', filterTable);
-        statusFilter.addEventListener('change', filterTable);
-        industryFilter.addEventListener('change', filterTable);
-        
-        updateCount();
-    }})();
-    </script>
-    """
+    # Calculate height based on rows
+    table_height = min(600, 80 + len(rows) * 42)
     
-    filter_row = f"""
-    <div class="rrg-filter-row">
-        <input type="text" id="{table_id}_search" placeholder="🔍 Search by name..." style="min-width: 200px;">
-        <select id="{table_id}_status">{status_options}</select>
-        <select id="{table_id}_industry">{industry_options}</select>
-        <span class="filter-badge" id="{table_id}_count">{len(rows)} / {len(rows)}</span>
-    </div>
-    """
-    
-    return f"""
-    <div class='rrg-table-container'>
-        {filter_row}
-        <div class='rrg-wrap'>
-            <table class='rrg-table' id='{table_id}'>
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;700;800&display=swap');
+            
+            * {{
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }}
+            
+            body {{
+                font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+                background: #10141b;
+                color: #e6eaee;
+                padding: 12px;
+            }}
+            
+            .filter-row {{
+                display: flex;
+                gap: 10px;
+                margin-bottom: 12px;
+                flex-wrap: wrap;
+                align-items: center;
+            }}
+            
+            .filter-row input, .filter-row select {{
+                background: #0b0e13;
+                border: 1px solid #1f2732;
+                color: #e6eaee;
+                padding: 8px 12px;
+                border-radius: 8px;
+                font-family: inherit;
+                font-size: 13px;
+            }}
+            
+            .filter-row input:focus, .filter-row select:focus {{
+                outline: none;
+                border-color: #7a5cff;
+            }}
+            
+            .filter-row input::placeholder {{
+                color: #b3bdc7;
+            }}
+            
+            .filter-badge {{
+                background: #7a5cff;
+                color: white;
+                padding: 5px 12px;
+                border-radius: 20px;
+                font-size: 12px;
+                font-weight: 700;
+            }}
+            
+            .table-wrap {{
+                max-height: {table_height - 60}px;
+                overflow: auto;
+                border: 1px solid #1f2732;
+                border-radius: 10px;
+            }}
+            
+            table {{
+                width: 100%;
+                border-collapse: collapse;
+            }}
+            
+            th, td {{
+                border-bottom: 1px solid #1a2230;
+                padding: 10px 12px;
+                font-size: 13px;
+                text-align: left;
+            }}
+            
+            th {{
+                position: sticky;
+                top: 0;
+                z-index: 2;
+                background: #121823;
+                color: #b3bdc7;
+                font-weight: 800;
+                cursor: pointer;
+                user-select: none;
+                transition: background 0.2s;
+                white-space: nowrap;
+            }}
+            
+            th:hover {{
+                background: #1a2233;
+            }}
+            
+            .sort-icon {{
+                margin-left: 6px;
+                opacity: 0.5;
+                font-size: 10px;
+            }}
+            
+            th.sort-asc .sort-icon::after {{ content: '▲'; opacity: 1; }}
+            th.sort-desc .sort-icon::after {{ content: '▼'; opacity: 1; }}
+            th:not(.sort-asc):not(.sort-desc) .sort-icon::after {{ content: '⇅'; }}
+            
+            .rrg-name a {{
+                color: #9ecbff;
+                text-decoration: none;
+            }}
+            
+            .rrg-name a:hover {{
+                text-decoration: underline;
+            }}
+            
+            tr.hidden-row {{
+                display: none;
+            }}
+            
+            /* Scrollbar */
+            .table-wrap::-webkit-scrollbar {{
+                height: 10px;
+                width: 10px;
+            }}
+            .table-wrap::-webkit-scrollbar-thumb {{
+                background: #2e3745;
+                border-radius: 8px;
+            }}
+            .table-wrap::-webkit-scrollbar-track {{
+                background: #10141b;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="filter-row">
+            <input type="text" id="{table_id}_search" placeholder="🔍 Search by name..." style="min-width: 180px;">
+            <select id="{table_id}_status">{status_options}</select>
+            <select id="{table_id}_industry">{industry_options}</select>
+            <span class="filter-badge" id="{table_id}_count">{len(rows)} / {len(rows)}</span>
+        </div>
+        <div class="table-wrap">
+            <table id="{table_id}">
                 <thead>{th}</thead>
-                <tbody>{''.join(tr)}</tbody>
+                <tbody>{''.join(tr_list)}</tbody>
             </table>
         </div>
-    </div>
-    {js_code}
+        
+        <script>
+        (function() {{
+            const table = document.getElementById('{table_id}');
+            const headers = table.querySelectorAll('th');
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            const searchInput = document.getElementById('{table_id}_search');
+            const statusFilter = document.getElementById('{table_id}_status');
+            const industryFilter = document.getElementById('{table_id}_industry');
+            const countBadge = document.getElementById('{table_id}_count');
+            
+            let currentSort = {{ col: 0, asc: true }};
+            
+            function updateCount() {{
+                const visible = rows.filter(r => !r.classList.contains('hidden-row')).length;
+                countBadge.textContent = visible + ' / ' + rows.length;
+            }}
+            
+            function sortTable(colIndex, key) {{
+                const isNumeric = ['rank', 'rs_ratio', 'rs_mom', 'price', 'chg'].includes(key);
+                const asc = currentSort.col === colIndex ? !currentSort.asc : (colIndex === 0);
+                currentSort = {{ col: colIndex, asc: asc }};
+                
+                headers.forEach((h, i) => {{
+                    h.classList.remove('sort-asc', 'sort-desc');
+                    if (i === colIndex) {{
+                        h.classList.add(asc ? 'sort-asc' : 'sort-desc');
+                    }}
+                }});
+                
+                rows.sort((a, b) => {{
+                    let aVal = a.dataset[key] || '';
+                    let bVal = b.dataset[key] || '';
+                    
+                    if (isNumeric) {{
+                        aVal = parseFloat(aVal) || 0;
+                        bVal = parseFloat(bVal) || 0;
+                        return asc ? aVal - bVal : bVal - aVal;
+                    }} else {{
+                        return asc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+                    }}
+                }});
+                
+                rows.forEach(row => tbody.appendChild(row));
+            }}
+            
+            function filterTable() {{
+                const searchTerm = searchInput.value.toLowerCase();
+                const statusTerm = statusFilter.value;
+                const industryTerm = industryFilter.value;
+                
+                rows.forEach(row => {{
+                    const name = row.dataset.name || '';
+                    const status = row.dataset.status || '';
+                    const industry = row.dataset.industry || '';
+                    
+                    const matchesSearch = !searchTerm || name.includes(searchTerm);
+                    const matchesStatus = !statusTerm || status === statusTerm;
+                    const matchesIndustry = !industryTerm || industry === industryTerm;
+                    
+                    if (matchesSearch && matchesStatus && matchesIndustry) {{
+                        row.classList.remove('hidden-row');
+                    }} else {{
+                        row.classList.add('hidden-row');
+                    }}
+                }});
+                
+                updateCount();
+            }}
+            
+            headers.forEach((header, index) => {{
+                header.addEventListener('click', () => {{
+                    sortTable(index, header.dataset.key);
+                }});
+            }});
+            
+            searchInput.addEventListener('input', filterTable);
+            statusFilter.addEventListener('change', filterTable);
+            industryFilter.addEventListener('change', filterTable);
+            
+            updateCount();
+        }})();
+        </script>
+    </body>
+    </html>
     """
+    
+    return html_content, table_height
 
 # Build table rows IN RANK ORDER so it matches the right panel
 rows = []
@@ -1046,7 +1169,8 @@ for t in ranked_syms:
     })
 
 with st.expander("Table", expanded=True):
-    st.markdown(make_table_html(rows), unsafe_allow_html=True)
+    table_html, table_height = make_interactive_table(rows)
+    components.html(table_html, height=table_height, scrolling=False)
 
 # -------------------- Downloads --------------------
 def export_ranks_csv(perf_sorted):
@@ -1074,9 +1198,9 @@ def export_table_csv(rows_):
 c1, c2 = st.columns(2)
 with c1:
     st.download_button("Download Ranks CSV", data=export_ranks_csv(perf),
-                       file_name=f"ranks_{date_str}.csv", mime="text/csv", use_container_width=True)
+                       file_name=f"ranks_{date_str}.csv", mime="text/csv", width='stretch')
 with c2:
     st.download_button("Download Table CSV", data=export_table_csv(rows),
-                       file_name=f"table_{date_str}.csv", mime="text/csv", use_container_width=True)
+                       file_name=f"table_{date_str}.csv", mime="text/csv", width='stretch')
 
 st.caption("Names open TradingView. Use Play/Pause to watch rotation; Speed controls frame interval; Loop wraps frames.")
