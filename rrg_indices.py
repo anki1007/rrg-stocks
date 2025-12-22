@@ -435,8 +435,8 @@ st.sidebar.header("RRG — Controls")
 # Data source controls
 #uploaded = st.sidebar.file_uploader("Upload indices CSV (optional override)", type=["csv"])
 #if st.sidebar.button("Reload universe"):
-    st.cache_data.clear()
-    st.rerun()
+    #st.cache_data.clear()
+    #st.rerun()
 
 bench_label = st.sidebar.selectbox("Benchmark", list(BENCH_CHOICES.keys()), index=0)
 interval_label = st.sidebar.selectbox("Strength vs (TF)", TF_LABELS, index=TF_LABELS.index(DEFAULT_TF))
