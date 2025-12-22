@@ -14,7 +14,6 @@ import streamlit as st
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.colors import to_hex
-from matplotlib.patches import FancyArrowPatch
 
 # -------------------- Defaults --------------------
 DEFAULT_TF = "Daily"
@@ -61,21 +60,6 @@ h1, h2, h3, h4, h5, h6, strong, b { color:#0f172a !important; }
 .rrg-rank .row { display: flex; gap: 8px; align-items: baseline; margin: 2px 0; }
 .rrg-rank .name { color: #0b57d0; }
 
-/* Status badge styling */
-.status-badge {
-    display: inline-block;
-    padding: 4px 10px;
-    border-radius: 4px;
-    font-weight: 600;
-    font-size: 13px;
-    text-align: center;
-    min-width: 80px;
-}
-.status-leading { background: #22c55e; color: white; }
-.status-improving { background: #3b82f6; color: white; }
-.status-weakening { background: #eab308; color: #1a1a1a; }
-.status-lagging { background: #ef4444; color: white; }
-
 /* Scrollable table wrapper with sticky header */
 .rrg-wrap {
   max-height: calc(100vh - 260px);
@@ -88,17 +72,12 @@ h1, h2, h3, h4, h5, h6, strong, b { color:#0f172a !important; }
   position: sticky; top: 0; z-index: 2;
   text-align: left; background: #eef2f7; color: #0f172a; font-weight: 800; letter-spacing: .2px;
 }
-.rrg-row { transition: background .12s ease; background: #ffffff; }
-.rrg-row:hover { background: #f8fafc; }
+.rrg-row { transition: background .12s ease; }
 .rrg-name a { color: #0b57d0; text-decoration: underline; }
 
 /* Make scrollbars visible on WebKit (Chrome/Edge) */
 .rrg-wrap::-webkit-scrollbar { height: 12px; width: 12px; }
 .rrg-wrap::-webkit-scrollbar-thumb { background:#c7ccd6; border-radius: 8px; }
-
-/* Positive/negative change colors */
-.positive-change { color: #16a34a; font-weight: 600; }
-.negative-change { color: #dc2626; font-weight: 600; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -163,7 +142,6 @@ TF_TO_INTERVAL = {"Daily":"1d","Weekly":"1wk","Monthly":"1mo"}
 WINDOW = 14
 DEFAULT_TAIL = 8
 BENCH_CHOICES = {"Nifty 500":"^CRSLDX","Nifty 200":"^CNX200","Nifty 50":"^NSEI"}
-TOP_N_PER_QUADRANT = 25  # Maximum stocks to display per quadrant
 
 def pick_close(df, symbol: str) -> pd.Series:
     if isinstance(df, pd.Series): return df.dropna()
@@ -218,29 +196,7 @@ def get_status(x, y):
 
 def status_bg_color(x,y):
     m=get_status(x,y)
-    return {"Lagging":"#ef4444","Leading":"#22c55e","Improving":"#3b82f6","Weakening":"#eab308"}.get(m,"#aaaaaa")
-
-def compute_momentum_score(rr: float, mm: float) -> float:
-    """Compute momentum score as distance from center weighted by quadrant"""
-    if np.isnan(rr) or np.isnan(mm):
-        return 0.0
-    # Distance from center (100, 100)
-    dist = np.hypot(rr - 100.0, mm - 100.0)
-    # Weight by quadrant (positive for Leading/Improving, negative for Lagging/Weakening)
-    if rr >= 100 and mm >= 100:  # Leading
-        return dist
-    elif rr < 100 and mm >= 100:  # Improving
-        return dist * 0.8
-    elif rr >= 100 and mm < 100:  # Weakening
-        return -dist * 0.6
-    else:  # Lagging
-        return -dist
-    
-def compute_rrg_power(rr: float, mm: float) -> float:
-    """Compute RRG Power (distance from center)"""
-    if np.isnan(rr) or np.isnan(mm):
-        return 0.0
-    return float(np.hypot(rr - 100.0, mm - 100.0))
+    return {"Lagging":"#e06a6a","Leading":"#3fa46a","Improving":"#5d86d1","Weakening":"#e2d06b"}.get(m,"#aaaaaa")
 
 # -------------------- Closed-bar enforcement --------
 IST_TZ="Asia/Kolkata"; BAR_CUTOFF_HOUR=10; NET_TIME_MAX_AGE=300
@@ -388,9 +344,6 @@ tail_len = st.sidebar.slider("Trail Length", 1, 20, DEFAULT_TAIL, 1)
 show_labels = st.sidebar.toggle("Show labels on chart", value=False)
 label_top_n = st.sidebar.slider("Label top N by distance", 3, 30, 12, 1, disabled=not show_labels)
 
-# Top N per quadrant control
-top_n_per_quadrant = st.sidebar.slider("Max stocks per quadrant", 5, 50, TOP_N_PER_QUADRANT, 5)
-
 # ---------- Playback controls ----------
 if "playing" not in st.session_state: st.session_state.playing = False
 play_toggle = st.sidebar.toggle("Play / Pause", value=st.session_state.playing, key="playing")
@@ -455,64 +408,6 @@ date_str = format_bar_date(idx[end_idx], interval)
 # -------------------- Title -------------------------
 st.markdown(f"**Relative Rotation Graph (RRG) — {bench_label} — {period_label} — {interval_label} — {csv_disp} — {date_str}**")
 
-# -------------------- Categorize stocks by quadrant and select top N ----------
-def categorize_by_quadrant(tickers, rs_ratio_map, rs_mom_map, end_idx, top_n=25):
-    """Categorize stocks by quadrant and return top N per quadrant based on distance from center"""
-    quadrants = {
-        "Leading": [],
-        "Improving": [],
-        "Weakening": [],
-        "Lagging": []
-    }
-    
-    for t in tickers:
-        rr = rs_ratio_map[t].iloc[end_idx]
-        mm = rs_mom_map[t].iloc[end_idx]
-        if np.isnan(rr) or np.isnan(mm):
-            continue
-        
-        status = get_status(rr, mm)
-        dist = np.hypot(rr - 100.0, mm - 100.0)
-        quadrants[status].append((t, dist, rr, mm))
-    
-    # Sort each quadrant by distance (farthest from center first) and take top N
-    selected = set()
-    for status in quadrants:
-        quadrants[status].sort(key=lambda x: x[1], reverse=True)
-        for t, _, _, _ in quadrants[status][:top_n]:
-            selected.add(t)
-    
-    return selected, quadrants
-
-# Get top N stocks per quadrant
-selected_tickers, quadrant_data = categorize_by_quadrant(tickers, rs_ratio_map, rs_mom_map, end_idx, top_n_per_quadrant)
-
-if "visible_set" not in st.session_state:
-    st.session_state.visible_set = set(tickers)
-
-# Filter visible set to only include selected tickers
-display_tickers = st.session_state.visible_set.intersection(selected_tickers)
-
-# -------------------- Build stock data for tooltips ----------
-stock_info = {}
-for t in tickers:
-    rr = float(rs_ratio_map[t].iloc[end_idx])
-    mm = float(rs_mom_map[t].iloc[end_idx])
-    px = tickers_data[t].reindex(idx).dropna()
-    price = float(px.iloc[end_idx]) if end_idx < len(px) else np.nan
-    chg = ((px.iloc[end_idx]/px.iloc[start_idx]-1)*100.0) if (end_idx < len(px) and start_idx < len(px)) else np.nan
-    
-    stock_info[t] = {
-        "name": safe_long_name(t, META),
-        "status": get_status(rr, mm),
-        "momentum_score": compute_momentum_score(rr, mm),
-        "rs_ratio": rr,
-        "rs_momentum": mm,
-        "price": price,
-        "change_pct": chg,
-        "rrg_power": compute_rrg_power(rr, mm)
-    }
-
 # -------------------- Layout: Plot + Ranking ----------
 plot_col, rank_col = st.columns([4.5, 1.8], gap="medium")
 
@@ -532,67 +427,32 @@ with plot_col:
     ax.text(95,95,"Lagging",     fontsize=13, color="#111", weight="bold")
     ax.set_xlim(94,106); ax.set_ylim(94,106)
 
+    if "visible_set" not in st.session_state:
+        st.session_state.visible_set = set(tickers)
+
     def dist_last(t):
         rr_last=rs_ratio_map[t].iloc[end_idx]; mm_last=rs_mom_map[t].iloc[end_idx]
         return float(np.hypot(rr_last-100.0, mm_last-100.0))
 
     label_allow_set = set()
     if show_labels:
-        # Only consider display_tickers for labels
-        label_allow_set = set([t for t,_ in sorted([(t, dist_last(t)) for t in display_tickers], key=lambda x:x[1], reverse=True)[:label_top_n]])
+        label_allow_set = set([t for t,_ in sorted([(t, dist_last(t)) for t in tickers], key=lambda x:x[1], reverse=True)[:label_top_n]])
 
-    # Store annotation data for interactive tooltips
-    scatter_data = []
-    
     for t in tickers:
-        if t not in display_tickers: continue
+        if t not in st.session_state.visible_set: continue
         rr=rs_ratio_map[t].iloc[start_idx+1:end_idx+1].dropna()
         mm=rs_mom_map[t].iloc[start_idx+1:end_idx+1].dropna()
         rr,mm=rr.align(mm, join="inner")
         if len(rr)==0 or len(mm)==0: continue
-        
-        # Plot the trail
         ax.plot(rr.values, mm.values, linewidth=1.2, alpha=0.7, color=SYMBOL_COLORS[t])
-        
-        # Plot points with sizes (larger for the last point)
         sizes=[22]*(len(rr)-1)+[76]
         ax.scatter(rr.values, mm.values, s=sizes, linewidths=0.6,
                    facecolor=SYMBOL_COLORS[t], edgecolor="#333333")
-        
-        # Add arrowhead at the end to show direction
-        if len(rr) >= 2:
-            # Draw arrow from second-to-last to last point
-            x_start, y_start = rr.values[-2], mm.values[-2]
-            x_end, y_end = rr.values[-1], mm.values[-1]
-            
-            # Calculate arrow direction
-            dx = x_end - x_start
-            dy = y_end - y_start
-            
-            # Only draw arrow if there's meaningful movement
-            if abs(dx) > 0.01 or abs(dy) > 0.01:
-                ax.annotate('', xy=(x_end, y_end), xytext=(x_start, y_start),
-                           arrowprops=dict(arrowstyle='->', color=SYMBOL_COLORS[t], 
-                                          lw=1.8, mutation_scale=12))
-        
         if show_labels and t in label_allow_set:
             rr_last, mm_last = rr.values[-1], mm.values[-1]
             ax.annotate(f"{t}", (rr_last, mm_last), fontsize=11, color=SYMBOL_COLORS[t],
                         xytext=(6,6), textcoords="offset points")
-        
-        # Store data for potential tooltip display
-        scatter_data.append({
-            "symbol": t,
-            "name": stock_info[t]["name"],
-            "x": rr.values[-1],
-            "y": mm.values[-1]
-        })
-    
     st.pyplot(fig, use_container_width=True)
-    
-    # Display count of stocks shown per quadrant
-    quad_counts = {q: len([t for t in display_tickers if get_status(rs_ratio_map[t].iloc[end_idx], rs_mom_map[t].iloc[end_idx]) == q]) for q in ["Leading", "Improving", "Weakening", "Lagging"]}
-    st.caption(f"Showing top {top_n_per_quadrant} per quadrant: 🟢 Leading: {quad_counts['Leading']} | 🔵 Improving: {quad_counts['Improving']} | 🟡 Weakening: {quad_counts['Weakening']} | 🔴 Lagging: {quad_counts['Lagging']}")
 
 with rank_col:
     st.markdown("### Ranking")
@@ -615,7 +475,7 @@ with rank_col:
 
     perf=[]
     for t in tickers:
-        if t not in display_tickers: continue
+        if t not in st.session_state.visible_set: continue
         perf.append((t, compute_rank_metric(t)))
     perf.sort(key=lambda x:x[1], reverse=True)
 
@@ -635,195 +495,68 @@ with rank_col:
             )
         st.markdown(f'<div class="rrg-rank">{"".join(rows_html)}</div>', unsafe_allow_html=True)
 
-# -------------------- Interactive Tooltip Section ----------
-st.markdown("### 📊 Stock Details (Hover Info)")
-st.markdown("*Click on a stock in the table below to see detailed information*")
+# -------------------- Table under the plot -----------
+def make_table_html(rows):
+    th = "<tr>" + "".join([f"<th>{h}</th>" for h in ["#", "Name", "Status", "Industry", "Price", "Change %"]]) + "</tr>"
+    tr = []
+    for r in rows:
+        bg = r["bg"]; fg = r["fg"]
+        price_val = "-" if pd.isna(r["price"]) else f'{r["price"]:.2f}'
+        chg_val = "-" if pd.isna(r["chg"]) else f'{r["chg"]:.2f}'
+        tr.append(
+            f'<tr class="rrg-row" style="background:{bg}; color:{fg}">'
+            f'<td>{r["rank"]}</td>'
+            f'<td class="rrg-name"><a href="{r["tv"]}" target="_blank">{r["name"]}</a></td>'
+            f'<td>{r["status"]}</td>'
+            f'<td>{r["industry"]}</td>'
+            f'<td>{price_val}</td>'
+            f'<td>{chg_val}</td>'
+            f'</tr>'
+        )
+    return f'<div class="rrg-wrap"><table class="rrg-table">{th}{"".join(tr)}</table></div>'
 
-# -------------------- Table under the plot with sorting and filtering -----------
-def get_status_badge(status):
-    """Return HTML for status badge with appropriate color"""
-    status_class = f"status-{status.lower()}"
-    return f'<span class="status-badge {status_class}">{status}</span>'
+rank_dict = {sym:i for i,(sym,_m) in enumerate(sorted(
+    [(t, rs_ratio_map[t].iloc[end_idx]) for t in tickers if t in st.session_state.visible_set],
+    key=lambda x:x[1], reverse=True), start=1)}
 
-def format_change(val):
-    """Format change percentage with color"""
-    if pd.isna(val):
-        return "-"
-    cls = "positive-change" if val >= 0 else "negative-change"
-    sign = "+" if val >= 0 else ""
-    return f'<span class="{cls}">{sign}{val:.2f}%</span>'
-
-# Build dataframe for the table
-table_data = []
+rows=[]
 for t in tickers:
     if t not in st.session_state.visible_set: continue
-    info = stock_info[t]
-    tv_link = f'https://www.tradingview.com/chart/?symbol={quote("NSE:"+display_symbol(t).replace("-","_"), safe="")}'
-    
-    table_data.append({
-        "Symbol": display_symbol(t),
-        "Name": info["name"],
-        "Status": info["status"],
-        "Industry": META.get(t,{}).get("industry","-"),
-        "Price": info["price"],
-        "Change %": info["change_pct"],
-        "Momentum Score": info["momentum_score"],
-        "RS-Ratio": info["rs_ratio"],
-        "RS-Momentum": info["rs_momentum"],
-        "RRG Power": info["rrg_power"],
-        "TV Link": tv_link,
-        "_raw_symbol": t
+    rr=float(rs_ratio_map[t].iloc[end_idx]); mm=float(rs_mom_map[t].iloc[end_idx])
+    status=get_status(rr, mm)
+    bg = status_bg_color(rr, mm)
+    fg = "#ffffff" if bg in ("#e06a6a","#3fa46a","#5d86d1") else "#000000"
+    px=tickers_data[t].reindex(idx).dropna()
+    price=float(px.iloc[end_idx]) if end_idx < len(px) else np.nan
+    chg=((px.iloc[end_idx]/px.iloc[start_idx]-1)*100.0) if (end_idx < len(px) and start_idx < len(px)) else np.nan
+    tv=f'https://www.tradingview.com/chart/?symbol={quote("NSE:"+display_symbol(t).replace("-","_"), safe="")}'
+    rows.append({
+        "rank": rank_dict.get(t, ""), "name": safe_long_name(t, META), "status": status,
+        "industry": META.get(t,{}).get("industry","-"), "price": price, "chg": chg,
+        "bg": bg, "fg": fg, "tv": tv
     })
 
-df_table = pd.DataFrame(table_data)
-
-# Collapsible + interactive table with filtering and sorting
-with st.expander("📋 Detailed Table (Sortable & Filterable)", expanded=True):
-    # Add filters
-    filter_col1, filter_col2, filter_col3 = st.columns(3)
-    
-    with filter_col1:
-        status_filter = st.multiselect(
-            "Filter by Status",
-            options=["Leading", "Improving", "Weakening", "Lagging"],
-            default=[]
-        )
-    
-    with filter_col2:
-        industry_options = sorted(df_table["Industry"].unique().tolist())
-        industry_filter = st.multiselect(
-            "Filter by Industry",
-            options=industry_options,
-            default=[]
-        )
-    
-    with filter_col3:
-        search_term = st.text_input("🔍 Search by Name/Symbol", "")
-    
-    # Apply filters
-    filtered_df = df_table.copy()
-    
-    if status_filter:
-        filtered_df = filtered_df[filtered_df["Status"].isin(status_filter)]
-    
-    if industry_filter:
-        filtered_df = filtered_df[filtered_df["Industry"].isin(industry_filter)]
-    
-    if search_term:
-        search_lower = search_term.lower()
-        filtered_df = filtered_df[
-            filtered_df["Name"].str.lower().str.contains(search_lower, na=False) |
-            filtered_df["Symbol"].str.lower().str.contains(search_lower, na=False)
-        ]
-    
-    # Display count
-    st.markdown(f"**Showing {len(filtered_df)} of {len(df_table)} stocks**")
-    
-    # Create display dataframe with formatted columns
-    display_df = filtered_df[["Symbol", "Name", "Status", "Industry", "Price", "Change %", 
-                              "Momentum Score", "RS-Ratio", "RS-Momentum", "RRG Power"]].copy()
-    
-    # Format numeric columns
-    display_df["Price"] = display_df["Price"].apply(lambda x: f"₹{x:.2f}" if not pd.isna(x) else "-")
-    display_df["Change %"] = display_df["Change %"].apply(lambda x: f"{x:+.2f}%" if not pd.isna(x) else "-")
-    display_df["Momentum Score"] = display_df["Momentum Score"].apply(lambda x: f"{x:.2f}" if not pd.isna(x) else "-")
-    display_df["RS-Ratio"] = display_df["RS-Ratio"].apply(lambda x: f"{x:.2f}" if not pd.isna(x) else "-")
-    display_df["RS-Momentum"] = display_df["RS-Momentum"].apply(lambda x: f"{x:.2f}" if not pd.isna(x) else "-")
-    display_df["RRG Power"] = display_df["RRG Power"].apply(lambda x: f"{x:.2f}" if not pd.isna(x) else "-")
-    
-    # Use Streamlit's native dataframe with sorting
-    st.dataframe(
-        display_df,
-        use_container_width=True,
-        height=400,
-        column_config={
-            "Symbol": st.column_config.TextColumn("Symbol", width="small"),
-            "Name": st.column_config.TextColumn("Name", width="medium"),
-            "Status": st.column_config.TextColumn("Status", width="small"),
-            "Industry": st.column_config.TextColumn("Industry", width="medium"),
-            "Price": st.column_config.TextColumn("Price", width="small"),
-            "Change %": st.column_config.TextColumn("Change %", width="small"),
-            "Momentum Score": st.column_config.TextColumn("Mom Score", width="small"),
-            "RS-Ratio": st.column_config.TextColumn("RS-Ratio", width="small"),
-            "RS-Momentum": st.column_config.TextColumn("RS-Mom", width="small"),
-            "RRG Power": st.column_config.TextColumn("RRG Power", width="small"),
-        },
-        hide_index=True
-    )
-    
-    # Alternative: HTML table with colored status badges
-    st.markdown("---")
-    st.markdown("**Detailed View with Status Colors:**")
-    
-    def make_enhanced_table_html(df):
-        headers = ["#", "Name", "Status", "Industry", "Price", "Change %", "Mom Score", "RS-Ratio", "RS-Mom", "RRG Power"]
-        th = "<tr>" + "".join([f"<th>{h}</th>" for h in headers]) + "</tr>"
-        tr = []
-        
-        for i, (_, row) in enumerate(df.iterrows(), start=1):
-            status = row["Status"]
-            status_class = f"status-{status.lower()}"
-            
-            # Format change with color
-            chg_val = filtered_df.iloc[i-1]["Change %"] if i <= len(filtered_df) else np.nan
-            if pd.isna(chg_val):
-                chg_html = "-"
-            else:
-                chg_color = "#16a34a" if chg_val >= 0 else "#dc2626"
-                chg_sign = "+" if chg_val >= 0 else ""
-                chg_html = f'<span style="color:{chg_color}; font-weight:600">{chg_sign}{chg_val:.2f}%</span>'
-            
-            # Get original symbol for TV link
-            orig_sym = filtered_df.iloc[i-1]["_raw_symbol"] if i <= len(filtered_df) else ""
-            tv_link = f'https://www.tradingview.com/chart/?symbol={quote("NSE:"+display_symbol(orig_sym).replace("-","_"), safe="")}'
-            
-            tr.append(
-                f'<tr class="rrg-row">'
-                f'<td>{i}</td>'
-                f'<td class="rrg-name"><a href="{tv_link}" target="_blank">{row["Name"]}</a></td>'
-                f'<td><span class="status-badge {status_class}">{status}</span></td>'
-                f'<td>{row["Industry"]}</td>'
-                f'<td>{row["Price"]}</td>'
-                f'<td>{chg_html}</td>'
-                f'<td>{row["Momentum Score"]}</td>'
-                f'<td>{row["RS-Ratio"]}</td>'
-                f'<td>{row["RS-Momentum"]}</td>'
-                f'<td>{row["RRG Power"]}</td>'
-                f'</tr>'
-            )
-        
-        return f'<div class="rrg-wrap"><table class="rrg-table">{th}{"".join(tr)}</table></div>'
-    
-    st.markdown(make_enhanced_table_html(display_df), unsafe_allow_html=True)
+# Collapsible + scrollable table
+with st.expander("Table", expanded=True):
+    st.markdown(make_table_html(rows), unsafe_allow_html=True)
 
 # -------------------- Downloads ----------------------
 def export_ranks_csv(perf_sorted):
     out=[]
     for t,_m in perf_sorted:
         rr=float(rs_ratio_map[t].iloc[end_idx]); mm=float(rs_mom_map[t].iloc[end_idx])
-        info = stock_info.get(t, {})
         out.append((t, META.get(t,{}).get("name",t), META.get(t,{}).get("industry","-"),
-                    _m, rr, mm, get_status(rr, mm), 
-                    info.get("momentum_score", 0), info.get("rrg_power", 0)))
-    df=pd.DataFrame(out, columns=["symbol","name","industry","rank_metric","rs_ratio","rs_momentum","status","momentum_score","rrg_power"])
+                    _m, rr, mm, get_status(rr, mm)))
+    df=pd.DataFrame(out, columns=["symbol","name","industry","rank_metric","rs_ratio","rs_momentum","status"])
     buf=io.StringIO(); df.to_csv(buf, index=False); return buf.getvalue().encode()
 
-def export_table_csv(table_data):
+def export_table_csv(rows):
     df=pd.DataFrame([{
-        "symbol": r["Symbol"],
-        "name": r["Name"], 
-        "industry": r["Industry"], 
-        "status": r["Status"],
-        "price": r["Price"], 
-        "pct_change_tail": r["Change %"],
-        "momentum_score": r["Momentum Score"],
-        "rs_ratio": r["RS-Ratio"],
-        "rs_momentum": r["RS-Momentum"],
-        "rrg_power": r["RRG Power"]
-    } for r in table_data])
+        "name": r["name"], "industry": r["industry"], "status": r["status"],
+        "price": r["price"], "pct_change_tail": r["chg"]
+    } for r in rows])
     buf=io.StringIO(); df.to_csv(buf, index=False); return buf.getvalue().encode()
 
-# Recalculate perf for all visible tickers
 perf=[]
 for t in tickers:
     if t not in st.session_state.visible_set: continue
@@ -845,28 +578,12 @@ perf.sort(key=lambda x:x[1], reverse=True)
 
 dl1, dl2 = st.columns(2)
 with dl1:
-    st.download_button("📥 Download Ranks CSV", data=export_ranks_csv(perf),
+    st.download_button("Download Ranks CSV", data=export_ranks_csv(perf),
                        file_name=f"ranks_{date_str}.csv", mime="text/csv", use_container_width=True)
 with dl2:
-    st.download_button("📥 Download Table CSV", data=export_table_csv(table_data),
+    st.download_button("Download Table CSV", data=export_table_csv(rows),
                        file_name=f"table_{date_str}.csv", mime="text/csv", use_container_width=True)
 
 st.caption("Names open TradingView. Use Play/Pause to watch rotation; Speed adjusts frame interval, and Loop wraps frames.")
 
-# -------------------- Legend/Help Section ----------------------
-with st.expander("ℹ️ Understanding RRG Metrics"):
-    st.markdown("""
-    **Quadrant Interpretation:**
-    - 🟢 **Leading** (Top-Right): Strong relative strength and positive momentum - best performers
-    - 🔵 **Improving** (Top-Left): Weak relative strength but gaining momentum - potential turnaround candidates
-    - 🟡 **Weakening** (Bottom-Right): Strong relative strength but losing momentum - watch for rotation
-    - 🔴 **Lagging** (Bottom-Left): Weak relative strength and negative momentum - underperformers
-    
-    **Metrics Explained:**
-    - **RS-Ratio**: Relative strength compared to benchmark (100 = neutral)
-    - **RS-Momentum**: Rate of change in relative strength (100 = neutral)
-    - **Momentum Score**: Combined score factoring in quadrant position and distance from center
-    - **RRG Power**: Distance from center (100, 100) - indicates strength of trend
-    
-    **Arrow Direction**: Shows where the stock is heading based on recent movement
-    """)
+
