@@ -512,7 +512,7 @@ default_period_for_tf = {"1d": "1Y", "1wk": "1Y", "1mo": "10Y"}[interval]
 period_label = st.sidebar.selectbox("Period", list(PERIOD_MAP.keys()), index=list(PERIOD_MAP.keys()).index(default_period_for_tf))
 period = PERIOD_MAP[period_label]
 
-rank_modes = ["RRG Power (dist)", "RS-Ratio", "RS-Momentum", "Price %Δ (tail)", "Momentum Slope (tail)"]
+rank_modes = ["Momentum Score", "RS-Ratio", "RS-Momentum", "Price %Δ (tail)", "Momentum Slope (tail)"]
 rank_mode = st.sidebar.selectbox("Rank by", rank_modes, index=0)
 tail_len = st.sidebar.slider("Trail Length", 1, 20, DEFAULT_TAIL, 1)
 show_labels = st.sidebar.toggle("Show labels on chart", value=False)
@@ -616,7 +616,7 @@ st.markdown(f"### {date_str}")
 def ranking_value(t: str) -> float:
     rr_last = rs_ratio_map[t].iloc[end_idx]
     mm_last = rs_mom_map[t].iloc[end_idx]
-    if rank_mode == "RRG Power (dist)":
+    if rank_mode == "Momentum Score":
         return float(np.hypot(rr_last - 100.0, mm_last - 100.0))
     if rank_mode == "RS-Ratio":
         return float(rr_last)
@@ -705,7 +705,7 @@ with plot_col:
         price = float(px.iloc[end_idx]) if end_idx < len(px) else np.nan
         chg = ((px.iloc[end_idx] / px.iloc[start_idx] - 1) * 100.0) if (end_idx < len(px) and start_idx < len(px)) else np.nan
         
-        # Calculate RRG Power (distance from center, higher = stronger)
+        # Calculate Momentum Score (distance from center, higher = stronger)
         rrg_power = float(np.hypot(rr_last - 100.0, mm_last - 100.0))
         
         # Build hover text for each point on trail
@@ -719,7 +719,7 @@ with plot_col:
                 f"<b>Status:</b> {pt_status}<br>" +
                 f"<b>RS-Ratio:</b> {pt_rr:.2f}<br>" +
                 f"<b>RS-Momentum:</b> {pt_mm:.2f}<br>" +
-                f"<b>RRG Power:</b> {rrg_power:.2f}<br>" +
+                f"<b>Momentum Score:</b> {rrg_power:.2f}<br>" +
                 f"<b>Price:</b> ₹{price:,.2f}<br>" +
                 f"<b>Change %:</b> {chg:+.2f}%<br>" +
                 f"<b>Industry:</b> {industry}"
@@ -856,7 +856,7 @@ def make_interactive_table(rows):
     """Generate a fully self-contained interactive HTML table with sorting and filtering"""
     table_id = "rrg_table_" + str(abs(hash(str(len(rows)))) % 10000)
     
-    headers = ["Ranking", "Name", "Status", "Industry", "RS-Ratio", "RS-Momentum", "RRG Power", "Price", "Change %"]
+    headers = ["Ranking", "Name", "Status", "Industry", "RS-Ratio", "RS-Momentum", "Momentum Score", "Price", "Change %"]
     header_keys = ["rank", "name", "status", "industry", "rs_ratio", "rs_mom", "rrg_power", "price", "chg"]
     
     # Build header with sort icons
@@ -874,7 +874,7 @@ def make_interactive_table(rows):
         price_val = r["price"] if not pd.isna(r["price"]) else 0
         chg_val = r["chg"] if not pd.isna(r["chg"]) else 0
         
-        # Calculate RRG Power (distance from center)
+        # Calculate Momentum Score (distance from center)
         rrg_power_val = float(np.hypot(rr_val - 100.0, mm_val - 100.0))
         
         rr_txt = "-" if pd.isna(r["rs_ratio"]) else f"{r['rs_ratio']:.2f}"
@@ -1084,7 +1084,7 @@ def make_interactive_table(rows):
                 text-align: right;
             }}
             
-            /* RRG Power column */
+            /* Momentum Score column */
             .power-cell {{
                 font-weight: 600;
                 color: #a78bfa;
