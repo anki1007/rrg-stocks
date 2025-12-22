@@ -530,8 +530,15 @@ if st.session_state.playing:
             height=0,
         )
 
-end_idx = st.slider("Date", min_value=DEFAULT_TAIL, max_value=idx_len - 1,
-                    value=st.session_state.end_idx, step=1, key="end_idx", format=" ")
+end_idx = st.slider(
+    "Date",
+    min_value=DEFAULT_TAIL,
+    max_value=idx_len - 1,
+    step=1,
+    key="end_idx",
+    format=" "
+)
+
 start_idx = max(end_idx - tail_len, 0)
 date_str = format_bar_date(idx[end_idx], interval)
 
