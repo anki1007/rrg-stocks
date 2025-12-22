@@ -879,25 +879,30 @@ def make_interactive_table(rows):
         price_txt = "-" if pd.isna(r["price"]) else f"₹{r['price']:,.2f}"
         chg_txt = "-" if pd.isna(r["chg"]) else f"{r['chg']:+.2f}%"
         
-        chg_color = "#3fa46a" if r.get("chg", 0) and r.get("chg", 0) > 0 else "#e06a6a" if r.get("chg", 0) and r.get("chg", 0) < 0 else "inherit"
+        # Color for change % column
+        chg_color = "#4ade80" if r.get("chg", 0) and r.get("chg", 0) > 0 else "#f87171" if r.get("chg", 0) and r.get("chg", 0) < 0 else "#9ca3af"
+        
+        # Status badge color (only for status column)
+        status_bg = r['bg']
+        status_fg = r['fg']
         
         # Escape single quotes in name for data attribute
         safe_name = r['name'].replace("'", "&#39;").lower()
         safe_industry = r['industry'].replace("'", "&#39;").lower()
         
         tr_list.append(
-            f"<tr class='rrg-row' style='background:{r['bg']}; color:{r['fg']}' " +
+            f"<tr class='rrg-row' " +
             f"data-rank='{r['rank']}' data-name='{safe_name}' data-status='{r['status'].lower()}' " +
             f"data-industry='{safe_industry}' data-rs_ratio='{rr_val}' data-rs_mom='{mm_val}' " +
             f"data-price='{price_val}' data-chg='{chg_val}'>" +
-            f"<td>{r['rank']}</td>" +
+            f"<td class='rank-cell'>{r['rank']}</td>" +
             f"<td class='rrg-name'><a href='{r['tv']}' target='_blank'>{r['name']}</a></td>" +
-            f"<td>{r['status']}</td>" +
-            f"<td>{r['industry']}</td>" +
+            f"<td><span class='status-badge' style='background:{status_bg}; color:{status_fg}'>{r['status']}</span></td>" +
+            f"<td class='industry-cell'>{r['industry']}</td>" +
             f"<td>{rr_txt}</td>" +
             f"<td>{mm_txt}</td>" +
             f"<td>{price_txt}</td>" +
-            f"<td style='color:{chg_color}'>{chg_txt}</td>" +
+            f"<td class='chg-cell' style='color:{chg_color}'>{chg_txt}</td>" +
             "</tr>"
         )
     
@@ -909,14 +914,14 @@ def make_interactive_table(rows):
     industry_options = '<option value="">All Industries</option>' + ''.join(f'<option value="{ind.lower()}">{ind}</option>' for ind in industries)
     
     # Calculate height based on rows
-    table_height = min(600, 80 + len(rows) * 42)
+    table_height = min(650, 90 + len(rows) * 44)
     
     html_content = f"""
     <!DOCTYPE html>
     <html>
     <head>
         <style>
-            @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;700;800&display=swap');
+            @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
             
             * {{
                 box-sizing: border-box;
@@ -1013,13 +1018,65 @@ def make_interactive_table(rows):
             th.sort-desc .sort-icon::after {{ content: '▼'; opacity: 1; }}
             th:not(.sort-asc):not(.sort-desc) .sort-icon::after {{ content: '⇅'; }}
             
+            /* Row styling - neutral background */
+            .rrg-row {{
+                background: #0d1117;
+                transition: background 0.15s;
+            }}
+            
+            .rrg-row:hover {{
+                background: #161b22;
+            }}
+            
+            .rrg-row:nth-child(even) {{
+                background: #0f1419;
+            }}
+            
+            .rrg-row:nth-child(even):hover {{
+                background: #161b22;
+            }}
+            
+            /* Name column link */
             .rrg-name a {{
-                color: #9ecbff;
+                color: #58a6ff;
                 text-decoration: none;
+                font-weight: 600;
             }}
             
             .rrg-name a:hover {{
                 text-decoration: underline;
+                color: #79b8ff;
+            }}
+            
+            /* Rank column */
+            .rank-cell {{
+                font-weight: 700;
+                color: #8b949e;
+                text-align: center;
+                width: 70px;
+            }}
+            
+            /* Status badge - this is where the color shows */
+            .status-badge {{
+                display: inline-block;
+                padding: 4px 10px;
+                border-radius: 6px;
+                font-size: 12px;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.3px;
+            }}
+            
+            /* Industry column */
+            .industry-cell {{
+                color: #8b949e;
+                font-size: 12px;
+            }}
+            
+            /* Change % column */
+            .chg-cell {{
+                font-weight: 700;
+                text-align: right;
             }}
             
             tr.hidden-row {{
