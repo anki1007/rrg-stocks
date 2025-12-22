@@ -26,9 +26,8 @@ from matplotlib.colors import to_hex
 GITHUB_USER = "anki1007"
 GITHUB_REPO = "rrg-stocks"
 GITHUB_BRANCH = "main"
-GITHUB_TICKER_DIR = "ticker"
 CSV_BASENAME = "niftyindices.csv"  # CSV path under /ticker
-RAW_BASE = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/{GITHUB_BRANCH}/{GITHUB_TICKER_DIR}/"
+RAW_BASE = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/{GITHUB_BRANCH}/"
 
 DEFAULT_TF = "Weekly"
 WINDOW = 14
