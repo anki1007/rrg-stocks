@@ -461,11 +461,11 @@ speed_ms = st.sidebar.slider("Speed (ms/frame)", 1000, 3000, 1500, 50)
 looping = st.sidebar.checkbox("Loop", value=True)
 
 # -------------------- Data Build --------------------
-if uploaded is not None:
-    UNIVERSE, META = load_universe_from_uploaded_csv(uploaded)
-else:
-    # cache_bust varies the cache key so updated CSVs are fetched within ttl window
-    UNIVERSE, META = load_universe_from_github_csv(CSV_BASENAME, cache_bust=str(pd.Timestamp.utcnow().floor("1min")))
+UNIVERSE, META = load_universe_from_github_csv(
+    CSV_BASENAME,
+    cache_bust=str(pd.Timestamp.utcnow().floor("1min"))
+)
+
 
 bench_symbol = BENCH_CHOICES[bench_label]
 benchmark_data, tickers_data = download_block_with_benchmark(UNIVERSE, bench_symbol, period, interval)
