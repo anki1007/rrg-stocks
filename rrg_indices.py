@@ -21,6 +21,7 @@ import streamlit.components.v1 as components
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.colors import to_hex
+import plotly.graph_objects as go
 
 # -------------------- Config --------------------
 GITHUB_USER = "anki1007"
@@ -152,6 +153,79 @@ h1, h2, h3, h4, h5, h6,
 .stMarkdown h1, .stMarkdown h2, .stMarkdown h3,
 .stMarkdown h4, .stMarkdown h5, .stMarkdown h6 {
   color: var(--text) !important;
+}
+
+/* Enhanced Table Styles */
+.rrg-table-container {
+  background: var(--bg-2);
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid var(--border);
+}
+
+.rrg-filter-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.rrg-filter-row input, .rrg-filter-row select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-family: var(--app-font);
+  font-size: 13px;
+}
+
+.rrg-filter-row input:focus, .rrg-filter-row select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.rrg-filter-row input::placeholder {
+  color: var(--text-dim);
+}
+
+.rrg-table th {
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s;
+}
+
+.rrg-table th:hover {
+  background: #1a2233 !important;
+}
+
+.rrg-table th .sort-icon {
+  margin-left: 6px;
+  opacity: 0.5;
+  font-size: 11px;
+}
+
+.rrg-table th.sort-asc .sort-icon::after { content: '▲'; opacity: 1; }
+.rrg-table th.sort-desc .sort-icon::after { content: '▼'; opacity: 1; }
+.rrg-table th:not(.sort-asc):not(.sort-desc) .sort-icon::after { content: '⇅'; }
+
+.rrg-table tr.hidden-row { display: none; }
+
+.filter-badge {
+  background: var(--accent);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* Plotly chart container */
+.plotly-chart-container {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
 }
 </style>
 """, unsafe_allow_html=True)
@@ -570,50 +644,194 @@ rank_dict = {sym: i for i, sym in enumerate(ranked_syms, start=1)}
 # -------------------- Plot + Ranking --------------------
 plot_col, rank_col = st.columns([4.5, 1.8], gap="medium")
 
+# Helper function for label filtering
+def dist_last(t):
+    rr_last = rs_ratio_map[t].iloc[end_idx]
+    mm_last = rs_mom_map[t].iloc[end_idx]
+    return float(np.hypot(rr_last - 100.0, mm_last - 100.0))
+
+allow_labels = {t for t, _ in sorted([(t, dist_last(t)) for t in tickers],
+                                     key=lambda x: x[1], reverse=True)[:label_top_n]} if show_labels else set()
+
 with plot_col:
-    fig, ax = plt.subplots(1, 1, figsize=(10.6, 6.8))
-    ax.set_facecolor("#F5F5DC")        # inner plot background
-    fig.patch.set_facecolor("#F5F5DC") # outer figure background
-    ax.set_title("Relative Rotation Graph (RRG)", fontsize=15, pad=10)
-    ax.set_xlabel("JdK RS-Ratio", fontsize=14)
-    ax.set_ylabel("JdK RS-Momentum", fontsize=14)
-    ax.axhline(100, color="#777", linestyle=":", linewidth=1.1)
-    ax.axvline(100, color="#777", linestyle=":", linewidth=1.1)
-    ax.fill_between([94, 100], [94, 94], [100, 100], color=(1.0, 0.0, 0.0, 0.20))
-    ax.fill_between([100, 106], [94, 94], [100, 100], color=(1.0, 1.0, 0.0, 0.20))
-    ax.fill_between([100, 106], [100, 100], [106, 106], color=(0.0, 1.0, 0.0, 0.20))
-    ax.fill_between([94, 100], [100, 100], [106, 106], color=(0.0, 0.0, 1.0, 0.20))
-    ax.text(95, 105, "Improving", fontsize=13, weight="bold")
-    ax.text(104, 105, "Leading", fontsize=13, weight="bold", ha="right")
-    ax.text(104, 95, "Weakening", fontsize=13, weight="bold", ha="right")
-    ax.text(95, 95, "Lagging", fontsize=13, weight="bold")
-    ax.set_xlim(94, 106); ax.set_ylim(94, 106)
-
-    def dist_last(t):
-        rr_last = rs_ratio_map[t].iloc[end_idx]
-        mm_last = rs_mom_map[t].iloc[end_idx]
-        return float(np.hypot(rr_last - 100.0, mm_last - 100.0))
-
-    allow_labels = {t for t, _ in sorted([(t, dist_last(t)) for t in tickers],
-                                         key=lambda x: x[1], reverse=True)[:label_top_n]} if show_labels else set()
-
+    # Build interactive Plotly RRG chart
+    fig = go.Figure()
+    
+    # Add quadrant backgrounds
+    fig.add_shape(type="rect", x0=94, y0=94, x1=100, y1=100,
+                  fillcolor="rgba(255, 0, 0, 0.15)", line_width=0, layer="below")
+    fig.add_shape(type="rect", x0=100, y0=94, x1=106, y1=100,
+                  fillcolor="rgba(255, 255, 0, 0.15)", line_width=0, layer="below")
+    fig.add_shape(type="rect", x0=100, y0=100, x1=106, y1=106,
+                  fillcolor="rgba(0, 255, 0, 0.15)", line_width=0, layer="below")
+    fig.add_shape(type="rect", x0=94, y0=100, x1=100, y1=106,
+                  fillcolor="rgba(0, 100, 255, 0.15)", line_width=0, layer="below")
+    
+    # Add center lines
+    fig.add_hline(y=100, line_dash="dot", line_color="#777", line_width=1)
+    fig.add_vline(x=100, line_dash="dot", line_color="#777", line_width=1)
+    
+    # Add quadrant labels
+    fig.add_annotation(x=95, y=105.5, text="<b>Improving</b>", showarrow=False,
+                       font=dict(size=13, color="#5d86d1"))
+    fig.add_annotation(x=105, y=105.5, text="<b>Leading</b>", showarrow=False,
+                       font=dict(size=13, color="#3fa46a"))
+    fig.add_annotation(x=105, y=94.5, text="<b>Weakening</b>", showarrow=False,
+                       font=dict(size=13, color="#e2d06b"))
+    fig.add_annotation(x=95, y=94.5, text="<b>Lagging</b>", showarrow=False,
+                       font=dict(size=13, color="#e06a6a"))
+    
+    # Plot each ticker with trail, arrow, and rich hover
     for t in tickers:
         if t not in st.session_state.visible_set:
             continue
         rr = rs_ratio_map[t].iloc[start_idx + 1 : end_idx + 1].dropna()
         mm = rs_mom_map[t].iloc[start_idx + 1 : end_idx + 1].dropna()
         rr, mm = rr.align(mm, join="inner")
-        if len(rr) == 0 or len(mm) == 0:
+        if len(rr) < 2:
             continue
-        ax.plot(rr.values, mm.values, linewidth=1.2, alpha=0.7, color=SYMBOL_COLORS[t])
-        sizes = [22] * (len(rr) - 1) + [76]
-        ax.scatter(rr.values, mm.values, s=sizes, linewidths=0.6,
-                   facecolor=SYMBOL_COLORS[t], edgecolor="#333")
+        
+        color = SYMBOL_COLORS[t]
+        name = META.get(t, {}).get("name", t)
+        industry = META.get(t, {}).get("industry", "-")
+        
+        # Get current values for hover
+        rr_last = float(rr.values[-1])
+        mm_last = float(mm.values[-1])
+        status = get_status(rr_last, mm_last)
+        
+        # Calculate price and change
+        px = tickers_data[t].reindex(idx).dropna()
+        price = float(px.iloc[end_idx]) if end_idx < len(px) else np.nan
+        chg = ((px.iloc[end_idx] / px.iloc[start_idx] - 1) * 100.0) if (end_idx < len(px) and start_idx < len(px)) else np.nan
+        
+        # Calculate momentum score (distance from center, higher = stronger)
+        mom_score = float(np.hypot(rr_last - 100.0, mm_last - 100.0))
+        
+        # Build hover text for each point on trail
+        hover_texts = []
+        for i in range(len(rr)):
+            pt_rr = float(rr.values[i])
+            pt_mm = float(mm.values[i])
+            pt_status = get_status(pt_rr, pt_mm)
+            hover_texts.append(
+                f"<b>{name}</b><br>" +
+                f"<b>Status:</b> {pt_status}<br>" +
+                f"<b>RS-Ratio:</b> {pt_rr:.2f}<br>" +
+                f"<b>RS-Momentum:</b> {pt_mm:.2f}<br>" +
+                f"<b>Momentum Score:</b> {mom_score:.2f}<br>" +
+                f"<b>Price:</b> ₹{price:,.2f}<br>" +
+                f"<b>Change %:</b> {chg:+.2f}%<br>" +
+                f"<b>Industry:</b> {industry}"
+            )
+        
+        # Trail line
+        fig.add_trace(go.Scatter(
+            x=rr.values, y=mm.values,
+            mode='lines',
+            line=dict(color=color, width=2),
+            opacity=0.6,
+            hoverinfo='skip',
+            showlegend=False
+        ))
+        
+        # Trail points (smaller for history, larger for current)
+        sizes = [8] * (len(rr) - 1) + [16]
+        fig.add_trace(go.Scatter(
+            x=rr.values, y=mm.values,
+            mode='markers',
+            marker=dict(
+                size=sizes,
+                color=color,
+                line=dict(color='#333', width=1)
+            ),
+            text=hover_texts,
+            hoverinfo='text',
+            hoverlabel=dict(
+                bgcolor='#1a1f2e',
+                bordercolor=color,
+                font=dict(family='Plus Jakarta Sans, sans-serif', size=12, color='white')
+            ),
+            showlegend=False
+        ))
+        
+        # Add arrow head showing direction
+        if len(rr) >= 2:
+            # Calculate direction from second-to-last to last point
+            x0, y0 = float(rr.values[-2]), float(mm.values[-2])
+            x1, y1 = float(rr.values[-1]), float(mm.values[-1])
+            
+            # Calculate arrow direction
+            dx = x1 - x0
+            dy = y1 - y0
+            length = np.sqrt(dx**2 + dy**2)
+            
+            if length > 0.01:  # Only add arrow if there's movement
+                # Normalize and scale arrow
+                arrow_scale = 0.8
+                ax_offset = (dx / length) * arrow_scale
+                ay_offset = (dy / length) * arrow_scale
+                
+                fig.add_annotation(
+                    x=x1, y=y1,
+                    ax=x1 - ax_offset, ay=y1 - ay_offset,
+                    xref='x', yref='y',
+                    axref='x', ayref='y',
+                    showarrow=True,
+                    arrowhead=2,
+                    arrowsize=1.5,
+                    arrowwidth=2,
+                    arrowcolor=color,
+                    opacity=0.9
+                )
+        
+        # Add label for top N by distance
         if show_labels and t in allow_labels:
-            ax.annotate(t, (rr.values[-1], mm.values[-1]), fontsize=11,
-                        color=SYMBOL_COLORS[t], xytext=(6, 6), textcoords="offset points")
-
-    st.pyplot(fig, use_container_width=True)
+            fig.add_annotation(
+                x=rr_last, y=mm_last,
+                text=f"<b>{display_symbol(t)}</b>",
+                showarrow=False,
+                xshift=15, yshift=10,
+                font=dict(size=11, color=color),
+                bgcolor='rgba(0,0,0,0.5)',
+                borderpad=3
+            )
+    
+    # Update layout
+    fig.update_layout(
+        title=dict(
+            text="Relative Rotation Graph (RRG)",
+            font=dict(size=16, family='Plus Jakarta Sans, sans-serif', color='#333'),
+            x=0.5
+        ),
+        xaxis=dict(
+            title="JdK RS-Ratio",
+            range=[94, 106],
+            showgrid=True,
+            gridcolor='rgba(0,0,0,0.1)',
+            zeroline=False,
+            tickfont=dict(color='#333')
+        ),
+        yaxis=dict(
+            title="JdK RS-Momentum",
+            range=[94, 106],
+            showgrid=True,
+            gridcolor='rgba(0,0,0,0.1)',
+            zeroline=False,
+            tickfont=dict(color='#333')
+        ),
+        plot_bgcolor='#F5F5DC',
+        paper_bgcolor='#F5F5DC',
+        margin=dict(l=60, r=40, t=60, b=60),
+        hoverlabel=dict(align='left'),
+        height=550
+    )
+    
+    st.plotly_chart(fig, use_container_width=True, config={
+        'displayModeBar': True,
+        'modeBarButtonsToRemove': ['lasso2d', 'select2d'],
+        'displaylogo': False
+    })
 
 with rank_col:
     st.markdown("### Ranking")
@@ -635,16 +853,40 @@ with rank_col:
 
 # -------------------- Table --------------------
 def make_table_html(rows):
+    # Generate unique table ID
+    table_id = "rrg_table_" + str(hash(str(len(rows))) % 10000)
+    
     headers = ["Ranking", "Name", "Status", "Industry", "RS-Ratio", "RS-Momentum", "Price", "Change %"]
-    th = "<tr>" + "".join([f"<th>{h}</th>" for h in headers]) + "</tr>"
+    header_keys = ["rank", "name", "status", "industry", "rs_ratio", "rs_mom", "price", "chg"]
+    
+    # Build header with sort icons
+    th_cells = []
+    for i, h in enumerate(headers):
+        sort_class = "sort-desc" if i == 0 else ""  # Default sort by ranking
+        th_cells.append(f'<th class="{sort_class}" data-col="{i}" data-key="{header_keys[i]}"><span>{h}</span><span class="sort-icon"></span></th>')
+    th = "<tr>" + "".join(th_cells) + "</tr>"
+    
+    # Build rows with data attributes for filtering/sorting
     tr = []
     for r in rows:
+        rr_val = r["rs_ratio"] if not pd.isna(r["rs_ratio"]) else 0
+        mm_val = r["rs_mom"] if not pd.isna(r["rs_mom"]) else 0
+        price_val = r["price"] if not pd.isna(r["price"]) else 0
+        chg_val = r["chg"] if not pd.isna(r["chg"]) else 0
+        
         rr_txt  = "-" if pd.isna(r["rs_ratio"]) else f"{r['rs_ratio']:.2f}"
         mm_txt  = "-" if pd.isna(r["rs_mom"])  else f"{r['rs_mom']:.2f}"
-        price_txt = "-" if pd.isna(r["price"]) else f"{r['price']:.2f}"
-        chg_txt   = "-" if pd.isna(r["chg"])   else f"{r['chg']:.2f}"
+        price_txt = "-" if pd.isna(r["price"]) else f"₹{r['price']:,.2f}"
+        chg_txt   = "-" if pd.isna(r["chg"])   else f"{r['chg']:+.2f}%"
+        
+        # Color code change
+        chg_color = "#3fa46a" if r.get("chg", 0) > 0 else "#e06a6a" if r.get("chg", 0) < 0 else "inherit"
+        
         tr.append(
-            "<tr class='rrg-row' style='background:%s; color:%s'>" % (r["bg"], r["fg"]) +
+            f"<tr class='rrg-row' style='background:{r['bg']}; color:{r['fg']}' " +
+            f"data-rank='{r['rank']}' data-name='{r['name'].lower()}' data-status='{r['status'].lower()}' " +
+            f"data-industry='{r['industry'].lower()}' data-rs_ratio='{rr_val}' data-rs_mom='{mm_val}' " +
+            f"data-price='{price_val}' data-chg='{chg_val}'>" +
             f"<td>{r['rank']}</td>" +
             f"<td class='rrg-name'><a href='{r['tv']}' target='_blank'>{r['name']}</a></td>" +
             f"<td>{r['status']}</td>" +
@@ -652,10 +894,131 @@ def make_table_html(rows):
             f"<td>{rr_txt}</td>" +
             f"<td>{mm_txt}</td>" +
             f"<td>{price_txt}</td>" +
-            f"<td>{chg_txt}</td>" +
+            f"<td style='color:{chg_color}'>{chg_txt}</td>" +
             "</tr>"
         )
-    return f"<div class='rrg-wrap'><table class='rrg-table'>{th}{''.join(tr)}</table></div>"
+    
+    # Get unique statuses and industries for filter dropdowns
+    statuses = sorted(set(r['status'] for r in rows))
+    industries = sorted(set(r['industry'] for r in rows if r['industry'] != '-'))
+    
+    status_options = '<option value="">All Statuses</option>' + ''.join(f'<option value="{s.lower()}">{s}</option>' for s in statuses)
+    industry_options = '<option value="">All Industries</option>' + ''.join(f'<option value="{ind.lower()}">{ind}</option>' for ind in industries)
+    
+    # JavaScript for sorting and filtering
+    js_code = f"""
+    <script>
+    (function() {{
+        const tableId = '{table_id}';
+        const table = document.getElementById(tableId);
+        if (!table) return;
+        
+        const headers = table.querySelectorAll('th');
+        const tbody = table.querySelector('tbody');
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        const searchInput = document.getElementById(tableId + '_search');
+        const statusFilter = document.getElementById(tableId + '_status');
+        const industryFilter = document.getElementById(tableId + '_industry');
+        const countBadge = document.getElementById(tableId + '_count');
+        
+        let currentSort = {{ col: 0, asc: true }};
+        
+        function updateCount() {{
+            const visible = rows.filter(r => !r.classList.contains('hidden-row')).length;
+            countBadge.textContent = visible + ' / ' + rows.length;
+        }}
+        
+        function sortTable(colIndex, key) {{
+            const isNumeric = ['rank', 'rs_ratio', 'rs_mom', 'price', 'chg'].includes(key);
+            const asc = currentSort.col === colIndex ? !currentSort.asc : (colIndex === 0);
+            currentSort = {{ col: colIndex, asc: asc }};
+            
+            // Update header classes
+            headers.forEach((h, i) => {{
+                h.classList.remove('sort-asc', 'sort-desc');
+                if (i === colIndex) {{
+                    h.classList.add(asc ? 'sort-asc' : 'sort-desc');
+                }}
+            }});
+            
+            rows.sort((a, b) => {{
+                let aVal = a.dataset[key] || '';
+                let bVal = b.dataset[key] || '';
+                
+                if (isNumeric) {{
+                    aVal = parseFloat(aVal) || 0;
+                    bVal = parseFloat(bVal) || 0;
+                    return asc ? aVal - bVal : bVal - aVal;
+                }} else {{
+                    return asc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+                }}
+            }});
+            
+            rows.forEach(row => tbody.appendChild(row));
+        }}
+        
+        function filterTable() {{
+            const searchTerm = searchInput.value.toLowerCase();
+            const statusTerm = statusFilter.value;
+            const industryTerm = industryFilter.value;
+            
+            rows.forEach(row => {{
+                const name = row.dataset.name || '';
+                const status = row.dataset.status || '';
+                const industry = row.dataset.industry || '';
+                
+                const matchesSearch = !searchTerm || name.includes(searchTerm);
+                const matchesStatus = !statusTerm || status === statusTerm;
+                const matchesIndustry = !industryTerm || industry === industryTerm;
+                
+                if (matchesSearch && matchesStatus && matchesIndustry) {{
+                    row.classList.remove('hidden-row');
+                }} else {{
+                    row.classList.add('hidden-row');
+                }}
+            }});
+            
+            updateCount();
+        }}
+        
+        // Attach event listeners
+        headers.forEach((header, index) => {{
+            header.addEventListener('click', () => {{
+                const key = header.dataset.key;
+                sortTable(index, key);
+            }});
+        }});
+        
+        searchInput.addEventListener('input', filterTable);
+        statusFilter.addEventListener('change', filterTable);
+        industryFilter.addEventListener('change', filterTable);
+        
+        updateCount();
+    }})();
+    </script>
+    """
+    
+    filter_row = f"""
+    <div class="rrg-filter-row">
+        <input type="text" id="{table_id}_search" placeholder="🔍 Search by name..." style="min-width: 200px;">
+        <select id="{table_id}_status">{status_options}</select>
+        <select id="{table_id}_industry">{industry_options}</select>
+        <span class="filter-badge" id="{table_id}_count">{len(rows)} / {len(rows)}</span>
+    </div>
+    """
+    
+    return f"""
+    <div class='rrg-table-container'>
+        {filter_row}
+        <div class='rrg-wrap'>
+            <table class='rrg-table' id='{table_id}'>
+                <thead>{th}</thead>
+                <tbody>{''.join(tr)}</tbody>
+            </table>
+        </div>
+    </div>
+    {js_code}
+    """
 
 # Build table rows IN RANK ORDER so it matches the right panel
 rows = []
