@@ -543,7 +543,7 @@ start_idx = max(end_idx - tail_len, 0)
 date_str = format_bar_date(idx[end_idx], interval)
 
 # -------- Title --------
-st.markdown(f"### Relative Rotation Graphs – Indices – {date_str}")
+st.markdown(f"###{date_str}")
 
 # -------------------- Ranking Metric (1 = strongest) --------------------
 def ranking_value(t: str) -> float:
