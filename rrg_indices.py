@@ -705,8 +705,8 @@ with plot_col:
         price = float(px.iloc[end_idx]) if end_idx < len(px) else np.nan
         chg = ((px.iloc[end_idx] / px.iloc[start_idx] - 1) * 100.0) if (end_idx < len(px) and start_idx < len(px)) else np.nan
         
-        # Calculate momentum score (distance from center, higher = stronger)
-        mom_score = float(np.hypot(rr_last - 100.0, mm_last - 100.0))
+        # Calculate RRG Power (distance from center, higher = stronger)
+        rrg_power = float(np.hypot(rr_last - 100.0, mm_last - 100.0))
         
         # Build hover text for each point on trail
         hover_texts = []
@@ -719,7 +719,7 @@ with plot_col:
                 f"<b>Status:</b> {pt_status}<br>" +
                 f"<b>RS-Ratio:</b> {pt_rr:.2f}<br>" +
                 f"<b>RS-Momentum:</b> {pt_mm:.2f}<br>" +
-                f"<b>Momentum Score:</b> {mom_score:.2f}<br>" +
+                f"<b>RRG Power:</b> {rrg_power:.2f}<br>" +
                 f"<b>Price:</b> ₹{price:,.2f}<br>" +
                 f"<b>Change %:</b> {chg:+.2f}%<br>" +
                 f"<b>Industry:</b> {industry}"
@@ -856,8 +856,8 @@ def make_interactive_table(rows):
     """Generate a fully self-contained interactive HTML table with sorting and filtering"""
     table_id = "rrg_table_" + str(abs(hash(str(len(rows)))) % 10000)
     
-    headers = ["Ranking", "Name", "Status", "Industry", "RS-Ratio", "RS-Momentum", "Price", "Change %"]
-    header_keys = ["rank", "name", "status", "industry", "rs_ratio", "rs_mom", "price", "chg"]
+    headers = ["Ranking", "Name", "Status", "Industry", "RS-Ratio", "RS-Momentum", "RRG Power", "Price", "Change %"]
+    header_keys = ["rank", "name", "status", "industry", "rs_ratio", "rs_mom", "rrg_power", "price", "chg"]
     
     # Build header with sort icons
     th_cells = []
@@ -874,8 +874,12 @@ def make_interactive_table(rows):
         price_val = r["price"] if not pd.isna(r["price"]) else 0
         chg_val = r["chg"] if not pd.isna(r["chg"]) else 0
         
+        # Calculate RRG Power (distance from center)
+        rrg_power_val = float(np.hypot(rr_val - 100.0, mm_val - 100.0))
+        
         rr_txt = "-" if pd.isna(r["rs_ratio"]) else f"{r['rs_ratio']:.2f}"
         mm_txt = "-" if pd.isna(r["rs_mom"]) else f"{r['rs_mom']:.2f}"
+        rrg_power_txt = f"{rrg_power_val:.2f}"
         price_txt = "-" if pd.isna(r["price"]) else f"₹{r['price']:,.2f}"
         chg_txt = "-" if pd.isna(r["chg"]) else f"{r['chg']:+.2f}%"
         
@@ -894,13 +898,14 @@ def make_interactive_table(rows):
             f"<tr class='rrg-row' " +
             f"data-rank='{r['rank']}' data-name='{safe_name}' data-status='{r['status'].lower()}' " +
             f"data-industry='{safe_industry}' data-rs_ratio='{rr_val}' data-rs_mom='{mm_val}' " +
-            f"data-price='{price_val}' data-chg='{chg_val}'>" +
+            f"data-rrg_power='{rrg_power_val}' data-price='{price_val}' data-chg='{chg_val}'>" +
             f"<td class='rank-cell'>{r['rank']}</td>" +
             f"<td class='rrg-name'><a href='{r['tv']}' target='_blank'>{r['name']}</a></td>" +
             f"<td><span class='status-badge' style='background:{status_bg}; color:{status_fg}'>{r['status']}</span></td>" +
             f"<td class='industry-cell'>{r['industry']}</td>" +
             f"<td>{rr_txt}</td>" +
             f"<td>{mm_txt}</td>" +
+            f"<td class='power-cell'>{rrg_power_txt}</td>" +
             f"<td>{price_txt}</td>" +
             f"<td class='chg-cell' style='color:{chg_color}'>{chg_txt}</td>" +
             "</tr>"
@@ -1079,6 +1084,12 @@ def make_interactive_table(rows):
                 text-align: right;
             }}
             
+            /* RRG Power column */
+            .power-cell {{
+                font-weight: 600;
+                color: #a78bfa;
+            }}
+            
             tr.hidden-row {{
                 display: none;
             }}
@@ -1130,7 +1141,7 @@ def make_interactive_table(rows):
             }}
             
             function sortTable(colIndex, key) {{
-                const isNumeric = ['rank', 'rs_ratio', 'rs_mom', 'price', 'chg'].includes(key);
+                const isNumeric = ['rank', 'rs_ratio', 'rs_mom', 'rrg_power', 'price', 'chg'].includes(key);
                 const asc = currentSort.col === colIndex ? !currentSort.asc : (colIndex === 0);
                 currentSort = {{ col: colIndex, asc: asc }};
                 
