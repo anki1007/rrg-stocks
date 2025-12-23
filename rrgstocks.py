@@ -1348,9 +1348,21 @@ def make_interactive_table(rows):
     return html_content, table_height
 
 
-# Build table rows IN RANK ORDER so it matches the right panel
+# Build table rows for ALL stocks (not just filtered visible_set)
+# Sort all tickers by momentum score for table display
+all_stocks_with_scores = []
+for t in tickers:
+    rr = float(rs_ratio_map[t].iloc[end_idx])
+    mm = float(rs_mom_map[t].iloc[end_idx])
+    mom_score = float(np.hypot(rr - 100.0, mm - 100.0))
+    all_stocks_with_scores.append((t, mom_score))
+
+all_stocks_with_scores.sort(key=lambda x: x[1], reverse=True)
+all_ranked_syms = [t for t, _ in all_stocks_with_scores]
+all_rank_dict = {sym: i for i, sym in enumerate(all_ranked_syms, start=1)}
+
 rows = []
-for t in ranked_syms:
+for t in all_ranked_syms:
     rr = float(rs_ratio_map[t].iloc[end_idx])
     mm = float(rs_mom_map[t].iloc[end_idx])
     status = get_status(rr, mm)
@@ -1360,7 +1372,7 @@ for t in ranked_syms:
     price = float(px.iloc[end_idx]) if end_idx < len(px) else np.nan
     chg = ((px.iloc[end_idx] / px.iloc[start_idx] - 1) * 100.0) if (end_idx < len(px) and start_idx < len(px)) else np.nan
     rows.append({
-        "rank": rank_dict.get(t, ""),
+        "rank": all_rank_dict.get(t, ""),
         "name": META.get(t, {}).get("name", t),
         "status": status,
         "industry": META.get(t, {}).get("industry", "-"),
@@ -1373,27 +1385,27 @@ for t in ranked_syms:
         "tv": tv_link_for_symbol(t),
     })
 
-with st.expander("Table", expanded=True):
+with st.expander(f"📊 Full Table — All {len(rows)} Stocks", expanded=True):
     table_html, table_height = make_interactive_table(rows)
     components.html(table_html, height=table_height, scrolling=False)
 
 # -------------------- Downloads --------------------
-def export_ranks_csv(perf_sorted):
+def export_ranks_csv(all_stocks_sorted):
     out = []
-    for t, _m in perf_sorted:
+    for t, mom_score in all_stocks_sorted:
         rr = float(rs_ratio_map[t].iloc[end_idx])
         mm = float(rs_mom_map[t].iloc[end_idx])
         out.append((
-            rank_dict[t],
+            all_rank_dict[t],
             t,
             META.get(t, {}).get("name", t),
             META.get(t, {}).get("industry", "-"),
-            _m,
+            mom_score,
             rr,
             mm,
             get_status(rr, mm),
         ))
-    df = pd.DataFrame(out, columns=["ranking", "symbol", "name", "industry", "rank_metric", "rs_ratio", "rs_momentum", "status"])
+    df = pd.DataFrame(out, columns=["ranking", "symbol", "name", "industry", "momentum_score", "rs_ratio", "rs_momentum", "status"])
     buf = io.StringIO()
     df.to_csv(buf, index=False)
     return buf.getvalue().encode()
@@ -1419,7 +1431,7 @@ c1, c2 = st.columns(2)
 with c1:
     st.download_button(
         "Download Ranks CSV",
-        data=export_ranks_csv(perf),
+        data=export_ranks_csv(all_stocks_with_scores),
         file_name=f"ranks_{date_str}.csv",
         mime="text/csv",
         use_container_width=True,
