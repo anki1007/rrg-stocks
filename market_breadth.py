@@ -104,15 +104,12 @@ INDEX_CONFIG = {
     },
 }
 
-st.divider()
-    
-    st.markdown("### 📊 EMA Reference")
-    st.markdown(":red[**EMA-20**] — Short-term trend")
-    st.markdown(":orange[**EMA-50**] — Medium-term trend")
-    st.markdown(":green[**EMA-100**] — Long-term trend")
-    st.markdown(":blue[**EMA-200**] — Major trend")
-    
-    st.divider()
+# EMA descriptions for sidebar
+EMA_DESCRIPTIONS = {
+    "20": " green: Short-Term Momentum",
+    "50": "Medium-Term Trend",
+    "100": "Intermediate Trend",
+    "200": "Long-Term Trend"
 }
 
 # ============================================================================
