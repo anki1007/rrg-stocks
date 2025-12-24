@@ -143,7 +143,7 @@ with st.sidebar:
                 <div>
                     <span style='color: {theme["text_color"]}; font-weight: bold;'>EMA {period}</span>
                     <br>
-                    <span style='color: #888; font-size: 12px;'>{EMA_DESCRIPTIONS[period]}</span>
+                    <span style='color: #888; font-size: 14px;'>{EMA_DESCRIPTIONS[period]}</span>
                 </div>
             </div>
             """,
