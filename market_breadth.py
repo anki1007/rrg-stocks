@@ -106,7 +106,7 @@ INDEX_CONFIG = {
 
 # EMA descriptions for sidebar
 EMA_DESCRIPTIONS = {
-    "20": " green: Short-Term Momentum",
+    "20": "Short-Term Momentum",
     "50": "Medium-Term Trend",
     "100": "Intermediate Trend",
     "200": "Long-Term Trend"
@@ -132,7 +132,7 @@ with st.sidebar:
     st.divider()
     
     # FIX #2: Display EMA colors with proper color swatches and descriptions
-    st.markdown("### 🎨 ACTIVE THEME COLORS")
+    st.markdown("### 🎨 EMA INTERPRETATION")
     
     for period in ["20", "50", "100", "200"]:
         color = theme['ema_colors'][period]
@@ -143,7 +143,7 @@ with st.sidebar:
                 <div>
                     <span style='color: {theme["text_color"]}; font-weight: bold;'>EMA {period}</span>
                     <br>
-                    <span style='color: #888; font-size: 11px;'>{EMA_DESCRIPTIONS[period]}</span>
+                    <span style='color: #888; font-size: 12px;'>{EMA_DESCRIPTIONS[period]}</span>
                 </div>
             </div>
             """,
