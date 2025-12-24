@@ -206,11 +206,9 @@ st.markdown(f"""
 # INDEX CONFIGURATION
 # =============================================================================
 INDEX_CONFIG = {
-    "Nifty 50": {"csv_name": "ticker/nifty50.csv", "description": "India's flagship Index - Top 50 blue-chip companies"},
+    "Nifty 50": {"csv_name": "ticker/nifty50.csv", "description": "India's flagship index - Top 50 blue-chip companies"},
     "Nifty 100": {"csv_name": "ticker/nifty100.csv", "description": "Top 100 companies by market capitalization"},
     "Nifty 200": {"csv_name": "ticker/nifty200.csv", "description": "Broad market representation - Large & Mid Cap"},
-    "Nifty MSC 400": {"csv_name": "ticker/niftymidsmallcap400.csv", "description": "Broad market representation - Mid & Small Cap"},
-    "Nifty 500": {"csv_name": "ticker/nifty500.csv", "description": "Broad market representation - Large, Mid & Small Cap"},
     "Nifty Total Market": {"csv_name": "ticker/niftytotalmarket.csv", "description": "Comprehensive market coverage"},
 }
 
@@ -1084,30 +1082,22 @@ with st.sidebar:
     
     st.markdown("### 📖 Interpretation Guide")
     
-    st.markdown(f"""
-    <div style="font-size: 0.85rem; color: {THEME['text_secondary']};">
-        <p><b style="color: {THEME['accent_green']};">● Healthy (&lt;30%)</b><br>
-        Strong market breadth. Most stocks above EMA.</p>
-        
-        <p><b style="color: {THEME['accent_orange']};">● Warning (30-70%)</b><br>
-        Deteriorating breadth. Caution advised.</p>
-        
-        <p><b style="color: {THEME['accent_red']};">● Critical (&gt;70%)</b><br>
-        Severe weakness. Potential capitulation or bear market.</p>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(":green[**● Healthy (<30%)**]")
+    st.caption("Strong market breadth. Most stocks above EMA.")
+    
+    st.markdown(":orange[**● Warning (30-70%)**]")
+    st.caption("Deteriorating breadth. Caution advised.")
+    
+    st.markdown(":red[**● Critical (>70%)**]")
+    st.caption("Severe weakness. Potential capitulation or bear market.")
     
     st.divider()
     
     st.markdown("### 📊 EMA Reference")
-    st.markdown(f"""
-    <div style="font-size: 0.85rem; color: {THEME['text_secondary']};">
-        <p><b style="color: {THEME['ema_colors'][20]};">EMA-20</b> — Short-term trend</p>
-        <p><b style="color: {THEME['ema_colors'][50]};">EMA-50</b> — Medium-term trend</p>
-        <p><b style="color: {THEME['ema_colors'][100]};">EMA-100</b> — Long-term trend</p>
-        <p><b style="color: {THEME['ema_colors'][200]};">EMA-200</b> — Major trend</p>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(":red[**EMA-20**] — Short-term trend")
+    st.markdown(":orange[**EMA-50**] — Medium-term trend")
+    st.markdown(":green[**EMA-100**] — Long-term trend")
+    st.markdown(":blue[**EMA-200**] — Major trend")
     
     st.divider()
     
