@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
+import pytz
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -103,6 +104,14 @@ INDEX_CONFIG = {
     },
 }
 
+# EMA descriptions for sidebar
+EMA_DESCRIPTIONS = {
+    "20": "Short-term momentum (1 month)",
+    "50": "Medium-term trend (2.5 months)",
+    "100": "Intermediate support (5 months)",
+    "200": "Long-term trend (10 months)"
+}
+
 # ============================================================================
 # SIDEBAR
 # ============================================================================
@@ -115,24 +124,31 @@ with st.sidebar:
     
     st.divider()
     
-    lookback_days = st.slider("📅 Historical Data (Years)", min_value=1, max_value=25, value=10, step=1)
-    lookback_days = lookback_days * 365
+    lookback_years = st.slider("📅 Historical Data (Years)", min_value=1, max_value=25, value=10, step=1)
+    lookback_days = lookback_years * 365
     
     max_workers = st.slider("⚡ Data Fetch Threads", min_value=5, max_value=30, value=10)
     
     st.divider()
     
+    # FIX #2: Display EMA colors with proper color swatches and descriptions
     st.markdown("### 🎨 ACTIVE THEME COLORS")
-    col1, col2, col3, col4 = st.columns(4)
     
-    with col1:
-        st.markdown(f"**EMA 20**")
-    with col2:
-        st.markdown(f"**EMA 50**")
-    with col3:
-        st.markdown(f"**EMA 100**")
-    with col4:
-        st.markdown(f"**EMA 200**")
+    for period in ["20", "50", "100", "200"]:
+        color = theme['ema_colors'][period]
+        st.markdown(
+            f"""
+            <div style='display: flex; align-items: center; margin-bottom: 8px;'>
+                <div style='width: 20px; height: 20px; background-color: {color}; border-radius: 4px; margin-right: 10px;'></div>
+                <div>
+                    <span style='color: {theme["text_color"]}; font-weight: bold;'>EMA {period}</span>
+                    <br>
+                    <span style='color: #888; font-size: 11px;'>{EMA_DESCRIPTIONS[period]}</span>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
 # ============================================================================
 # LOAD TICKERS FROM CSV
@@ -160,6 +176,36 @@ def load_tickers_from_csv(csv_filename):
         return None, f"File not found: {csv_filename}"
     except Exception as e:
         return None, f"Error loading {csv_filename}: {str(e)}"
+
+
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+def convert_to_ist(dt_index):
+    """Convert datetime index to IST and format cleanly"""
+    ist = pytz.timezone('Asia/Kolkata')
+    
+    # If already timezone aware, convert; otherwise localize to UTC first
+    if dt_index.tz is None:
+        dt_index = dt_index.tz_localize('UTC')
+    
+    return dt_index.tz_convert(ist)
+
+
+def format_date_ist(dt):
+    """Format a datetime object to clean IST string"""
+    if pd.isna(dt):
+        return ""
+    
+    ist = pytz.timezone('Asia/Kolkata')
+    
+    if hasattr(dt, 'tz') and dt.tz is not None:
+        dt_ist = dt.astimezone(ist)
+    else:
+        dt_ist = ist.localize(dt) if hasattr(dt, 'tzinfo') else dt
+    
+    return dt_ist.strftime('%Y-%m-%d')
 
 
 # ============================================================================
@@ -205,6 +251,7 @@ class MarketBreadthAnalyzer:
         results = {}
         for period in self.ema_periods:
             ema = self.calculate_ema(data, period)
+            # FIX #1: Start from index 199 (after EMA warm-up) but keep ALL data points
             start_idx = 199
             above = (data.iloc[start_idx:].values > ema.iloc[start_idx:].values).astype(int)
             common_index = data.index[start_idx:]
@@ -226,7 +273,7 @@ class MarketBreadthAnalyzer:
             
             for idx, future in enumerate(futures):
                 try:
-                    result = future.result(timeout=10)
+                    result = future.result(timeout=30)  # Increased timeout for more data
                     if result is not None:
                         all_results[tickers[idx]] = result
                 except:
@@ -324,7 +371,7 @@ def main():
         st.metric(label="📊 Selected", value=len(selected_tickers))
     
     with col2:
-        st.metric(label="📅 Period", value=f"{lookback_days/365:.0f}Y")
+        st.metric(label="📅 Period", value=f"{lookback_years}Y")
     
     with col3:
         st.metric(label="⚡ Threads", value=max_workers)
@@ -356,7 +403,7 @@ def main():
             st.success(f"✅ Using {len(selected_tickers)} custom tickers")
     
     # Analyze Button
-    if st.button("🚀 ANALYZE MARKET BREADTH", width="stretch", type="primary"):
+    if st.button("🚀 ANALYZE MARKET BREADTH", type="primary"):
         analyzer = MarketBreadthAnalyzer(lookback_days, max_workers, theme)
         breadth_data = analyzer.calculate_breadth(selected_tickers)
         
@@ -364,10 +411,20 @@ def main():
             st.session_state['breadth_data'] = breadth_data
             st.session_state['selected_tickers'] = selected_tickers
             st.session_state['selected_index'] = selected_index
+            st.session_state['lookback_years'] = lookback_years
     
     # Display Results
     if 'breadth_data' in st.session_state:
         breadth_data = st.session_state['breadth_data']
+        
+        # Show data range info
+        sample_period = list(breadth_data.keys())[0]
+        date_range = breadth_data[sample_period]['percent'].index
+        total_days = len(date_range)
+        start_date = format_date_ist(date_range.min())
+        end_date = format_date_ist(date_range.max())
+        
+        st.info(f"📅 **Data Range:** {start_date} to {end_date} ({total_days} trading days)")
         
         # =====================================================================
         # METRICS
@@ -408,7 +465,7 @@ def main():
         st.divider()
         
         # =====================================================================
-        # CHARTS
+        # CHARTS - FIX #1: Display ALL historical data
         # =====================================================================
         
         st.markdown("### 📈 MARKET BREADTH EVOLUTION")
@@ -421,7 +478,7 @@ def main():
             subplot_titles=("Percentage of Stocks Above EMA", "Stock Count Above EMA")
         )
         
-        # Percentage lines
+        # Percentage lines - ALL DATA
         for period in [20, 50, 100, 200]:
             data = breadth_data[period]['percent']
             fig.add_trace(
@@ -429,7 +486,7 @@ def main():
                     x=data.index,
                     y=data.values,
                     name=f"EMA {period}",
-                    line=dict(color=theme['ema_colors'][str(period)], width=2.5),
+                    line=dict(color=theme['ema_colors'][str(period)], width=2),
                     hovertemplate=f"<b>EMA {period}</b><br>%{{x|%Y-%m-%d}}<br>%{{y:.2f}}%<extra></extra>"
                 ),
                 row=1, col=1
@@ -440,15 +497,17 @@ def main():
         fig.add_hline(y=50, line_dash="dot", line_color=theme['neutral_color'], line_width=1.5, annotation_text="50% (Neutral)", annotation_position="right", row=1)
         fig.add_hline(y=30, line_dash="dash", line_color=theme['down_color'], line_width=1.5, annotation_text="30% (Weak)", annotation_position="right", row=1)
         
-        # Count bars
-        for idx, period in enumerate([20, 50, 100, 200]):
+        # Count lines (changed from bars for better performance with large datasets)
+        for period in [20, 50, 100, 200]:
             data = breadth_data[period]['count']
             fig.add_trace(
-                go.Bar(
+                go.Scatter(
                     x=data.index,
                     y=data.values,
                     name=f"Count EMA {period}",
-                    marker=dict(color=theme['ema_colors'][str(period)], opacity=0.7),
+                    line=dict(color=theme['ema_colors'][str(period)], width=1.5),
+                    fill='tozeroy',
+                    fillcolor=f"rgba{tuple(list(int(theme['ema_colors'][str(period)].lstrip('#')[i:i+2], 16) for i in (0, 2, 4)) + [0.2])}",
                     showlegend=False,
                     hovertemplate=f"<b>EMA {period}</b><br>%{{x|%Y-%m-%d}}<br>Stocks: %{{y}}<extra></extra>"
                 ),
@@ -460,8 +519,14 @@ def main():
         fig.update_yaxes(title_text="% of Stocks", row=1, col=1, gridcolor=theme['grid_color'], range=[0, 100], showgrid=True)
         fig.update_yaxes(title_text="Stock Count", row=2, col=1, gridcolor=theme['grid_color'], showgrid=True)
         
+        # Add range slider for navigation
+        fig.update_xaxes(
+            rangeslider=dict(visible=True, thickness=0.05),
+            row=2, col=1
+        )
+        
         fig.update_layout(
-            height=700,
+            height=800,
             plot_bgcolor=theme['bg_color'],
             paper_bgcolor=theme['bg_color'],
             font=dict(color=theme['text_color'], family="Courier New", size=11),
@@ -507,30 +572,54 @@ def main():
                 
                 st.divider()
                 
-                # Time series data
+                # FIX #3: Format dates in clean IST format
                 df_display = pd.DataFrame({
-                    'Date': data['percent'].index,
+                    'Date': [format_date_ist(dt) for dt in data['percent'].index],
                     'Percentage (%)': data['percent'].values,
                     'Count Above': data['count'].values.astype(int),
                     'Total': [data['total']] * len(data['percent']),
                     'Signal': ['🟢 STRONG' if x >= 70 else '🟡 BULLISH' if x >= 50 else '🟠 BEARISH' if x >= 30 else '🔴 WEAK' for x in data['percent'].values]
                 })
                 
+                # Show data summary
+                st.caption(f"📊 Showing {len(df_display)} trading days of data")
+                
+                # Add date range filter
+                col1, col2 = st.columns(2)
+                with col1:
+                    show_recent = st.selectbox(
+                        f"View range (EMA {period})",
+                        ["Last 30 days", "Last 90 days", "Last 1 year", "Last 3 years", "All data"],
+                        key=f"range_{period}"
+                    )
+                
+                # Filter based on selection
+                if show_recent == "Last 30 days":
+                    df_filtered = df_display.tail(30)
+                elif show_recent == "Last 90 days":
+                    df_filtered = df_display.tail(90)
+                elif show_recent == "Last 1 year":
+                    df_filtered = df_display.tail(252)
+                elif show_recent == "Last 3 years":
+                    df_filtered = df_display.tail(756)
+                else:
+                    df_filtered = df_display
+                
                 st.dataframe(
-                    df_display.sort_values('Date', ascending=False).head(30),
+                    df_filtered.sort_values('Date', ascending=False),
                     use_container_width=True,
                     hide_index=True,
                     height=400
                 )
                 
-                # Download button
+                # Download button - full data
                 csv = df_display.to_csv(index=False)
                 st.download_button(
-                    f"⬇️ Download EMA {period} CSV",
+                    f"⬇️ Download EMA {period} Full History CSV",
                     csv,
                     f"breadth_ema{period}_{st.session_state.get('selected_index', 'custom').replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.csv",
                     "text/csv",
-                    width="stretch"
+                    key=f"download_{period}"
                 )
         
         # =====================================================================
