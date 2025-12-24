@@ -206,9 +206,11 @@ st.markdown(f"""
 # INDEX CONFIGURATION
 # =============================================================================
 INDEX_CONFIG = {
-    "Nifty 50": {"csv_name": "ticker/nifty50.csv", "description": "India's flagship index - Top 50 blue-chip companies"},
+    "Nifty 50": {"csv_name": "ticker/nifty50.csv", "description": "India's flagship Index - Top 50 blue-chip companies"},
     "Nifty 100": {"csv_name": "ticker/nifty100.csv", "description": "Top 100 companies by market capitalization"},
     "Nifty 200": {"csv_name": "ticker/nifty200.csv", "description": "Broad market representation - Large & Mid Cap"},
+    "Nifty MSC 400": {"csv_name": "ticker/niftymidsmallcap400.csv", "description": "Broad market representation - Mid & Small Cap"},
+    "Nifty 500": {"csv_name": "ticker/nifty500.csv", "description": "Broad market representation - Large, Mid & Small Cap"},
     "Nifty Total Market": {"csv_name": "ticker/niftytotalmarket.csv", "description": "Comprehensive market coverage"},
 }
 
