@@ -1085,10 +1085,10 @@ with st.sidebar:
     st.markdown("### 📖 Interpretation Guide")
     
     st.markdown(":green[**● Healthy (>70%)**]")
-    st.caption("Strong market breadth. Most stocks above EMA.")
+    st.caption("Strong market breadth. Most stocks above All EMAs.")
 
     st.markdown(":blue[**● Bullish Participation (50-70%)**]")
-    st.caption("Strong market breadth. Most stocks above EMA.")
+    st.caption("Balanced market breadth.")
     
     st.markdown(":orange[**● Critical Warning (30-50%)**]")
     st.caption("Deteriorating breadth. Caution advised.")
