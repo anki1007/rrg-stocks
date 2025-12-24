@@ -132,7 +132,7 @@ with st.sidebar:
     st.divider()
     
     # FIX #2: Display EMA colors with proper color swatches and descriptions
-    st.markdown("### 🎨 ACTIVE THEME COLORS")
+    st.markdown("### 🎨 EMA INTERPRETATION")
     
     for period in ["20", "50", "100", "200"]:
         color = theme['ema_colors'][period]
@@ -141,7 +141,7 @@ with st.sidebar:
             <div style='display: flex; align-items: center; margin-bottom: 8px;'>
                 <div style='width: 20px; height: 20px; background-color: {color}; border-radius: 4px; margin-right: 10px;'></div>
                 <div>
-                    <span style='color: {theme["text_color"]}; font-weight: bold;'>EMA {period}</span>
+                    <span style='color: {color}; font-weight: bold;'>EMA {period}</span>
                     <br>
                     <span style='color: #888; font-size: 11px;'>{EMA_DESCRIPTIONS[period]}</span>
                 </div>
