@@ -219,20 +219,47 @@ class MarketBreadthAnalyzer:
         self.ema_periods = [20, 50, 100, 200]
         self.theme = theme
     
-    def get_stock_data(self, ticker, max_retries=2):
-        """Fetch stock data with retry logic"""
+    def get_stock_data(self, ticker, max_retries=3):
+        """Fetch stock data with retry logic - FIXED to get full historical data"""
         for attempt in range(max_retries):
             try:
                 stock = yf.Ticker(ticker)
                 end_date = datetime.now()
                 start_date = end_date - timedelta(days=self.lookback_days)
-                hist = stock.history(start=start_date, end=end_date)
+                
+                # FIX: Use period parameter as fallback for better data retrieval
+                # yfinance sometimes has issues with start/end dates
+                hist = stock.history(start=start_date, end=end_date, auto_adjust=True)
+                
+                # If we got very limited data, try using period parameter instead
+                if len(hist) < 200:
+                    # Map lookback_days to period string
+                    if self.lookback_days >= 3650:  # 10+ years
+                        period_str = "max"
+                    elif self.lookback_days >= 1825:  # 5+ years
+                        period_str = "10y"
+                    elif self.lookback_days >= 730:  # 2+ years
+                        period_str = "5y"
+                    elif self.lookback_days >= 365:  # 1+ year
+                        period_str = "2y"
+                    else:
+                        period_str = "1y"
+                    
+                    hist = stock.history(period=period_str, auto_adjust=True)
                 
                 if hist.empty or len(hist) < 200:
                     return None
                 
+                # Trim to requested lookback if we got more data
+                if len(hist) > 0:
+                    cutoff_date = datetime.now() - timedelta(days=self.lookback_days)
+                    # Make cutoff_date timezone-aware if hist.index is timezone-aware
+                    if hist.index.tz is not None:
+                        cutoff_date = cutoff_date.replace(tzinfo=hist.index.tz)
+                    hist = hist[hist.index >= cutoff_date]
+                
                 return hist['Close'].dropna()
-            except:
+            except Exception as e:
                 if attempt == max_retries - 1:
                     return None
         return None
@@ -243,7 +270,7 @@ class MarketBreadthAnalyzer:
         return data.ewm(span=period, adjust=False).mean()
     
     def analyze_ticker(self, ticker):
-        """Analyze single ticker against all EMAs"""
+        """Analyze single ticker against all EMAs - FIXED to return ALL data after warm-up"""
         data = self.get_stock_data(ticker)
         if data is None or len(data) < 200:
             return None
@@ -251,8 +278,12 @@ class MarketBreadthAnalyzer:
         results = {}
         for period in self.ema_periods:
             ema = self.calculate_ema(data, period)
-            # FIX #1: Start from index 199 (after EMA warm-up) but keep ALL data points
+            # Start from index 199 (after EMA warm-up for 200-day EMA) to ensure accurate EMAs
+            # But keep ALL subsequent data points for full historical analysis
             start_idx = 199
+            if len(data) <= start_idx:
+                return None
+            
             above = (data.iloc[start_idx:].values > ema.iloc[start_idx:].values).astype(int)
             common_index = data.index[start_idx:]
             results[period] = pd.Series(above, index=common_index)
@@ -260,58 +291,88 @@ class MarketBreadthAnalyzer:
         return results
     
     def calculate_breadth(self, tickers):
-        """Calculate market breadth for all tickers"""
+        """Calculate market breadth for all tickers - FIXED to preserve full date range"""
         container = st.container()
         progress_bar = container.progress(0)
         status_text = container.empty()
         
         all_results = {}
         completed = 0
+        failed_tickers = []
         
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            futures = [executor.submit(self.analyze_ticker, ticker) for ticker in tickers]
+            futures = {executor.submit(self.analyze_ticker, ticker): ticker for ticker in tickers}
             
-            for idx, future in enumerate(futures):
+            for future in futures:
+                ticker = futures[future]
                 try:
-                    result = future.result(timeout=30)  # Increased timeout for more data
+                    result = future.result(timeout=60)  # Increased timeout for more data
                     if result is not None:
-                        all_results[tickers[idx]] = result
-                except:
-                    pass
+                        all_results[ticker] = result
+                    else:
+                        failed_tickers.append(ticker)
+                except Exception as e:
+                    failed_tickers.append(ticker)
                 
                 completed += 1
                 progress = completed / len(tickers)
                 progress_bar.progress(progress)
-                status_text.text(f"📊 Fetched: {completed}/{len(tickers)} tickers")
+                status_text.text(f"📊 Fetched: {completed}/{len(tickers)} tickers | Success: {len(all_results)} | Failed: {len(failed_tickers)}")
         
         progress_bar.empty()
         status_text.empty()
         
         if not all_results:
+            st.error("❌ No valid data retrieved. Please try again.")
             return None
+        
+        # Debug info
+        sample_ticker = list(all_results.keys())[0]
+        sample_data = all_results[sample_ticker][20]
+        st.info(f"📊 Sample ticker '{sample_ticker}' has {len(sample_data)} data points from {sample_data.index.min().strftime('%Y-%m-%d')} to {sample_data.index.max().strftime('%Y-%m-%d')}")
         
         breadth_data = {}
         for period in self.ema_periods:
+            # Collect all unique dates across all tickers
             all_dates = set()
             for ticker_results in all_results.values():
-                all_dates.update(ticker_results[period].index)
+                if period in ticker_results:
+                    all_dates.update(ticker_results[period].index)
             
             all_dates = sorted(list(all_dates))
+            
+            if not all_dates:
+                continue
+            
+            # Create aligned series for each ticker
             series_list = []
             for ticker, ticker_results in all_results.items():
-                series = ticker_results[period].reindex(all_dates, method='ffill')
-                series_list.append(series)
+                if period in ticker_results:
+                    series = ticker_results[period].reindex(all_dates, method='ffill')
+                    series_list.append(series)
+            
+            if not series_list:
+                continue
             
             df_combined = pd.concat(series_list, axis=1, ignore_index=True)
-            df_combined = df_combined.dropna()
+            # Don't drop all NaN rows - just fill forward to maintain data continuity
+            df_combined = df_combined.ffill().bfill()
+            
+            # Calculate breadth metrics
+            count_per_day = df_combined.sum(axis=1)
+            total_stocks_per_day = df_combined.notna().sum(axis=1)
+            percent_above = (count_per_day / total_stocks_per_day * 100).round(2)
             
             breadth_data[period] = {
-                'percent': (df_combined.mean(axis=1) * 100).round(2),
-                'count': df_combined.sum(axis=1).astype(int),
+                'percent': percent_above,
+                'count': count_per_day.astype(int),
                 'total': len(all_results)
             }
         
-        st.success(f"✅ Analysis Complete! Analyzed {len(all_results)} tickers successfully")
+        if failed_tickers:
+            st.warning(f"⚠️ Could not fetch data for {len(failed_tickers)} tickers")
+        
+        st.success(f"✅ Analysis Complete! Analyzed {len(all_results)} tickers with {len(all_dates)} trading days of data")
         return breadth_data
 
 
@@ -465,10 +526,18 @@ def main():
         st.divider()
         
         # =====================================================================
-        # CHARTS - FIX #1: Display ALL historical data
+        # CHARTS - FIXED: Display ALL historical data with proper x-axis range
         # =====================================================================
         
         st.markdown("### 📈 MARKET BREADTH EVOLUTION")
+        
+        # Add chart time range selector
+        chart_range = st.selectbox(
+            "📅 Chart Display Range",
+            ["Full History", "Last 5 Years", "Last 3 Years", "Last 1 Year", "Last 6 Months", "Last 3 Months"],
+            index=0,
+            key="chart_range"
+        )
         
         fig = make_subplots(
             rows=2, cols=1,
@@ -477,6 +546,22 @@ def main():
             row_heights=[0.6, 0.4],
             subplot_titles=("Percentage of Stocks Above EMA", "Stock Count Above EMA")
         )
+        
+        # Determine x-axis range based on selection
+        x_range = None
+        if chart_range != "Full History":
+            end_dt = datetime.now()
+            if chart_range == "Last 5 Years":
+                start_dt = end_dt - timedelta(days=5*365)
+            elif chart_range == "Last 3 Years":
+                start_dt = end_dt - timedelta(days=3*365)
+            elif chart_range == "Last 1 Year":
+                start_dt = end_dt - timedelta(days=365)
+            elif chart_range == "Last 6 Months":
+                start_dt = end_dt - timedelta(days=180)
+            elif chart_range == "Last 3 Months":
+                start_dt = end_dt - timedelta(days=90)
+            x_range = [start_dt, end_dt]
         
         # Percentage lines - ALL DATA
         for period in [20, 50, 100, 200]:
@@ -497,9 +582,12 @@ def main():
         fig.add_hline(y=50, line_dash="dot", line_color=theme['neutral_color'], line_width=1.5, annotation_text="50% (Neutral)", annotation_position="right", row=1)
         fig.add_hline(y=30, line_dash="dash", line_color=theme['down_color'], line_width=1.5, annotation_text="30% (Weak)", annotation_position="right", row=1)
         
-        # Count lines (changed from bars for better performance with large datasets)
+        # Count lines (area fill for better visualization)
         for period in [20, 50, 100, 200]:
             data = breadth_data[period]['count']
+            color_hex = theme['ema_colors'][str(period)].lstrip('#')
+            r, g, b = tuple(int(color_hex[i:i+2], 16) for i in (0, 2, 4))
+            
             fig.add_trace(
                 go.Scatter(
                     x=data.index,
@@ -507,23 +595,28 @@ def main():
                     name=f"Count EMA {period}",
                     line=dict(color=theme['ema_colors'][str(period)], width=1.5),
                     fill='tozeroy',
-                    fillcolor=f"rgba{tuple(list(int(theme['ema_colors'][str(period)].lstrip('#')[i:i+2], 16) for i in (0, 2, 4)) + [0.2])}",
+                    fillcolor=f"rgba({r},{g},{b},0.2)",
                     showlegend=False,
                     hovertemplate=f"<b>EMA {period}</b><br>%{{x|%Y-%m-%d}}<br>Stocks: %{{y}}<extra></extra>"
                 ),
                 row=2, col=1
             )
         
-        # Update axes
-        fig.update_xaxes(title_text="Date", row=2, col=1, gridcolor=theme['grid_color'], showgrid=True)
+        # Update axes with optional range
+        fig.update_xaxes(
+            title_text="Date", 
+            row=2, col=1, 
+            gridcolor=theme['grid_color'], 
+            showgrid=True,
+            range=x_range,
+            rangeslider=dict(visible=True, thickness=0.05)
+        )
         fig.update_yaxes(title_text="% of Stocks", row=1, col=1, gridcolor=theme['grid_color'], range=[0, 100], showgrid=True)
         fig.update_yaxes(title_text="Stock Count", row=2, col=1, gridcolor=theme['grid_color'], showgrid=True)
         
-        # Add range slider for navigation
-        fig.update_xaxes(
-            rangeslider=dict(visible=True, thickness=0.05),
-            row=2, col=1
-        )
+        # If range is set, also update the first x-axis
+        if x_range:
+            fig.update_xaxes(range=x_range, row=1, col=1)
         
         fig.update_layout(
             height=800,
@@ -539,7 +632,7 @@ def main():
         st.plotly_chart(fig, use_container_width=True)
         
         # =====================================================================
-        # DETAILED STATISTICS
+        # DETAILED STATISTICS - FIXED: Proper scrollable table with column config
         # =====================================================================
         
         st.markdown("### 📋 DETAILED BREADTH ANALYSIS BY EMA")
@@ -575,21 +668,21 @@ def main():
                 # FIX #3: Format dates in clean IST format
                 df_display = pd.DataFrame({
                     'Date': [format_date_ist(dt) for dt in data['percent'].index],
-                    'Percentage (%)': data['percent'].values,
+                    'Percentage (%)': data['percent'].values.round(2),
                     'Count Above': data['count'].values.astype(int),
                     'Total': [data['total']] * len(data['percent']),
                     'Signal': ['🟢 STRONG' if x >= 70 else '🟡 BULLISH' if x >= 50 else '🟠 BEARISH' if x >= 30 else '🔴 WEAK' for x in data['percent'].values]
                 })
                 
                 # Show data summary
-                st.caption(f"📊 Showing {len(df_display)} trading days of data")
+                st.caption(f"📊 Total: {len(df_display)} trading days of data")
                 
                 # Add date range filter
                 col1, col2 = st.columns(2)
                 with col1:
                     show_recent = st.selectbox(
                         f"View range (EMA {period})",
-                        ["Last 30 days", "Last 90 days", "Last 1 year", "Last 3 years", "All data"],
+                        ["Last 30 days", "Last 90 days", "Last 1 year", "Last 3 years", "Last 5 years", "All data"],
                         key=f"range_{period}"
                     )
                 
@@ -602,14 +695,26 @@ def main():
                     df_filtered = df_display.tail(252)
                 elif show_recent == "Last 3 years":
                     df_filtered = df_display.tail(756)
+                elif show_recent == "Last 5 years":
+                    df_filtered = df_display.tail(1260)
                 else:
                     df_filtered = df_display
                 
+                st.caption(f"📋 Showing {len(df_filtered)} rows")
+                
+                # FIX #1: Use proper dataframe configuration for scrolling
                 st.dataframe(
-                    df_filtered.sort_values('Date', ascending=False),
+                    df_filtered.sort_values('Date', ascending=False).reset_index(drop=True),
                     use_container_width=True,
                     hide_index=True,
-                    height=400
+                    height=500,  # Increased height for better visibility
+                    column_config={
+                        "Date": st.column_config.TextColumn("Date", width="medium"),
+                        "Percentage (%)": st.column_config.NumberColumn("Percentage (%)", format="%.2f", width="medium"),
+                        "Count Above": st.column_config.NumberColumn("Count Above", width="small"),
+                        "Total": st.column_config.NumberColumn("Total", width="small"),
+                        "Signal": st.column_config.TextColumn("Signal", width="medium")
+                    }
                 )
                 
                 # Download button - full data
