@@ -26,7 +26,7 @@ THEMES = {
         "bg_color": "#161614",
         "text_color": "#FFD700",
         "grid_color": "#2a2a2a",
-        "ema_colors": {"20": "#FF6B9D", "50": "#4ECDC4", "100": "#95E1D3", "200": "#FF6348"},
+        "ema_colors": {"20": "#00FF00", "50": "#FFFF00", "100": "#FFA500", "200": "#FF0000"},
         "up_color": "#00D084",
         "down_color": "#FF5E78",
         "neutral_color": "#FFD700"
@@ -35,7 +35,7 @@ THEMES = {
         "bg_color": "#0B0E11",
         "text_color": "#00FF41",
         "grid_color": "#1a1a1a",
-        "ema_colors": {"20": "#39FF14", "50": "#00FF41", "100": "#0FFF50", "200": "#3FFF00"},
+        "ema_colors": {"20": "#00FF00", "50": "#FFFF00", "100": "#FFA500", "200": "#FF0000"},
         "up_color": "#39FF14",
         "down_color": "#FF0000",
         "neutral_color": "#00FF41"
@@ -44,7 +44,7 @@ THEMES = {
         "bg_color": "#0a0015",
         "text_color": "#00D9FF",
         "grid_color": "#1a0033",
-        "ema_colors": {"20": "#FF10F0", "50": "#00D9FF", "100": "#B537F2", "200": "#FF006E"},
+        "ema_colors": {"20": "#00FF00", "50": "#FFFF00", "100": "#FFA500", "200": "#FF0000"},
         "up_color": "#00FF88",
         "down_color": "#FF0055",
         "neutral_color": "#00D9FF"
@@ -53,7 +53,7 @@ THEMES = {
         "bg_color": "#FFFFFF",
         "text_color": "#1F2937",
         "grid_color": "#E5E7EB",
-        "ema_colors": {"20": "#EF4444", "50": "#3B82F6", "100": "#10B981", "200": "#F59E0B"},
+        "ema_colors": {"20": "#22C55E", "50": "#EAB308", "100": "#F97316", "200": "#EF4444"},
         "up_color": "#10B981",
         "down_color": "#EF4444",
         "neutral_color": "#6B7280"
@@ -106,10 +106,10 @@ INDEX_CONFIG = {
 
 # EMA descriptions for sidebar
 EMA_DESCRIPTIONS = {
-    "20": "Short-Term Momentum",
-    "50": "Medium-Term Trend",
-    "100": "Intermediate Trend",
-    "200": "Long-Term Trend"
+    "20": "Short-term momentum (1 month)",
+    "50": "Medium-term trend (2.5 months)",
+    "100": "Intermediate support (5 months)",
+    "200": "Long-term trend (10 months)"
 }
 
 # ============================================================================
@@ -132,7 +132,7 @@ with st.sidebar:
     st.divider()
     
     # FIX #2: Display EMA colors with proper color swatches and descriptions
-    st.markdown("### 🎨 EMA INTERPRETATION")
+    st.markdown("### 🎨 ACTIVE THEME COLORS")
     
     for period in ["20", "50", "100", "200"]:
         color = theme['ema_colors'][period]
@@ -143,7 +143,7 @@ with st.sidebar:
                 <div>
                     <span style='color: {theme["text_color"]}; font-weight: bold;'>EMA {period}</span>
                     <br>
-                    <span style='color: #888; font-size: 14px;'>{EMA_DESCRIPTIONS[period]}</span>
+                    <span style='color: #888; font-size: 11px;'>{EMA_DESCRIPTIONS[period]}</span>
                 </div>
             </div>
             """,
