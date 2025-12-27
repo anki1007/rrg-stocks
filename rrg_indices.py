@@ -826,7 +826,6 @@ rank_mode = st.sidebar.selectbox("Rank by", rank_modes, index=0)
 tail_len = st.sidebar.slider("Trail Length", 1, 20, DEFAULT_TAIL, 1)
 show_labels = st.sidebar.toggle("Show labels on chart", value=False)
 label_top_n = st.sidebar.slider("Label top N by distance", 3, 30, 12, 1, disabled=not show_labels)
-max_rank_display = st.sidebar.slider("Max items in ranking panel", 10, 35, 20, 1)
 
 diag = st.sidebar.checkbox("Show diagnostics", value=False)
 
@@ -1024,9 +1023,7 @@ perf.sort(key=lambda x: x[1], reverse=True)
 ranked_syms = [sym for sym, _ in perf]
 rank_dict = {sym: i for i, sym in enumerate(ranked_syms, start=1)}
 
-# -------------------- Plot + Ranking --------------------
-plot_col, rank_col = st.columns([4.5, 1.8], gap="medium")
-
+# -------------------- Plot (Full Width) --------------------
 # Helper function for label filtering
 def dist_last(t):
     rr_last = rs_ratio_map[t].iloc[end_idx]
@@ -1036,231 +1033,211 @@ def dist_last(t):
 allow_labels = {t for t, _ in sorted([(t, dist_last(t)) for t in tickers],
                                      key=lambda x: x[1], reverse=True)[:label_top_n]} if show_labels else set()
 
-with plot_col:
-    # Build interactive Plotly RRG chart with PASTEL quadrant colors like StockCharts
-    fig = go.Figure()
+# Build interactive Plotly RRG chart with PASTEL quadrant colors like StockCharts
+fig = go.Figure()
+
+# Add quadrant backgrounds - PASTEL like StockCharts
+# Lagging (bottom-left) - Light Pink
+fig.add_shape(type="rect", x0=94, y0=94, x1=100, y1=100,
+              fillcolor=QUADRANT_BG_COLORS["Lagging"], line_width=0, layer="below")
+# Weakening (bottom-right) - Light Yellow/Cream
+fig.add_shape(type="rect", x0=100, y0=94, x1=106, y1=100,
+              fillcolor=QUADRANT_BG_COLORS["Weakening"], line_width=0, layer="below")
+# Leading (top-right) - Light Green/Mint
+fig.add_shape(type="rect", x0=100, y0=100, x1=106, y1=106,
+              fillcolor=QUADRANT_BG_COLORS["Leading"], line_width=0, layer="below")
+# Improving (top-left) - Light Purple/Lavender
+fig.add_shape(type="rect", x0=94, y0=100, x1=100, y1=106,
+              fillcolor=QUADRANT_BG_COLORS["Improving"], line_width=0, layer="below")
+
+# Add center lines - darker for visibility on pastel background
+fig.add_hline(y=100, line_dash="solid", line_color="rgba(100, 100, 100, 0.6)", line_width=1.5)
+fig.add_vline(x=100, line_dash="solid", line_color="rgba(100, 100, 100, 0.6)", line_width=1.5)
+
+# Add quadrant labels with darker colors for better visibility on pastel backgrounds
+fig.add_annotation(x=97, y=105.5, text="<b>IMPROVING</b>", showarrow=False,
+                   font=dict(size=14, color="#4a3a7a", family="Plus Jakarta Sans"))
+fig.add_annotation(x=103, y=105.5, text="<b>LEADING</b>", showarrow=False,
+                   font=dict(size=14, color="#0d5c2e", family="Plus Jakarta Sans"))
+fig.add_annotation(x=103, y=94.5, text="<b>WEAKENING</b>", showarrow=False,
+                   font=dict(size=14, color="#6a5a0a", family="Plus Jakarta Sans"))
+fig.add_annotation(x=97, y=94.5, text="<b>LAGGING</b>", showarrow=False,
+                   font=dict(size=14, color="#8a2a2a", family="Plus Jakarta Sans"))
+
+# Plot each ticker with THIN gradient trail width like StockCharts
+for t in tickers:
+    if t not in st.session_state.visible_set:
+        continue
+    rr = rs_ratio_map[t].iloc[start_idx + 1 : end_idx + 1].dropna()
+    mm = rs_mom_map[t].iloc[start_idx + 1 : end_idx + 1].dropna()
+    rr, mm = rr.align(mm, join="inner")
+    if len(rr) < 2:
+        continue
     
-    # Add quadrant backgrounds - PASTEL like StockCharts
-    # Lagging (bottom-left) - Light Pink
-    fig.add_shape(type="rect", x0=94, y0=94, x1=100, y1=100,
-                  fillcolor=QUADRANT_BG_COLORS["Lagging"], line_width=0, layer="below")
-    # Weakening (bottom-right) - Light Yellow/Cream
-    fig.add_shape(type="rect", x0=100, y0=94, x1=106, y1=100,
-                  fillcolor=QUADRANT_BG_COLORS["Weakening"], line_width=0, layer="below")
-    # Leading (top-right) - Light Green/Mint
-    fig.add_shape(type="rect", x0=100, y0=100, x1=106, y1=106,
-                  fillcolor=QUADRANT_BG_COLORS["Leading"], line_width=0, layer="below")
-    # Improving (top-left) - Light Purple/Lavender
-    fig.add_shape(type="rect", x0=94, y0=100, x1=100, y1=106,
-                  fillcolor=QUADRANT_BG_COLORS["Improving"], line_width=0, layer="below")
+    name = META.get(t, {}).get("name", t)
+    industry = META.get(t, {}).get("industry", "-")
     
-    # Add center lines - darker for visibility on pastel background
-    fig.add_hline(y=100, line_dash="solid", line_color="rgba(100, 100, 100, 0.6)", line_width=1.5)
-    fig.add_vline(x=100, line_dash="solid", line_color="rgba(100, 100, 100, 0.6)", line_width=1.5)
+    # Get current values for hover
+    rr_last = float(rr.values[-1])
+    mm_last = float(mm.values[-1])
+    status = get_status(rr_last, mm_last)
     
-    # Add quadrant labels with darker colors for better visibility on pastel backgrounds
-    fig.add_annotation(x=97, y=105.5, text="<b>IMPROVING</b>", showarrow=False,
-                       font=dict(size=14, color="#4a3a7a", family="Plus Jakarta Sans"))
-    fig.add_annotation(x=103, y=105.5, text="<b>LEADING</b>", showarrow=False,
-                       font=dict(size=14, color="#0d5c2e", family="Plus Jakarta Sans"))
-    fig.add_annotation(x=103, y=94.5, text="<b>WEAKENING</b>", showarrow=False,
-                       font=dict(size=14, color="#6a5a0a", family="Plus Jakarta Sans"))
-    fig.add_annotation(x=97, y=94.5, text="<b>LAGGING</b>", showarrow=False,
-                       font=dict(size=14, color="#8a2a2a", family="Plus Jakarta Sans"))
+    # Color based on current quadrant (head position)
+    color = status_bg_color(rr_last, mm_last)
     
-    # Plot each ticker with THIN gradient trail width like StockCharts
-    for t in tickers:
-        if t not in st.session_state.visible_set:
-            continue
-        rr = rs_ratio_map[t].iloc[start_idx + 1 : end_idx + 1].dropna()
-        mm = rs_mom_map[t].iloc[start_idx + 1 : end_idx + 1].dropna()
-        rr, mm = rr.align(mm, join="inner")
-        if len(rr) < 2:
-            continue
-        
-        name = META.get(t, {}).get("name", t)
-        industry = META.get(t, {}).get("industry", "-")
-        
-        # Get current values for hover
-        rr_last = float(rr.values[-1])
-        mm_last = float(mm.values[-1])
-        status = get_status(rr_last, mm_last)
-        
-        # Color based on current quadrant (head position)
-        color = status_bg_color(rr_last, mm_last)
-        
-        # Calculate price and change
-        px = tickers_data[t].reindex(idx).dropna()
-        price = float(px.iloc[end_idx]) if end_idx < len(px) else np.nan
-        chg = ((px.iloc[end_idx] / px.iloc[start_idx] - 1) * 100.0) if (end_idx < len(px) and start_idx < len(px)) else np.nan
-        
-        # Calculate Momentum Score (distance from center, higher = stronger)
-        rrg_power = float(np.hypot(rr_last - 100.0, mm_last - 100.0))
-        
-        # Build hover text for last point
-        hover_text = (
-            f"<b>{name}</b><br>" +
-            f"<b>Status:</b> {status}<br>" +
-            f"<b>RS-Ratio:</b> {rr_last:.2f}<br>" +
-            f"<b>RS-Momentum:</b> {mm_last:.2f}<br>" +
-            f"<b>Momentum Score:</b> {rrg_power:.2f}<br>" +
-            f"<b>Price:</b> ₹{price:,.2f}<br>" +
-            f"<b>Change %:</b> {chg:+.2f}%<br>" +
-            f"<b>Industry:</b> {industry}"
-        )
-        
-        # Draw trail segments with gradient width - slightly thicker for visibility
-        n_points = len(rr)
-        for i in range(n_points - 1):
-            # Width increases from 1.5 to 3.0 along the trail
-            seg_width = 1.5 + (i / max(1, n_points - 2)) * 1.5
-            # Opacity increases from 0.5 to 1.0
-            seg_opacity = 0.5 + (i / max(1, n_points - 2)) * 0.5
-            
-            fig.add_trace(go.Scatter(
-                x=[rr.values[i], rr.values[i+1]], 
-                y=[mm.values[i], mm.values[i+1]],
-                mode='lines',
-                line=dict(color=color, width=seg_width),
-                opacity=seg_opacity,
-                hoverinfo='skip',
-                showlegend=False
-            ))
-        
-        # Trail points - small dots, larger for current head
-        sizes = [5] * (len(rr) - 1) + [12]
-        
-        fig.add_trace(go.Scatter(
-            x=rr.values, y=mm.values,
-            mode='markers',
-            marker=dict(
-                size=sizes,
-                color=color,
-                line=dict(color='rgba(255,255,255,0.8)', width=1)
-            ),
-            text=[hover_text] * len(rr),
-            hoverinfo='text',
-            hoverlabel=dict(
-                bgcolor='#1a1f2e',
-                bordercolor=color,
-                font=dict(family='Plus Jakarta Sans, sans-serif', size=12, color='white')
-            ),
-            showlegend=False
-        ))
-        
-        # Add arrow head showing direction
-        if len(rr) >= 2:
-            # Calculate direction from second-to-last to last point
-            x0, y0 = float(rr.values[-2]), float(mm.values[-2])
-            x1, y1 = float(rr.values[-1]), float(mm.values[-1])
-            
-            # Calculate arrow direction
-            dx = x1 - x0
-            dy = y1 - y0
-            length = np.sqrt(dx**2 + dy**2)
-            
-            if length > 0.01:  # Only add arrow if there's movement
-                # Normalize and scale arrow
-                arrow_scale = 0.4
-                ax_offset = (dx / length) * arrow_scale
-                ay_offset = (dy / length) * arrow_scale
-                
-                fig.add_annotation(
-                    x=x1, y=y1,
-                    ax=x1 - ax_offset, ay=y1 - ay_offset,
-                    xref='x', yref='y',
-                    axref='x', ayref='y',
-                    showarrow=True,
-                    arrowhead=2,
-                    arrowsize=1.5,
-                    arrowwidth=2,
-                    arrowcolor=color,
-                    opacity=1.0
-                )
-        
-        # Add label for top N by distance - IMPROVED VISIBILITY
-        if show_labels and t in allow_labels:
-            # Use darker color that matches quadrant but is readable
-            label_colors = {
-                "Leading": "#0d5c2e",      # Dark green
-                "Improving": "#4a3a7a",    # Dark purple
-                "Weakening": "#6a5a0a",    # Dark gold
-                "Lagging": "#8a2a2a",      # Dark red
-            }
-            label_color = label_colors.get(status, "#333")
-            
-            fig.add_annotation(
-                x=rr_last, y=mm_last,
-                text=f"<b>{name}</b>",
-                showarrow=True,
-                arrowhead=0,
-                arrowsize=1,
-                arrowwidth=1,
-                arrowcolor=label_color,
-                ax=20, ay=-15,
-                font=dict(size=11, color=label_color, family="Plus Jakarta Sans"),
-                bgcolor='rgba(255,255,255,0.85)',
-                bordercolor=label_color,
-                borderwidth=1,
-                borderpad=3
-            )
+    # Calculate price and change
+    px = tickers_data[t].reindex(idx).dropna()
+    price = float(px.iloc[end_idx]) if end_idx < len(px) else np.nan
+    chg = ((px.iloc[end_idx] / px.iloc[start_idx] - 1) * 100.0) if (end_idx < len(px) and start_idx < len(px)) else np.nan
     
-    # Update layout with LIGHT chart area but visible labels on dark surroundings
-    fig.update_layout(
-        title=dict(
-            text=f"<b>Relative Rotation Graph</b>",
-            font=dict(size=20, family='Plus Jakarta Sans, sans-serif', color='#e6eaee'),
-            x=0.5
-        ),
-        xaxis=dict(
-            title=dict(text="<b>JdK RS-Ratio</b>", font=dict(size=14, color='#e6eaee')),
-            range=[94, 106],
-            showgrid=True,
-            gridcolor='rgba(150,150,150,0.3)',
-            zeroline=False,
-            tickfont=dict(color='#b3bdc7', size=11),
-            linecolor='#555',
-        ),
-        yaxis=dict(
-            title=dict(text="<b>JdK RS-Momentum</b>", font=dict(size=14, color='#e6eaee')),
-            range=[94, 106],
-            showgrid=True,
-            gridcolor='rgba(150,150,150,0.3)',
-            zeroline=False,
-            tickfont=dict(color='#b3bdc7', size=11),
-            linecolor='#555',
-        ),
-        plot_bgcolor='#fafafa',
-        paper_bgcolor='#0b0e13',
-        margin=dict(l=70, r=40, t=70, b=70),
-        hoverlabel=dict(align='left'),
-        height=620
+    # Calculate Momentum Score (distance from center, higher = stronger)
+    rrg_power = float(np.hypot(rr_last - 100.0, mm_last - 100.0))
+    
+    # Build hover text for last point
+    hover_text = (
+        f"<b>{name}</b><br>" +
+        f"<b>Status:</b> {status}<br>" +
+        f"<b>RS-Ratio:</b> {rr_last:.2f}<br>" +
+        f"<b>RS-Momentum:</b> {mm_last:.2f}<br>" +
+        f"<b>Momentum Score:</b> {rrg_power:.2f}<br>" +
+        f"<b>Price:</b> ₹{price:,.2f}<br>" +
+        f"<b>Change %:</b> {chg:+.2f}%<br>" +
+        f"<b>Industry:</b> {industry}"
     )
     
-    st.plotly_chart(fig, use_container_width=True, config={
-        'displayModeBar': True,
-        'modeBarButtonsToRemove': ['lasso2d', 'select2d'],
-        'displaylogo': False
-    })
-
-with rank_col:
-    st.markdown(f"### Ranking")
-    st.caption(f"as of {date_str}")
-    if ranked_syms:
-        rows_html = []
-        for sym in ranked_syms[:max_rank_display]:
-            rr = float(rs_ratio_map[sym].iloc[end_idx])
-            mm = float(rs_mom_map[sym].iloc[end_idx])
-            stat = get_status(rr, mm)
-            color = status_bg_color(rr, mm)  # Use quadrant color
-            name = META.get(sym, {}).get("name", sym)
-            rows_html.append(
-                f'<div class="row" style="color:{color}"><span>{rank_dict[sym]}.</span>'
-                f'<span class="name">{name}</span><span>[{stat}]</span></div>'
+    # Draw trail segments with gradient width - slightly thicker for visibility
+    n_points = len(rr)
+    for i in range(n_points - 1):
+        # Width increases from 1.5 to 3.0 along the trail
+        seg_width = 1.5 + (i / max(1, n_points - 2)) * 1.5
+        # Opacity increases from 0.5 to 1.0
+        seg_opacity = 0.5 + (i / max(1, n_points - 2)) * 0.5
+        
+        fig.add_trace(go.Scatter(
+            x=[rr.values[i], rr.values[i+1]], 
+            y=[mm.values[i], mm.values[i+1]],
+            mode='lines',
+            line=dict(color=color, width=seg_width),
+            opacity=seg_opacity,
+            hoverinfo='skip',
+            showlegend=False
+        ))
+    
+    # Trail points - small dots, larger for current head
+    sizes = [5] * (len(rr) - 1) + [12]
+    
+    fig.add_trace(go.Scatter(
+        x=rr.values, y=mm.values,
+        mode='markers',
+        marker=dict(
+            size=sizes,
+            color=color,
+            line=dict(color='rgba(255,255,255,0.8)', width=1)
+        ),
+        text=[hover_text] * len(rr),
+        hoverinfo='text',
+        hoverlabel=dict(
+            bgcolor='#1a1f2e',
+            bordercolor=color,
+            font=dict(family='Plus Jakarta Sans, sans-serif', size=12, color='white')
+        ),
+        showlegend=False
+    ))
+    
+    # Add arrow head showing direction
+    if len(rr) >= 2:
+        # Calculate direction from second-to-last to last point
+        x0, y0 = float(rr.values[-2]), float(mm.values[-2])
+        x1, y1 = float(rr.values[-1]), float(mm.values[-1])
+        
+        # Calculate arrow direction
+        dx = x1 - x0
+        dy = y1 - y0
+        length = np.sqrt(dx**2 + dy**2)
+        
+        if length > 0.01:  # Only add arrow if there's movement
+            # Normalize and scale arrow
+            arrow_scale = 0.4
+            ax_offset = (dx / length) * arrow_scale
+            ay_offset = (dy / length) * arrow_scale
+            
+            fig.add_annotation(
+                x=x1, y=y1,
+                ax=x1 - ax_offset, ay=y1 - ay_offset,
+                xref='x', yref='y',
+                axref='x', ayref='y',
+                showarrow=True,
+                arrowhead=2,
+                arrowsize=1.5,
+                arrowwidth=2,
+                arrowcolor=color,
+                opacity=1.0
             )
-        st.markdown(f'<div class="rrg-rank">{"".join(rows_html)}</div>', unsafe_allow_html=True)
-    else:
-        st.write("—")
+    
+    # Add label for top N by distance - IMPROVED VISIBILITY
+    if show_labels and t in allow_labels:
+        # Use darker color that matches quadrant but is readable
+        label_colors = {
+            "Leading": "#0d5c2e",      # Dark green
+            "Improving": "#4a3a7a",    # Dark purple
+            "Weakening": "#6a5a0a",    # Dark gold
+            "Lagging": "#8a2a2a",      # Dark red
+        }
+        label_color = label_colors.get(status, "#333")
+        
+        fig.add_annotation(
+            x=rr_last, y=mm_last,
+            text=f"<b>{name}</b>",
+            showarrow=True,
+            arrowhead=0,
+            arrowsize=1,
+            arrowwidth=1,
+            arrowcolor=label_color,
+            ax=20, ay=-15,
+            font=dict(size=11, color=label_color, family="Plus Jakarta Sans"),
+            bgcolor='rgba(255,255,255,0.85)',
+            bordercolor=label_color,
+            borderwidth=1,
+            borderpad=3
+        )
+
+# Update layout with LIGHT chart area but visible labels on dark surroundings
+fig.update_layout(
+    title=dict(
+        text=f"<b>Relative Rotation Graph</b>",
+        font=dict(size=20, family='Plus Jakarta Sans, sans-serif', color='#e6eaee'),
+        x=0.5
+    ),
+    xaxis=dict(
+        title=dict(text="<b>JdK RS-Ratio</b>", font=dict(size=14, color='#e6eaee')),
+        range=[94, 106],
+        showgrid=True,
+        gridcolor='rgba(150,150,150,0.3)',
+        zeroline=False,
+        tickfont=dict(color='#b3bdc7', size=11),
+        linecolor='#555',
+    ),
+    yaxis=dict(
+        title=dict(text="<b>JdK RS-Momentum</b>", font=dict(size=14, color='#e6eaee')),
+        range=[94, 106],
+        showgrid=True,
+        gridcolor='rgba(150,150,150,0.3)',
+        zeroline=False,
+        tickfont=dict(color='#b3bdc7', size=11),
+        linecolor='#555',
+    ),
+    plot_bgcolor='#fafafa',
+    paper_bgcolor='#0b0e13',
+    margin=dict(l=70, r=40, t=70, b=70),
+    hoverlabel=dict(align='left'),
+    height=700  # Larger chart
+)
+
+st.plotly_chart(fig, use_container_width=True, config={
+    'displayModeBar': True,
+    'modeBarButtonsToRemove': ['lasso2d', 'select2d'],
+    'displaylogo': False
+})
 
 # -------------------- Table --------------------
 def make_interactive_table(rows):
