@@ -33,9 +33,9 @@ RAW_BASE = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/{GITH
 DEFAULT_TF = "Weekly"
 WINDOW = 14
 DEFAULT_TAIL = 8
-PERIOD_MAP = {"6M": "6mo", "1Y": "1y", "2Y": "2y", "3Y": "3y", "5Y": "5y", "10Y": "10y"}
-TF_LABELS = ["Daily", "Weekly", "Monthly"]
-TF_TO_INTERVAL = {"Daily": "1d", "Weekly": "1wk", "Monthly": "1mo"}
+PERIOD_MAP = {"3M": "3mo", "6M": "6mo", "1Y": "1y", "2Y": "2y", "3Y": "3y", "5Y": "5y", "10Y": "10y"}
+TF_LABELS = ["60 Min", "Daily", "Weekly", "Monthly"]
+TF_TO_INTERVAL = {"60 Min": "60m", "Daily": "1d", "Weekly": "1wk", "Monthly": "1mo"}
 BENCH_CHOICES = {"Nifty 500": "^CRSLDX", "Nifty 200": "^CNX200", "Nifty 50": "^NSEI"}
 
 IST_TZ = "Asia/Kolkata"
@@ -227,6 +227,65 @@ h1, h2, h3, h4, h5, h6,
   overflow: hidden;
   border: 1px solid var(--border);
 }
+
+/* Sidebar selectbox dropdown styling for dark theme */
+section[data-testid="stSidebar"] .stSelectbox > div > div {
+  background: var(--bg) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text) !important;
+}
+
+section[data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] > div {
+  background: var(--bg) !important;
+  border-color: var(--border) !important;
+}
+
+section[data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] span {
+  color: var(--text) !important;
+}
+
+section[data-testid="stSidebar"] .stSelectbox svg {
+  fill: var(--text) !important;
+}
+
+/* Multiselect styling */
+section[data-testid="stSidebar"] .stMultiSelect > div > div {
+  background: var(--bg) !important;
+  border: 1px solid var(--border) !important;
+}
+
+section[data-testid="stSidebar"] .stMultiSelect [data-baseweb="select"] > div {
+  background: var(--bg) !important;
+}
+
+section[data-testid="stSidebar"] .stMultiSelect span {
+  color: var(--text) !important;
+}
+
+/* Dropdown menu styling */
+[data-baseweb="popover"] {
+  background: var(--bg-2) !important;
+  border: 1px solid var(--border) !important;
+}
+
+[data-baseweb="popover"] li {
+  background: var(--bg-2) !important;
+  color: var(--text) !important;
+}
+
+[data-baseweb="popover"] li:hover {
+  background: #1a2233 !important;
+}
+
+/* Selected option in multiselect */
+[data-baseweb="tag"] {
+  background: var(--accent) !important;
+  color: white !important;
+}
+
+[data-baseweb="tag"] span {
+  color: white !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -330,6 +389,7 @@ def tv_link_for_symbol(yahoo_sym: str) -> str:
 
 def format_bar_date(ts: pd.Timestamp, interval: str) -> str:
     ts = pd.Timestamp(ts)
+    if interval=="60m": return ts.strftime("%Y-%m-%d %H:%M")
     if interval=="1wk": return ts.to_period("W-FRI").end_time.date().isoformat()
     if interval=="1mo": return ts.to_period("M").end_time.date().isoformat()
     return ts.date().isoformat()
@@ -410,6 +470,10 @@ def _is_bar_complete_for_timestamp(last_ts, interval, now=None):
     last_ist=_to_ist(last_ts); now_ist=_to_ist(now)
     last_date=last_ist.date(); today=now_ist.date(); wd_now=now_ist.weekday()
 
+    if interval=="60m":
+        # For 60-minute bars, check if at least 60 minutes have passed
+        time_diff = now_ist - last_ist
+        return time_diff >= _dt.timedelta(minutes=60)
     if interval=="1d":
         if last_date < today: return True
         if last_date == today: return _after_cutoff_ist(now_ist)
@@ -508,7 +572,7 @@ st.sidebar.header("Controls")
 bench_label = st.sidebar.selectbox("Benchmark", list(BENCH_CHOICES.keys()), index=0)
 interval_label = st.sidebar.selectbox("Strength vs (TF)", TF_LABELS, index=TF_LABELS.index(DEFAULT_TF))
 interval = TF_TO_INTERVAL[interval_label]
-default_period_for_tf = {"1d": "1Y", "1wk": "1Y", "1mo": "10Y"}[interval]
+default_period_for_tf = {"60m": "3M", "1d": "1Y", "1wk": "1Y", "1mo": "10Y"}[interval]
 period_label = st.sidebar.selectbox("Period", list(PERIOD_MAP.keys()), index=list(PERIOD_MAP.keys()).index(default_period_for_tf))
 period = PERIOD_MAP[period_label]
 
@@ -571,6 +635,40 @@ if diag:
 # Initialize visible set BEFORE ranking/perf is computed
 if "visible_set" not in st.session_state:
     st.session_state.visible_set = set(tickers)
+
+# Sync visible_set with available tickers (remove any that no longer exist)
+st.session_state.visible_set = st.session_state.visible_set.intersection(set(tickers))
+
+# Add multiselect in sidebar for index selection
+st.sidebar.markdown("---")
+st.sidebar.markdown("**Select Indices**")
+index_names = {t: META.get(t, {}).get("name", t) for t in tickers}
+sorted_tickers = sorted(tickers, key=lambda t: index_names[t])
+display_options = {index_names[t]: t for t in sorted_tickers}
+
+# Get currently selected display names
+current_selection = [index_names[t] for t in sorted_tickers if t in st.session_state.visible_set]
+
+selected_names = st.sidebar.multiselect(
+    "Show on chart:",
+    options=list(display_options.keys()),
+    default=current_selection,
+    help="Select which indices to display on the RRG chart"
+)
+
+# Update visible_set based on selection
+st.session_state.visible_set = {display_options[name] for name in selected_names}
+
+# Quick buttons for select/deselect all
+col1, col2 = st.sidebar.columns(2)
+with col1:
+    if st.button("Select All", use_container_width=True):
+        st.session_state.visible_set = set(tickers)
+        st.rerun()
+with col2:
+    if st.button("Clear All", use_container_width=True):
+        st.session_state.visible_set = set()
+        st.rerun()
 
 SYMBOL_COLORS = symbol_color_map(tickers)
 idx = bench_idx
