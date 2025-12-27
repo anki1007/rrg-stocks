@@ -789,7 +789,6 @@ with plot_col:
         if len(rr) < 2:
             continue
         
-        color = SYMBOL_COLORS[t]
         name = META.get(t, {}).get("name", t)
         industry = META.get(t, {}).get("industry", "-")
         
@@ -797,6 +796,9 @@ with plot_col:
         rr_last = float(rr.values[-1])
         mm_last = float(mm.values[-1])
         status = get_status(rr_last, mm_last)
+        
+        # Color based on current quadrant (head position)
+        color = status_bg_color(rr_last, mm_last)
         
         # Calculate price and change
         px = tickers_data[t].reindex(idx).dropna()
@@ -887,7 +889,7 @@ with plot_col:
         if show_labels and t in allow_labels:
             fig.add_annotation(
                 x=rr_last, y=mm_last,
-                text=f"<b>{display_symbol(t)}</b>",
+                text=f"<b>{name}</b>",
                 showarrow=False,
                 xshift=15, yshift=10,
                 font=dict(size=11, color=color),
@@ -939,7 +941,7 @@ with rank_col:
             rr = float(rs_ratio_map[sym].iloc[end_idx])
             mm = float(rs_mom_map[sym].iloc[end_idx])
             stat = get_status(rr, mm)
-            color = SYMBOL_COLORS.get(sym, "#333")
+            color = status_bg_color(rr, mm)  # Use quadrant color
             name = META.get(sym, {}).get("name", sym)
             rows_html.append(
                 f'<div class="row" style="color:{color}"><span>{rank_dict[sym]}.</span>'
