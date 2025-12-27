@@ -65,14 +65,14 @@ def load_index_data(index_name):
     """Load CSV data from GitHub for selected index"""
     github_base = "https://raw.githubusercontent.com/anki1007/rrg-stocks/main/ticker"
     csv_urls = {
-        "Nifty 50": f"{github_base}/nifty50.csv",
-        "Nifty 100": f"{github_base}/nifty100.csv",
-        "Nifty 200": f"{github_base}/nifty200.csv",
-        "Nifty 500": f"{github_base}/nifty500.csv",
-        "Nifty Total Mkt": f"{github_base}/niftytotalmarket.csv",
-        "Nifty Mid Smallcap 400": f"{github_base}/niftymidsmallcap400.csv",
-        "Nifty Smallcap 250": f"{github_base}/niftysmallcap250.csv",
-        "Nifty Midcap 150": f"{github_base}/niftymidcap150.csv",
+      #  "Nifty 50": f"{github_base}/nifty50.csv",
+      #  "Nifty 100": f"{github_base}/nifty100.csv",
+       # "Nifty 200": f"{github_base}/nifty200.csv",
+    #    "Nifty 500": f"{github_base}/nifty500.csv",
+      #  "Nifty Total Mkt": f"{github_base}/niftytotalmarket.csv",
+      #  "Nifty Mid Smallcap 400": f"{github_base}/niftymidsmallcap400.csv",
+      #  "Nifty Smallcap 250": f"{github_base}/niftysmallcap250.csv",
+      #  "Nifty Midcap 150": f"{github_base}/niftymidcap150.csv",
     }
     url = csv_urls.get(index_name)
     if url:
