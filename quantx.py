@@ -23,7 +23,7 @@ import time
 
 # Page configuration
 st.set_page_config(
-    page_title="Momentum 50 - Performance Dashboard",
+    page_title="Momentum 50 Shop - Performance Dashboard",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -256,7 +256,7 @@ class Position:
         return sum(l.buy_brokerage for l in self.lots)
 
 
-class MomentumBacktester:
+class MomentumShopBacktester:
     """Complete backtester with all metrics calculation"""
     
     def __init__(
@@ -271,7 +271,7 @@ class MomentumBacktester:
         avg_cash_pct: float = 0.0,
         fresh_trade_divisor: Optional[float] = None,
         avg_trade_divisor: Optional[float] = None,
-        initial_capital: float = 500000.0,
+        initial_capital: float = 400000.0,
         target_pct: float = 0.05,
         avg_trigger_pct: float = 0.03,
         brokerage_per_order: float = 40.0,
@@ -734,9 +734,18 @@ class MomentumBacktester:
         metrics['best_trade'] = trades_df['NetPnl'].max()
         metrics['worst_trade'] = trades_df['NetPnl'].min()
         
-        # Monthly returns
+        # Monthly returns - calculate properly for all months
+        # Get month-end values
         equity_monthly = equity_ff.resample('ME').last()
+        
+        # Calculate returns for each month
         monthly_returns = equity_monthly.pct_change().fillna(0) * 100
+        
+        # For the first month, calculate from initial capital
+        if len(equity_monthly) > 0:
+            first_month_return = ((equity_monthly.iloc[0] - self.initial_capital) / self.initial_capital) * 100
+            monthly_returns.iloc[0] = first_month_return
+        
         metrics['monthly_returns'] = monthly_returns
         metrics['best_month'] = monthly_returns.max()
         metrics['worst_month'] = monthly_returns.min()
@@ -965,7 +974,7 @@ def create_screener_chart(symbol: str) -> go.Figure:
     try:
         df = yf.download(
             symbol + ".NS",
-            period="6mo",
+            period="5y",
             interval="1d",
             progress=False,
             multi_level_index=None
@@ -1168,47 +1177,126 @@ def create_monthly_heatmap(metrics: Dict) -> go.Figure:
         )
         return fig
     
-    # Create pivot table
+    # Create dataframe with year and month
     df = pd.DataFrame({
         'Year': monthly_returns.index.year,
         'Month': monthly_returns.index.month,
         'Return': monthly_returns.values
     })
     
-    pivot = df.pivot(index='Year', columns='Month', values='Return')
-    pivot.columns = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
-                     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][:len(pivot.columns)]
+    # Get all unique years in the data
+    all_years = sorted(df['Year'].unique())
     
-    # Add YTD column
-    ytd = df.groupby('Year')['Return'].sum()
-    pivot['YTD'] = ytd
+    # Create pivot table
+    pivot = df.pivot_table(index='Year', columns='Month', values='Return', aggfunc='sum')
+    
+    # Ensure all 12 months are present
+    for month in range(1, 13):
+        if month not in pivot.columns:
+            pivot[month] = np.nan
+    
+    # Sort columns (months 1-12)
+    pivot = pivot.reindex(columns=sorted(pivot.columns))
+    
+    # Rename columns to month names
+    month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    pivot.columns = month_names
+    
+    # Reindex to ensure all years from min to max are present
+    min_year = min(all_years)
+    max_year = max(all_years)
+    full_years = list(range(min_year, max_year + 1))
+    pivot = pivot.reindex(full_years)
+    
+    # Calculate YTD for each year
+    ytd_values = []
+    for year in full_years:
+        year_data = df[df['Year'] == year]['Return']
+        ytd_values.append(year_data.sum() if len(year_data) > 0 else np.nan)
+    pivot['YTD'] = ytd_values
+    
+    # Calculate color scale range
+    all_values = pivot.values.flatten()
+    all_values = all_values[~np.isnan(all_values)]
+    
+    if len(all_values) > 0:
+        min_val = all_values.min()
+        max_val = all_values.max()
+        # Make symmetric around 0 for better visualization
+        max_abs = max(abs(min_val) if min_val < 0 else 0, 
+                      abs(max_val) if max_val > 0 else 0, 
+                      5)  # Minimum range of 5%
+    else:
+        max_abs = 5
+    
+    # Create diverging colorscale centered at 0
+    # Red/Orange for negative, Cyan/Green for positive
+    colorscale = [
+        [0.0, '#d63031'],      # Deep red for most negative
+        [0.2, '#e17055'],      # Coral/orange-red
+        [0.4, '#fdcb6e'],      # Yellow/orange for slightly negative
+        [0.5, '#2d3436'],      # Dark neutral (for zero)
+        [0.6, '#74b9ff'],      # Light blue for slightly positive
+        [0.8, '#00cec9'],      # Cyan/teal
+        [1.0, '#00b894']       # Green for most positive
+    ]
+    
+    # Prepare data for heatmap
+    z_data = pivot.values
+    x_labels = list(pivot.columns)
+    y_labels = [str(y) for y in pivot.index]
+    
+    # Format text (show value or empty for NaN)
+    text_data = []
+    for row in z_data:
+        text_row = []
+        for val in row:
+            if np.isnan(val):
+                text_row.append('')
+            else:
+                text_row.append(f'{val:.1f}')
+        text_data.append(text_row)
     
     fig = go.Figure(data=go.Heatmap(
-        z=pivot.values,
-        x=pivot.columns,
-        y=pivot.index,
-        colorscale=[
-            [0, '#ff4757'],
-            [0.5, '#1a1a2e'],
-            [1, '#00ff88']
-        ],
-        text=np.round(pivot.values, 1),
+        z=z_data,
+        x=x_labels,
+        y=y_labels,
+        colorscale=colorscale,
+        zmid=0,
+        zmin=-max_abs,
+        zmax=max_abs,
+        text=text_data,
         texttemplate='%{text}',
-        textfont=dict(size=10, color='white'),
+        textfont=dict(size=11, color='white'),
         hovertemplate='Year: %{y}<br>Month: %{x}<br>Return: %{z:.2f}%<extra></extra>',
         colorbar=dict(
             title=dict(text='Return %', font=dict(color='#e0e0e0')),
             tickfont=dict(color='#e0e0e0')
-        )
+        ),
+        xgap=2,  # Add gap between cells
+        ygap=2
     ))
+    
+    # Calculate dynamic height based on number of years
+    num_years = len(y_labels)
+    chart_height = max(250, min(600, 100 + num_years * 40))
     
     fig.update_layout(
         title=dict(text='Monthly Returns (%) - Heatmap', font=dict(color='#ff6b35', size=16)),
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(26,26,46,0.8)',
         font=dict(color='#e0e0e0'),
-        xaxis=dict(side='top'),
-        height=300
+        xaxis=dict(
+            side='top',
+            tickfont=dict(size=11),
+            tickangle=0
+        ),
+        yaxis=dict(
+            tickfont=dict(size=11),
+            autorange='reversed'  # Show oldest year (2020) at top
+        ),
+        height=chart_height
     )
     
     return fig
@@ -1624,7 +1712,7 @@ def main():
                 <p style="color: #888;">
                     The screener will analyze all 50 stocks in the Nifty 500 Momentum 50 index and identify
                     those trading below their 20-Day Moving Average - potential buying opportunities
-                    according to the Momentum Strategy.
+                    according to the Momentum Shop strategy.
                 </p>
                 <div style="display: flex; justify-content: center; gap: 20px; margin-top: 30px;">
                     <div style="background: linear-gradient(145deg, #1e1e2f, #2d2d44); padding: 15px 25px; border-radius: 8px; border-left: 3px solid #00ff88;">
@@ -1712,7 +1800,7 @@ def main():
                 # Run backtest
                 with st.spinner("Fetching stock list..."):
                     instruments = fetch_nifty_momentum50_stocks()
-                    st.info(f"Loaded {len(instruments)} stocks from Nifty Momentum 50")
+                    st.info(f"Loaded {len(instruments)} stocks from Nifty 500 Momentum 50")
                 
                 # Create progress indicators
                 progress_bar = st.progress(0)
@@ -1723,7 +1811,7 @@ def main():
                     status_text.text(msg)
                 
                 try:
-                    backtester = MomentumBacktester(
+                    backtester = MomentumShopBacktester(
                         instruments=instruments,
                         start_date=start_date,
                         end_date=end_date,
@@ -2150,7 +2238,7 @@ def main():
     st.markdown("""
     <div style="text-align: center; padding: 20px; margin-top: 50px; border-top: 1px solid #333;">
         <p style="color: #666; font-size: 12px;">
-            Made with ❤️ by Stallions | ©2024 Stallions.in - All Rights Reserved
+            Made with ❤️ by Stallions | ©2025 Stallions.in - All Rights Reserved
         </p>
     </div>
     """, unsafe_allow_html=True)
