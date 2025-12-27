@@ -608,18 +608,18 @@ def get_status(x, y):
 # Quadrant colors - PASTEL like StockCharts reference
 # Trail colors (saturated) - used for lines and dots
 QUADRANT_COLORS = {
-    "Leading": "#2d8a4e",      # Dark green for trails
-    "Improving": "#7c5cba",    # Purple for trails
-    "Weakening": "#c4a12e",    # Gold/mustard for trails
-    "Lagging": "#c94444",      # Red for trails
+    "Leading": "#1a7a3a",      # Darker green for better visibility
+    "Improving": "#6a4a9a",    # Darker purple for better visibility
+    "Weakening": "#9a7a0a",    # Darker gold for better visibility
+    "Lagging": "#b03030",      # Darker red for better visibility
 }
 
 # Background colors (pastel) - for quadrant fills
 QUADRANT_BG_COLORS = {
-    "Leading": "rgba(144, 238, 144, 0.45)",      # Light green - mint
-    "Improving": "rgba(200, 180, 230, 0.45)",    # Light purple - lavender
-    "Weakening": "rgba(255, 230, 150, 0.45)",    # Light yellow - cream
-    "Lagging": "rgba(255, 180, 180, 0.45)",      # Light red - pink
+    "Leading": "rgba(144, 238, 144, 0.5)",      # Light green - mint
+    "Improving": "rgba(200, 180, 230, 0.5)",    # Light purple - lavender
+    "Weakening": "rgba(255, 230, 150, 0.5)",    # Light yellow - cream
+    "Lagging": "rgba(255, 180, 180, 0.5)",      # Light red - pink
 }
 
 def status_bg_color(x, y):
@@ -1058,15 +1058,15 @@ with plot_col:
     fig.add_hline(y=100, line_dash="solid", line_color="rgba(100, 100, 100, 0.6)", line_width=1.5)
     fig.add_vline(x=100, line_dash="solid", line_color="rgba(100, 100, 100, 0.6)", line_width=1.5)
     
-    # Add quadrant labels with matching dark colors for visibility
+    # Add quadrant labels with darker colors for better visibility on pastel backgrounds
     fig.add_annotation(x=97, y=105.5, text="<b>IMPROVING</b>", showarrow=False,
-                       font=dict(size=13, color="#5a4a8a", family="Plus Jakarta Sans"))
+                       font=dict(size=14, color="#4a3a7a", family="Plus Jakarta Sans"))
     fig.add_annotation(x=103, y=105.5, text="<b>LEADING</b>", showarrow=False,
-                       font=dict(size=13, color="#1a6a3a", family="Plus Jakarta Sans"))
+                       font=dict(size=14, color="#0d5c2e", family="Plus Jakarta Sans"))
     fig.add_annotation(x=103, y=94.5, text="<b>WEAKENING</b>", showarrow=False,
-                       font=dict(size=13, color="#8a7a1a", family="Plus Jakarta Sans"))
+                       font=dict(size=14, color="#6a5a0a", family="Plus Jakarta Sans"))
     fig.add_annotation(x=97, y=94.5, text="<b>LAGGING</b>", showarrow=False,
-                       font=dict(size=13, color="#9a3a3a", family="Plus Jakarta Sans"))
+                       font=dict(size=14, color="#8a2a2a", family="Plus Jakarta Sans"))
     
     # Plot each ticker with THIN gradient trail width like StockCharts
     for t in tickers:
@@ -1109,13 +1109,13 @@ with plot_col:
             f"<b>Industry:</b> {industry}"
         )
         
-        # Draw trail segments with THIN gradient width (like StockCharts: 1px to 2.5px)
+        # Draw trail segments with gradient width - slightly thicker for visibility
         n_points = len(rr)
         for i in range(n_points - 1):
-            # Width increases from 1.0 to 2.5 along the trail (thin like StockCharts)
-            seg_width = 1.0 + (i / max(1, n_points - 2)) * 1.5
-            # Opacity increases from 0.4 to 1.0
-            seg_opacity = 0.4 + (i / max(1, n_points - 2)) * 0.6
+            # Width increases from 1.5 to 3.0 along the trail
+            seg_width = 1.5 + (i / max(1, n_points - 2)) * 1.5
+            # Opacity increases from 0.5 to 1.0
+            seg_opacity = 0.5 + (i / max(1, n_points - 2)) * 0.5
             
             fig.add_trace(go.Scatter(
                 x=[rr.values[i], rr.values[i+1]], 
@@ -1127,8 +1127,8 @@ with plot_col:
                 showlegend=False
             ))
         
-        # Trail points - small dots like StockCharts, larger for current head
-        sizes = [4] * (len(rr) - 1) + [10]
+        # Trail points - small dots, larger for current head
+        sizes = [5] * (len(rr) - 1) + [12]
         
         fig.add_trace(go.Scatter(
             x=rr.values, y=mm.values,
@@ -1136,7 +1136,7 @@ with plot_col:
             marker=dict(
                 size=sizes,
                 color=color,
-                line=dict(color='rgba(50,50,50,0.4)', width=0.5)
+                line=dict(color='rgba(255,255,255,0.8)', width=1)
             ),
             text=[hover_text] * len(rr),
             hoverinfo='text',
@@ -1178,16 +1178,31 @@ with plot_col:
                     opacity=1.0
                 )
         
-        # Add label for top N by distance
+        # Add label for top N by distance - IMPROVED VISIBILITY
         if show_labels and t in allow_labels:
+            # Use darker color that matches quadrant but is readable
+            label_colors = {
+                "Leading": "#0d5c2e",      # Dark green
+                "Improving": "#4a3a7a",    # Dark purple
+                "Weakening": "#6a5a0a",    # Dark gold
+                "Lagging": "#8a2a2a",      # Dark red
+            }
+            label_color = label_colors.get(status, "#333")
+            
             fig.add_annotation(
                 x=rr_last, y=mm_last,
-                text=f"{name}",
-                showarrow=False,
-                xshift=10, yshift=6,
-                font=dict(size=10, color="#333", family="Plus Jakarta Sans"),
-                bgcolor='rgba(255,255,255,0.7)',
-                borderpad=2
+                text=f"<b>{name}</b>",
+                showarrow=True,
+                arrowhead=0,
+                arrowsize=1,
+                arrowwidth=1,
+                arrowcolor=label_color,
+                ax=20, ay=-15,
+                font=dict(size=11, color=label_color, family="Plus Jakarta Sans"),
+                bgcolor='rgba(255,255,255,0.85)',
+                bordercolor=label_color,
+                borderwidth=1,
+                borderpad=3
             )
     
     # Update layout with LIGHT background like StockCharts
@@ -1219,7 +1234,7 @@ with plot_col:
         paper_bgcolor='#0b0e13',  # Keep paper dark to match app theme
         margin=dict(l=60, r=40, t=60, b=60),
         hoverlabel=dict(align='left'),
-        height=580
+        height=620
     )
     
     st.plotly_chart(fig, use_container_width=True, config={
