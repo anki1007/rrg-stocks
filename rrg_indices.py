@@ -1205,34 +1205,34 @@ with plot_col:
                 borderpad=3
             )
     
-    # Update layout with LIGHT background like StockCharts
+    # Update layout with LIGHT chart area but visible labels on dark surroundings
     fig.update_layout(
         title=dict(
             text=f"<b>Relative Rotation Graph</b>",
-            font=dict(size=18, family='Plus Jakarta Sans, sans-serif', color='#333'),
+            font=dict(size=20, family='Plus Jakarta Sans, sans-serif', color='#e6eaee'),
             x=0.5
         ),
         xaxis=dict(
-            title=dict(text="<b>JdK RS-Ratio</b>", font=dict(size=13, color='#555')),
+            title=dict(text="<b>JdK RS-Ratio</b>", font=dict(size=14, color='#e6eaee')),
             range=[94, 106],
             showgrid=True,
             gridcolor='rgba(150,150,150,0.3)',
             zeroline=False,
-            tickfont=dict(color='#555', size=11),
-            linecolor='#999',
+            tickfont=dict(color='#b3bdc7', size=11),
+            linecolor='#555',
         ),
         yaxis=dict(
-            title=dict(text="<b>JdK RS-Momentum</b>", font=dict(size=13, color='#555')),
+            title=dict(text="<b>JdK RS-Momentum</b>", font=dict(size=14, color='#e6eaee')),
             range=[94, 106],
             showgrid=True,
             gridcolor='rgba(150,150,150,0.3)',
             zeroline=False,
-            tickfont=dict(color='#555', size=11),
-            linecolor='#999',
+            tickfont=dict(color='#b3bdc7', size=11),
+            linecolor='#555',
         ),
         plot_bgcolor='#fafafa',
-        paper_bgcolor='#0b0e13',  # Keep paper dark to match app theme
-        margin=dict(l=60, r=40, t=60, b=60),
+        paper_bgcolor='#0b0e13',
+        margin=dict(l=70, r=40, t=70, b=70),
         hoverlabel=dict(align='left'),
         height=620
     )
