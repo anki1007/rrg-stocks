@@ -572,9 +572,17 @@ st.sidebar.header("Controls")
 bench_label = st.sidebar.selectbox("Benchmark", list(BENCH_CHOICES.keys()), index=0)
 interval_label = st.sidebar.selectbox("Strength vs (TF)", TF_LABELS, index=TF_LABELS.index(DEFAULT_TF))
 interval = TF_TO_INTERVAL[interval_label]
-default_period_for_tf = {"60m": "3M", "1d": "1Y", "1wk": "1Y", "1mo": "10Y"}[interval]
-period_label = st.sidebar.selectbox("Period", list(PERIOD_MAP.keys()), index=list(PERIOD_MAP.keys()).index(default_period_for_tf))
-period = PERIOD_MAP[period_label]
+
+# For 60m interval, yfinance supports up to ~730 days of hourly data
+if interval == "60m":
+    PERIOD_MAP_60M = {"1M": "1mo", "3M": "3mo", "6M": "6mo"}
+    default_period_for_tf = "3M"
+    period_label = st.sidebar.selectbox("Period", list(PERIOD_MAP_60M.keys()), index=list(PERIOD_MAP_60M.keys()).index(default_period_for_tf))
+    period = PERIOD_MAP_60M[period_label]
+else:
+    default_period_for_tf = {"1d": "1Y", "1wk": "1Y", "1mo": "10Y"}[interval]
+    period_label = st.sidebar.selectbox("Period", list(PERIOD_MAP.keys()), index=list(PERIOD_MAP.keys()).index(default_period_for_tf))
+    period = PERIOD_MAP[period_label]
 
 rank_modes = ["Momentum Score", "RS-Ratio", "RS-Momentum", "Price %Δ (tail)", "Momentum Slope (tail)"]
 rank_mode = st.sidebar.selectbox("Rank by", rank_modes, index=0)
