@@ -569,7 +569,10 @@ def tv_link_for_symbol(yahoo_sym: str) -> str:
 
 def format_bar_date(ts: pd.Timestamp, interval: str) -> str:
     ts = pd.Timestamp(ts)
-    if interval=="60m": return ts.strftime("%Y-%m-%d %H:%M")
+    if interval=="60m":
+        # For 60m bars, show the bar END time (start + 1 hour)
+        bar_end = ts + pd.Timedelta(hours=1)
+        return bar_end.strftime("%Y-%m-%d %H:%M")
     if interval=="1wk": return ts.to_period("W-FRI").end_time.date().isoformat()
     if interval=="1mo": return ts.to_period("M").end_time.date().isoformat()
     return ts.date().isoformat()
@@ -602,12 +605,21 @@ def get_status(x, y):
     if x>=100 and y<=100: return "Weakening"
     return "Unknown"
 
-# Quadrant colors - SATURATED like StockCharts reference
+# Quadrant colors - PASTEL like StockCharts reference
+# Trail colors (saturated) - used for lines and dots
 QUADRANT_COLORS = {
-    "Leading": "#22c55e",      # Solid green
-    "Improving": "#3b82f6",    # Solid blue  
-    "Weakening": "#eab308",    # Solid yellow/gold
-    "Lagging": "#ef4444",      # Solid red
+    "Leading": "#2d8a4e",      # Dark green for trails
+    "Improving": "#7c5cba",    # Purple for trails
+    "Weakening": "#c4a12e",    # Gold/mustard for trails
+    "Lagging": "#c94444",      # Red for trails
+}
+
+# Background colors (pastel) - for quadrant fills
+QUADRANT_BG_COLORS = {
+    "Leading": "rgba(144, 238, 144, 0.45)",      # Light green - mint
+    "Improving": "rgba(200, 180, 230, 0.45)",    # Light purple - lavender
+    "Weakening": "rgba(255, 230, 150, 0.45)",    # Light yellow - cream
+    "Lagging": "rgba(255, 180, 180, 0.45)",      # Light red - pink
 }
 
 def status_bg_color(x, y):
@@ -658,9 +670,29 @@ def _is_bar_complete_for_timestamp(last_ts, interval, now=None):
     last_date=last_ist.date(); today=now_ist.date(); wd_now=now_ist.weekday()
 
     if interval=="60m":
-        # For 60-minute bars, check if at least 60 minutes have passed
-        time_diff = now_ist - last_ist
-        return time_diff >= _dt.timedelta(minutes=60)
+        # NSE market hours: 9:15 AM to 3:30 PM IST
+        # Last complete hourly bar of the day starts at 14:15 (ends at 15:15)
+        # A bar is complete if:
+        # 1. It's from a previous trading day, OR
+        # 2. It's from today and next bar's end time has passed
+        
+        last_bar_hour = last_ist.hour
+        last_bar_minute = last_ist.minute
+        
+        # If bar is from a previous day, it's complete
+        if last_date < today:
+            return True
+        
+        # If bar is from today, check if the bar has closed
+        # Bar starting at HH:15 closes at (HH+1):15
+        bar_close_hour = last_bar_hour + 1
+        bar_close_minute = last_bar_minute
+        
+        # Check if current time is past the bar close time
+        current_minutes = now_ist.hour * 60 + now_ist.minute
+        bar_close_minutes = bar_close_hour * 60 + bar_close_minute
+        
+        return current_minutes >= bar_close_minutes
     if interval=="1d":
         if last_date < today: return True
         if last_date == today: return _after_cutoff_ist(now_ist)
@@ -716,7 +748,7 @@ def retry(n=4, delay=1.5, backoff=2.0):
         return wrap
     return deco
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, ttl=300)  # 5 min cache for fresher data
 def download_block_with_benchmark(universe, benchmark, period, interval):
     @retry()
     def _dl():
@@ -729,7 +761,25 @@ def download_block_with_benchmark(universe, benchmark, period, interval):
     if bench is None or bench.empty:
         return bench, {}
 
-    drop_last = not _is_bar_complete_for_timestamp(bench.index[-1], interval, now=_now_ist_cached())
+    # For intraday data, always drop the last bar if market is open
+    # For daily/weekly/monthly, use the existing logic
+    now_ist = _now_ist_cached()
+    
+    if interval == "60m":
+        # For 60m, check if we're during market hours on a trading day
+        # Market hours: 9:15 AM - 3:30 PM IST, Mon-Fri
+        is_weekday = now_ist.weekday() < 5
+        market_open = now_ist.hour >= 9 and (now_ist.hour < 15 or (now_ist.hour == 15 and now_ist.minute < 30))
+        
+        if is_weekday and market_open:
+            # During market hours - drop the last (incomplete) bar
+            drop_last = True
+        else:
+            # After market or weekend - last bar should be complete
+            drop_last = False
+    else:
+        drop_last = not _is_bar_complete_for_timestamp(bench.index[-1], interval, now=now_ist)
+    
     def _maybe_trim(s): return s.iloc[:-1] if (drop_last and len(s)>=1) else s
 
     bench=_maybe_trim(bench)
@@ -785,6 +835,12 @@ if "playing" not in st.session_state:
 st.sidebar.toggle("Play / Pause", value=st.session_state.playing, key="playing")
 speed_ms = st.sidebar.slider("Speed (ms/frame)", 1000, 3000, 1500, 50)
 looping = st.sidebar.checkbox("Loop", value=True)
+
+# Add refresh button
+st.sidebar.markdown("---")
+if st.sidebar.button("🔄 Refresh Data", use_container_width=True):
+    st.cache_data.clear()
+    st.rerun()
 
 # -------------------- Data Build --------------------
 UNIVERSE, META = load_universe_from_github_csv(
@@ -981,38 +1037,38 @@ allow_labels = {t for t, _ in sorted([(t, dist_last(t)) for t in tickers],
                                      key=lambda x: x[1], reverse=True)[:label_top_n]} if show_labels else set()
 
 with plot_col:
-    # Build interactive Plotly RRG chart with SATURATED quadrant colors
+    # Build interactive Plotly RRG chart with PASTEL quadrant colors like StockCharts
     fig = go.Figure()
     
-    # Add quadrant backgrounds - MORE SATURATED like StockCharts
-    # Lagging (bottom-left) - Red
+    # Add quadrant backgrounds - PASTEL like StockCharts
+    # Lagging (bottom-left) - Light Pink
     fig.add_shape(type="rect", x0=94, y0=94, x1=100, y1=100,
-                  fillcolor="rgba(239, 68, 68, 0.25)", line_width=0, layer="below")
-    # Weakening (bottom-right) - Yellow
+                  fillcolor=QUADRANT_BG_COLORS["Lagging"], line_width=0, layer="below")
+    # Weakening (bottom-right) - Light Yellow/Cream
     fig.add_shape(type="rect", x0=100, y0=94, x1=106, y1=100,
-                  fillcolor="rgba(234, 179, 8, 0.25)", line_width=0, layer="below")
-    # Leading (top-right) - Green
+                  fillcolor=QUADRANT_BG_COLORS["Weakening"], line_width=0, layer="below")
+    # Leading (top-right) - Light Green/Mint
     fig.add_shape(type="rect", x0=100, y0=100, x1=106, y1=106,
-                  fillcolor="rgba(34, 197, 94, 0.25)", line_width=0, layer="below")
-    # Improving (top-left) - Blue
+                  fillcolor=QUADRANT_BG_COLORS["Leading"], line_width=0, layer="below")
+    # Improving (top-left) - Light Purple/Lavender
     fig.add_shape(type="rect", x0=94, y0=100, x1=100, y1=106,
-                  fillcolor="rgba(59, 130, 246, 0.25)", line_width=0, layer="below")
+                  fillcolor=QUADRANT_BG_COLORS["Improving"], line_width=0, layer="below")
     
-    # Add center lines
-    fig.add_hline(y=100, line_dash="dot", line_color="#555", line_width=1.5)
-    fig.add_vline(x=100, line_dash="dot", line_color="#555", line_width=1.5)
+    # Add center lines - darker for visibility on pastel background
+    fig.add_hline(y=100, line_dash="solid", line_color="rgba(100, 100, 100, 0.6)", line_width=1.5)
+    fig.add_vline(x=100, line_dash="solid", line_color="rgba(100, 100, 100, 0.6)", line_width=1.5)
     
-    # Add quadrant labels with matching colors
+    # Add quadrant labels with matching dark colors for visibility
     fig.add_annotation(x=97, y=105.5, text="<b>IMPROVING</b>", showarrow=False,
-                       font=dict(size=14, color=QUADRANT_COLORS["Improving"], family="Plus Jakarta Sans"))
+                       font=dict(size=13, color="#5a4a8a", family="Plus Jakarta Sans"))
     fig.add_annotation(x=103, y=105.5, text="<b>LEADING</b>", showarrow=False,
-                       font=dict(size=14, color=QUADRANT_COLORS["Leading"], family="Plus Jakarta Sans"))
+                       font=dict(size=13, color="#1a6a3a", family="Plus Jakarta Sans"))
     fig.add_annotation(x=103, y=94.5, text="<b>WEAKENING</b>", showarrow=False,
-                       font=dict(size=14, color=QUADRANT_COLORS["Weakening"], family="Plus Jakarta Sans"))
+                       font=dict(size=13, color="#8a7a1a", family="Plus Jakarta Sans"))
     fig.add_annotation(x=97, y=94.5, text="<b>LAGGING</b>", showarrow=False,
-                       font=dict(size=14, color=QUADRANT_COLORS["Lagging"], family="Plus Jakarta Sans"))
+                       font=dict(size=13, color="#9a3a3a", family="Plus Jakarta Sans"))
     
-    # Plot each ticker with GRADIENT trail width (thin→thick) and arrow
+    # Plot each ticker with THIN gradient trail width like StockCharts
     for t in tickers:
         if t not in st.session_state.visible_set:
             continue
@@ -1053,13 +1109,13 @@ with plot_col:
             f"<b>Industry:</b> {industry}"
         )
         
-        # Draw trail segments with INCREASING width (gradient effect)
+        # Draw trail segments with THIN gradient width (like StockCharts: 1px to 2.5px)
         n_points = len(rr)
         for i in range(n_points - 1):
-            # Width increases from 1.5 to 4.5 along the trail
-            seg_width = 1.5 + (i / max(1, n_points - 2)) * 3.0
-            # Opacity increases from 0.3 to 0.9
-            seg_opacity = 0.3 + (i / max(1, n_points - 2)) * 0.6
+            # Width increases from 1.0 to 2.5 along the trail (thin like StockCharts)
+            seg_width = 1.0 + (i / max(1, n_points - 2)) * 1.5
+            # Opacity increases from 0.4 to 1.0
+            seg_opacity = 0.4 + (i / max(1, n_points - 2)) * 0.6
             
             fig.add_trace(go.Scatter(
                 x=[rr.values[i], rr.values[i+1]], 
@@ -1071,9 +1127,8 @@ with plot_col:
                 showlegend=False
             ))
         
-        # Trail points - small dots, larger for current
-        sizes = [6] * (len(rr) - 1) + [14]
-        opacities = [0.4 + (i / max(1, len(rr) - 1)) * 0.6 for i in range(len(rr))]
+        # Trail points - small dots like StockCharts, larger for current head
+        sizes = [4] * (len(rr) - 1) + [10]
         
         fig.add_trace(go.Scatter(
             x=rr.values, y=mm.values,
@@ -1081,8 +1136,7 @@ with plot_col:
             marker=dict(
                 size=sizes,
                 color=color,
-                opacity=opacities,
-                line=dict(color='rgba(255,255,255,0.5)', width=1)
+                line=dict(color='rgba(50,50,50,0.4)', width=0.5)
             ),
             text=[hover_text] * len(rr),
             hoverinfo='text',
@@ -1107,7 +1161,7 @@ with plot_col:
             
             if length > 0.01:  # Only add arrow if there's movement
                 # Normalize and scale arrow
-                arrow_scale = 0.6
+                arrow_scale = 0.4
                 ax_offset = (dx / length) * arrow_scale
                 ay_offset = (dy / length) * arrow_scale
                 
@@ -1118,8 +1172,8 @@ with plot_col:
                     axref='x', ayref='y',
                     showarrow=True,
                     arrowhead=2,
-                    arrowsize=1.8,
-                    arrowwidth=2.5,
+                    arrowsize=1.5,
+                    arrowwidth=2,
                     arrowcolor=color,
                     opacity=1.0
                 )
@@ -1128,41 +1182,41 @@ with plot_col:
         if show_labels and t in allow_labels:
             fig.add_annotation(
                 x=rr_last, y=mm_last,
-                text=f"<b>{name}</b>",
+                text=f"{name}",
                 showarrow=False,
-                xshift=12, yshift=8,
-                font=dict(size=11, color=color, family="Plus Jakarta Sans"),
-                bgcolor='rgba(0,0,0,0.6)',
-                borderpad=3
+                xshift=10, yshift=6,
+                font=dict(size=10, color="#333", family="Plus Jakarta Sans"),
+                bgcolor='rgba(255,255,255,0.7)',
+                borderpad=2
             )
     
-    # Update layout with dark theme
+    # Update layout with LIGHT background like StockCharts
     fig.update_layout(
         title=dict(
             text=f"<b>Relative Rotation Graph</b>",
-            font=dict(size=18, family='Plus Jakarta Sans, sans-serif', color='#e6eaee'),
+            font=dict(size=18, family='Plus Jakarta Sans, sans-serif', color='#333'),
             x=0.5
         ),
         xaxis=dict(
-            title=dict(text="<b>JdK RS-Ratio</b>", font=dict(size=13, color='#b3bdc7')),
+            title=dict(text="<b>JdK RS-Ratio</b>", font=dict(size=13, color='#555')),
             range=[94, 106],
             showgrid=True,
-            gridcolor='rgba(255,255,255,0.08)',
+            gridcolor='rgba(150,150,150,0.3)',
             zeroline=False,
-            tickfont=dict(color='#b3bdc7', size=11),
-            linecolor='#1f2732',
+            tickfont=dict(color='#555', size=11),
+            linecolor='#999',
         ),
         yaxis=dict(
-            title=dict(text="<b>JdK RS-Momentum</b>", font=dict(size=13, color='#b3bdc7')),
+            title=dict(text="<b>JdK RS-Momentum</b>", font=dict(size=13, color='#555')),
             range=[94, 106],
             showgrid=True,
-            gridcolor='rgba(255,255,255,0.08)',
+            gridcolor='rgba(150,150,150,0.3)',
             zeroline=False,
-            tickfont=dict(color='#b3bdc7', size=11),
-            linecolor='#1f2732',
+            tickfont=dict(color='#555', size=11),
+            linecolor='#999',
         ),
-        plot_bgcolor='#0d1117',
-        paper_bgcolor='#0b0e13',
+        plot_bgcolor='#fafafa',
+        paper_bgcolor='#0b0e13',  # Keep paper dark to match app theme
         margin=dict(l=60, r=40, t=60, b=60),
         hoverlabel=dict(align='left'),
         height=580
