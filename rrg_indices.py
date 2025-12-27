@@ -60,7 +60,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(
 # -------------------- Streamlit Page --------------------
 st.set_page_config(page_title="Relative Rotation Graphs – Indices", layout="wide")
 
-# Advanced Plus Jakarta Sans dark theme, keeping all original logic
+# Advanced Plus Jakarta Sans dark theme - FULLY DARK
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;700;800&display=swap');
@@ -70,6 +70,7 @@ st.markdown("""
   --app-font: 'Plus Jakarta Sans', system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
   --bg: #0b0e13;
   --bg-2: #10141b;
+  --bg-3: #161b24;
   --border: #1f2732;
   --border-soft: #1a2230;
   --text: #e6eaee;
@@ -78,16 +79,29 @@ st.markdown("""
   --accent-2: #2bb0ff;
 }
 
-/* Global app */
-html, body, .stApp {
+/* Global app - EVERYTHING DARK */
+html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stAppViewBlockContainer"] {
   background: var(--bg) !important;
   color: var(--text) !important;
   font-family: var(--app-font) !important;
 }
 
-/* Main container spacing */
-.block-container {
-  padding-top: 3.5rem;
+/* Fix Streamlit header - make it dark */
+header[data-testid="stHeader"] {
+  background: var(--bg) !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+
+/* Fix toolbar */
+[data-testid="stToolbar"] {
+  background: var(--bg) !important;
+}
+
+/* Main container */
+.main .block-container {
+  background: var(--bg) !important;
+  padding-top: 2rem;
+  max-width: 100%;
 }
 
 /* Hero title style */
@@ -114,6 +128,9 @@ section[data-testid="stSidebar"] * {
 section[data-testid="stSidebar"] label {
   font-weight: 700;
   color: var(--text-dim) !important;
+}
+section[data-testid="stSidebar"] > div {
+  background: var(--bg-2) !important;
 }
 
 /* Buttons */
@@ -153,6 +170,47 @@ h1, h2, h3, h4, h5, h6,
 .stMarkdown h1, .stMarkdown h2, .stMarkdown h3,
 .stMarkdown h4, .stMarkdown h5, .stMarkdown h6 {
   color: var(--text) !important;
+}
+
+/* EXPANDER - FULLY DARK */
+div[data-testid="stExpander"] {
+  background: var(--bg-2) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 10px !important;
+}
+
+div[data-testid="stExpander"] > details {
+  background: var(--bg-2) !important;
+  border-radius: 10px !important;
+}
+
+div[data-testid="stExpander"] summary {
+  background: var(--bg-2) !important;
+  color: var(--text) !important;
+  border-radius: 10px !important;
+  padding: 12px 16px !important;
+}
+
+div[data-testid="stExpander"] summary:hover {
+  background: var(--bg-3) !important;
+}
+
+div[data-testid="stExpander"] summary span {
+  color: var(--text) !important;
+}
+
+div[data-testid="stExpander"] summary svg {
+  fill: var(--text) !important;
+  stroke: var(--text) !important;
+}
+
+div[data-testid="stExpander"] > details > div {
+  background: var(--bg-2) !important;
+}
+
+/* Streamlit expander content area */
+.streamlit-expanderContent {
+  background: var(--bg-2) !important;
 }
 
 /* Enhanced Table Styles */
@@ -285,6 +343,128 @@ section[data-testid="stSidebar"] .stMultiSelect span {
 
 [data-baseweb="tag"] span {
   color: white !important;
+}
+
+/* Slider styling - make it dark */
+.stSlider > div > div {
+  background: var(--bg) !important;
+}
+
+.stSlider [data-testid="stTickBar"] > div {
+  background: var(--border) !important;
+}
+
+/* Slider track and thumb */
+.stSlider [data-baseweb="slider"] > div {
+  background: var(--border) !important;
+}
+
+.stSlider [data-baseweb="slider"] [role="slider"] {
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+}
+
+/* Date slider container - above chart like StockCharts */
+.date-slider-container {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 24px;
+  margin-bottom: 16px;
+}
+
+.date-slider-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.date-display {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.date-range-info {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
+/* Timeline visualization above slider */
+.timeline-viz {
+  height: 40px;
+  background: linear-gradient(90deg, #1a2233 0%, var(--bg-3) 100%);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+.timeline-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--accent);
+  border-radius: 2px;
+}
+
+/* View controls row */
+.view-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.view-btn {
+  padding: 6px 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-dim);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.view-btn:hover {
+  background: var(--bg-3);
+  color: var(--text);
+}
+
+.view-btn.active {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+/* Download buttons */
+.stDownloadButton button {
+  background: var(--bg-2) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text) !important;
+}
+
+.stDownloadButton button:hover {
+  background: var(--bg-3) !important;
+  border-color: var(--accent) !important;
+}
+
+/* Caption text */
+.stCaption, small {
+  color: var(--text-dim) !important;
+}
+
+/* Checkbox styling */
+.stCheckbox label span {
+  color: var(--text) !important;
+}
+
+/* Toggle styling */
+div[data-testid="stToggle"] label span {
+  color: var(--text) !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -422,9 +602,16 @@ def get_status(x, y):
     if x>=100 and y<=100: return "Weakening"
     return "Unknown"
 
+# Quadrant colors - SATURATED like StockCharts reference
+QUADRANT_COLORS = {
+    "Leading": "#22c55e",      # Solid green
+    "Improving": "#3b82f6",    # Solid blue  
+    "Weakening": "#eab308",    # Solid yellow/gold
+    "Lagging": "#ef4444",      # Solid red
+}
+
 def status_bg_color(x, y):
-    m = get_status(x, y)
-    return {"Lagging":"#e06a6a","Leading":"#3fa46a","Improving":"#5d86d1","Weakening":"#e2d06b"}.get(m,"#aaaaaa")
+    return QUADRANT_COLORS.get(get_status(x, y), "#888888")
 
 # -------------------- IST closed-bar checks --------------------
 def _utc_now_from_network(timeout=2.5) -> pd.Timestamp:
@@ -703,20 +890,54 @@ if st.session_state.playing:
             height=0,
         )
 
+# -------- DATE SLIDER - ABOVE CHART like StockCharts --------
+start_date_str = format_bar_date(idx[DEFAULT_TAIL], interval)
+end_date_full = format_bar_date(idx[-1], interval)
+
+# Date slider container with timeline visualization
+st.markdown(f"""
+<div class="date-slider-container">
+    <div class="date-slider-header">
+        <span class="date-display" id="current-date-display">{format_bar_date(idx[st.session_state.end_idx], interval)}</span>
+        <span class="date-range-info">{start_date_str} to {end_date_full}</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# Slider for date selection
 end_idx = st.slider(
     "Date",
     min_value=DEFAULT_TAIL,
     max_value=idx_len - 1,
     step=1,
     key="end_idx",
-    format=" "
+    format=" ",
+    label_visibility="collapsed"
 )
+
+# View controls row
+ctrl_cols = st.columns([1, 1, 1, 1, 4])
+with ctrl_cols[0]:
+    if st.button("◀ Prev", use_container_width=True):
+        if st.session_state.end_idx > DEFAULT_TAIL:
+            st.session_state.end_idx -= 1
+            st.rerun()
+with ctrl_cols[1]:
+    if st.button("Next ▶", use_container_width=True):
+        if st.session_state.end_idx < idx_len - 1:
+            st.session_state.end_idx += 1
+            st.rerun()
+with ctrl_cols[2]:
+    if st.button("Latest", use_container_width=True):
+        st.session_state.end_idx = idx_len - 1
+        st.rerun()
+with ctrl_cols[3]:
+    if st.button("Center", use_container_width=True):
+        st.session_state.end_idx = (DEFAULT_TAIL + idx_len - 1) // 2
+        st.rerun()
 
 start_idx = max(end_idx - tail_len, 0)
 date_str = format_bar_date(idx[end_idx], interval)
-
-# -------- Title --------
-st.markdown(f"### {date_str}")
 
 # -------------------- Ranking Metric (1 = strongest) --------------------
 def ranking_value(t: str) -> float:
@@ -760,34 +981,38 @@ allow_labels = {t for t, _ in sorted([(t, dist_last(t)) for t in tickers],
                                      key=lambda x: x[1], reverse=True)[:label_top_n]} if show_labels else set()
 
 with plot_col:
-    # Build interactive Plotly RRG chart
+    # Build interactive Plotly RRG chart with SATURATED quadrant colors
     fig = go.Figure()
     
-    # Add quadrant backgrounds
+    # Add quadrant backgrounds - MORE SATURATED like StockCharts
+    # Lagging (bottom-left) - Red
     fig.add_shape(type="rect", x0=94, y0=94, x1=100, y1=100,
-                  fillcolor="rgba(255, 0, 0, 0.15)", line_width=0, layer="below")
+                  fillcolor="rgba(239, 68, 68, 0.25)", line_width=0, layer="below")
+    # Weakening (bottom-right) - Yellow
     fig.add_shape(type="rect", x0=100, y0=94, x1=106, y1=100,
-                  fillcolor="rgba(255, 255, 0, 0.15)", line_width=0, layer="below")
+                  fillcolor="rgba(234, 179, 8, 0.25)", line_width=0, layer="below")
+    # Leading (top-right) - Green
     fig.add_shape(type="rect", x0=100, y0=100, x1=106, y1=106,
-                  fillcolor="rgba(0, 255, 0, 0.15)", line_width=0, layer="below")
+                  fillcolor="rgba(34, 197, 94, 0.25)", line_width=0, layer="below")
+    # Improving (top-left) - Blue
     fig.add_shape(type="rect", x0=94, y0=100, x1=100, y1=106,
-                  fillcolor="rgba(0, 100, 255, 0.15)", line_width=0, layer="below")
+                  fillcolor="rgba(59, 130, 246, 0.25)", line_width=0, layer="below")
     
     # Add center lines
-    fig.add_hline(y=100, line_dash="dot", line_color="#777", line_width=1)
-    fig.add_vline(x=100, line_dash="dot", line_color="#777", line_width=1)
+    fig.add_hline(y=100, line_dash="dot", line_color="#555", line_width=1.5)
+    fig.add_vline(x=100, line_dash="dot", line_color="#555", line_width=1.5)
     
-    # Add quadrant labels
-    fig.add_annotation(x=95, y=105.5, text="<b>Improving</b>", showarrow=False,
-                       font=dict(size=13, color="#5d86d1"))
-    fig.add_annotation(x=105, y=105.5, text="<b>Leading</b>", showarrow=False,
-                       font=dict(size=13, color="#3fa46a"))
-    fig.add_annotation(x=105, y=94.5, text="<b>Weakening</b>", showarrow=False,
-                       font=dict(size=13, color="#e2d06b"))
-    fig.add_annotation(x=95, y=94.5, text="<b>Lagging</b>", showarrow=False,
-                       font=dict(size=13, color="#e06a6a"))
+    # Add quadrant labels with matching colors
+    fig.add_annotation(x=97, y=105.5, text="<b>IMPROVING</b>", showarrow=False,
+                       font=dict(size=14, color=QUADRANT_COLORS["Improving"], family="Plus Jakarta Sans"))
+    fig.add_annotation(x=103, y=105.5, text="<b>LEADING</b>", showarrow=False,
+                       font=dict(size=14, color=QUADRANT_COLORS["Leading"], family="Plus Jakarta Sans"))
+    fig.add_annotation(x=103, y=94.5, text="<b>WEAKENING</b>", showarrow=False,
+                       font=dict(size=14, color=QUADRANT_COLORS["Weakening"], family="Plus Jakarta Sans"))
+    fig.add_annotation(x=97, y=94.5, text="<b>LAGGING</b>", showarrow=False,
+                       font=dict(size=14, color=QUADRANT_COLORS["Lagging"], family="Plus Jakarta Sans"))
     
-    # Plot each ticker with trail, arrow, and rich hover
+    # Plot each ticker with GRADIENT trail width (thin→thick) and arrow
     for t in tickers:
         if t not in st.session_state.visible_set:
             continue
@@ -816,44 +1041,50 @@ with plot_col:
         # Calculate Momentum Score (distance from center, higher = stronger)
         rrg_power = float(np.hypot(rr_last - 100.0, mm_last - 100.0))
         
-        # Build hover text for each point on trail
-        hover_texts = []
-        for i in range(len(rr)):
-            pt_rr = float(rr.values[i])
-            pt_mm = float(mm.values[i])
-            pt_status = get_status(pt_rr, pt_mm)
-            hover_texts.append(
-                f"<b>{name}</b><br>" +
-                f"<b>Status:</b> {pt_status}<br>" +
-                f"<b>RS-Ratio:</b> {pt_rr:.2f}<br>" +
-                f"<b>RS-Momentum:</b> {pt_mm:.2f}<br>" +
-                f"<b>Momentum Score:</b> {rrg_power:.2f}<br>" +
-                f"<b>Price:</b> ₹{price:,.2f}<br>" +
-                f"<b>Change %:</b> {chg:+.2f}%<br>" +
-                f"<b>Industry:</b> {industry}"
-            )
+        # Build hover text for last point
+        hover_text = (
+            f"<b>{name}</b><br>" +
+            f"<b>Status:</b> {status}<br>" +
+            f"<b>RS-Ratio:</b> {rr_last:.2f}<br>" +
+            f"<b>RS-Momentum:</b> {mm_last:.2f}<br>" +
+            f"<b>Momentum Score:</b> {rrg_power:.2f}<br>" +
+            f"<b>Price:</b> ₹{price:,.2f}<br>" +
+            f"<b>Change %:</b> {chg:+.2f}%<br>" +
+            f"<b>Industry:</b> {industry}"
+        )
         
-        # Trail line
-        fig.add_trace(go.Scatter(
-            x=rr.values, y=mm.values,
-            mode='lines',
-            line=dict(color=color, width=2),
-            opacity=0.6,
-            hoverinfo='skip',
-            showlegend=False
-        ))
+        # Draw trail segments with INCREASING width (gradient effect)
+        n_points = len(rr)
+        for i in range(n_points - 1):
+            # Width increases from 1.5 to 4.5 along the trail
+            seg_width = 1.5 + (i / max(1, n_points - 2)) * 3.0
+            # Opacity increases from 0.3 to 0.9
+            seg_opacity = 0.3 + (i / max(1, n_points - 2)) * 0.6
+            
+            fig.add_trace(go.Scatter(
+                x=[rr.values[i], rr.values[i+1]], 
+                y=[mm.values[i], mm.values[i+1]],
+                mode='lines',
+                line=dict(color=color, width=seg_width),
+                opacity=seg_opacity,
+                hoverinfo='skip',
+                showlegend=False
+            ))
         
-        # Trail points (smaller for history, larger for current)
-        sizes = [8] * (len(rr) - 1) + [16]
+        # Trail points - small dots, larger for current
+        sizes = [6] * (len(rr) - 1) + [14]
+        opacities = [0.4 + (i / max(1, len(rr) - 1)) * 0.6 for i in range(len(rr))]
+        
         fig.add_trace(go.Scatter(
             x=rr.values, y=mm.values,
             mode='markers',
             marker=dict(
                 size=sizes,
                 color=color,
-                line=dict(color='#333', width=1)
+                opacity=opacities,
+                line=dict(color='rgba(255,255,255,0.5)', width=1)
             ),
-            text=hover_texts,
+            text=[hover_text] * len(rr),
             hoverinfo='text',
             hoverlabel=dict(
                 bgcolor='#1a1f2e',
@@ -876,7 +1107,7 @@ with plot_col:
             
             if length > 0.01:  # Only add arrow if there's movement
                 # Normalize and scale arrow
-                arrow_scale = 0.8
+                arrow_scale = 0.6
                 ax_offset = (dx / length) * arrow_scale
                 ay_offset = (dy / length) * arrow_scale
                 
@@ -887,10 +1118,10 @@ with plot_col:
                     axref='x', ayref='y',
                     showarrow=True,
                     arrowhead=2,
-                    arrowsize=1.5,
-                    arrowwidth=2,
+                    arrowsize=1.8,
+                    arrowwidth=2.5,
                     arrowcolor=color,
-                    opacity=0.9
+                    opacity=1.0
                 )
         
         # Add label for top N by distance
@@ -899,50 +1130,53 @@ with plot_col:
                 x=rr_last, y=mm_last,
                 text=f"<b>{name}</b>",
                 showarrow=False,
-                xshift=15, yshift=10,
-                font=dict(size=11, color=color),
-                bgcolor='rgba(0,0,0,0.5)',
+                xshift=12, yshift=8,
+                font=dict(size=11, color=color, family="Plus Jakarta Sans"),
+                bgcolor='rgba(0,0,0,0.6)',
                 borderpad=3
             )
     
-    # Update layout
+    # Update layout with dark theme
     fig.update_layout(
         title=dict(
-            text="Relative Rotation Graph (RRG)",
-            font=dict(size=16, family='Plus Jakarta Sans, sans-serif', color='#333'),
+            text=f"<b>Relative Rotation Graph</b>",
+            font=dict(size=18, family='Plus Jakarta Sans, sans-serif', color='#e6eaee'),
             x=0.5
         ),
         xaxis=dict(
-            title="JdK RS-Ratio",
+            title=dict(text="<b>JdK RS-Ratio</b>", font=dict(size=13, color='#b3bdc7')),
             range=[94, 106],
             showgrid=True,
-            gridcolor='rgba(0,0,0,0.1)',
+            gridcolor='rgba(255,255,255,0.08)',
             zeroline=False,
-            tickfont=dict(color='#333')
+            tickfont=dict(color='#b3bdc7', size=11),
+            linecolor='#1f2732',
         ),
         yaxis=dict(
-            title="JdK RS-Momentum",
+            title=dict(text="<b>JdK RS-Momentum</b>", font=dict(size=13, color='#b3bdc7')),
             range=[94, 106],
             showgrid=True,
-            gridcolor='rgba(0,0,0,0.1)',
+            gridcolor='rgba(255,255,255,0.08)',
             zeroline=False,
-            tickfont=dict(color='#333')
+            tickfont=dict(color='#b3bdc7', size=11),
+            linecolor='#1f2732',
         ),
-        plot_bgcolor='#F5F5DC',
-        paper_bgcolor='#F5F5DC',
+        plot_bgcolor='#0d1117',
+        paper_bgcolor='#0b0e13',
         margin=dict(l=60, r=40, t=60, b=60),
         hoverlabel=dict(align='left'),
-        height=550
+        height=580
     )
     
-    st.plotly_chart(fig, width='stretch', config={
+    st.plotly_chart(fig, use_container_width=True, config={
         'displayModeBar': True,
         'modeBarButtonsToRemove': ['lasso2d', 'select2d'],
         'displaylogo': False
     })
 
 with rank_col:
-    st.markdown("### Ranking")
+    st.markdown(f"### Ranking")
+    st.caption(f"as of {date_str}")
     if ranked_syms:
         rows_html = []
         for sym in ranked_syms[:max_rank_display]:
@@ -1326,7 +1560,7 @@ for t in ranked_syms:
     mm = float(rs_mom_map[t].iloc[end_idx])
     status = get_status(rr, mm)
     bg = status_bg_color(rr, mm)
-    fg = "#ffffff" if bg in ("#e06a6a", "#3fa46a", "#5d86d1") else "#000000"
+    fg = "#ffffff"
     px = tickers_data[t].reindex(idx).dropna()
     price = float(px.iloc[end_idx]) if end_idx < len(px) else np.nan
     chg = ((px.iloc[end_idx] / px.iloc[start_idx] - 1) * 100.0) if (end_idx < len(px) and start_idx < len(px)) else np.nan
@@ -1344,7 +1578,7 @@ for t in ranked_syms:
         "tv": tv_link_for_symbol(t),
     })
 
-with st.expander("Table", expanded=True):
+with st.expander("📊 Table", expanded=True):
     table_html, table_height = make_interactive_table(rows)
     components.html(table_html, height=table_height, scrolling=False)
 
@@ -1373,10 +1607,10 @@ def export_table_csv(rows_):
 
 c1, c2 = st.columns(2)
 with c1:
-    st.download_button("Download Ranks CSV", data=export_ranks_csv(perf),
-                       file_name=f"ranks_{date_str}.csv", mime="text/csv", width='stretch')
+    st.download_button("📥 Download Ranks CSV", data=export_ranks_csv(perf),
+                       file_name=f"ranks_{date_str}.csv", mime="text/csv", use_container_width=True)
 with c2:
-    st.download_button("Download Table CSV", data=export_table_csv(rows),
-                       file_name=f"table_{date_str}.csv", mime="text/csv", width='stretch')
+    st.download_button("📥 Download Table CSV", data=export_table_csv(rows),
+                       file_name=f"table_{date_str}.csv", mime="text/csv", use_container_width=True)
 
 st.caption("Names open TradingView. Use Play/Pause to watch rotation; Speed controls frame interval; Loop wraps frames.")
