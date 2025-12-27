@@ -949,6 +949,10 @@ if st.session_state.playing:
 start_date_str = format_bar_date(idx[DEFAULT_TAIL], interval)
 end_date_full = format_bar_date(idx[-1], interval)
 
+# Store values in session state for callbacks to access
+st.session_state._idx_len = idx_len
+st.session_state._default_tail = DEFAULT_TAIL
+
 # Date slider container with timeline visualization
 st.markdown(f"""
 <div class="date-slider-container">
@@ -959,7 +963,6 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# Slider for date selection
 end_idx = st.slider(
     "Date",
     min_value=DEFAULT_TAIL,
@@ -970,26 +973,35 @@ end_idx = st.slider(
     label_visibility="collapsed"
 )
 
-# View controls row
+# View controls row - use callbacks to modify state before next rerun
+# Callbacks must use session_state for values since local variables aren't available
+def go_prev():
+    if "_default_tail" in st.session_state and "end_idx" in st.session_state:
+        if st.session_state.end_idx > st.session_state._default_tail:
+            st.session_state.end_idx -= 1
+
+def go_next():
+    if "_idx_len" in st.session_state and "end_idx" in st.session_state:
+        if st.session_state.end_idx < st.session_state._idx_len - 1:
+            st.session_state.end_idx += 1
+
+def go_latest():
+    if "_idx_len" in st.session_state:
+        st.session_state.end_idx = st.session_state._idx_len - 1
+
+def go_center():
+    if "_idx_len" in st.session_state and "_default_tail" in st.session_state:
+        st.session_state.end_idx = (st.session_state._default_tail + st.session_state._idx_len - 1) // 2
+
 ctrl_cols = st.columns([1, 1, 1, 1, 4])
 with ctrl_cols[0]:
-    if st.button("◀ Prev", use_container_width=True):
-        if st.session_state.end_idx > DEFAULT_TAIL:
-            st.session_state.end_idx -= 1
-            st.rerun()
+    st.button("◀ Prev", use_container_width=True, on_click=go_prev)
 with ctrl_cols[1]:
-    if st.button("Next ▶", use_container_width=True):
-        if st.session_state.end_idx < idx_len - 1:
-            st.session_state.end_idx += 1
-            st.rerun()
+    st.button("Next ▶", use_container_width=True, on_click=go_next)
 with ctrl_cols[2]:
-    if st.button("Latest", use_container_width=True):
-        st.session_state.end_idx = idx_len - 1
-        st.rerun()
+    st.button("Latest", use_container_width=True, on_click=go_latest)
 with ctrl_cols[3]:
-    if st.button("Center", use_container_width=True):
-        st.session_state.end_idx = (DEFAULT_TAIL + idx_len - 1) // 2
-        st.rerun()
+    st.button("Center", use_container_width=True, on_click=go_center)
 
 start_idx = max(end_idx - tail_len, 0)
 date_str = format_bar_date(idx[end_idx], interval)
