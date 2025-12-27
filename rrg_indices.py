@@ -570,12 +570,65 @@ def tv_link_for_symbol(yahoo_sym: str) -> str:
 def format_bar_date(ts: pd.Timestamp, interval: str) -> str:
     ts = pd.Timestamp(ts)
     if interval=="60m":
+        # yfinance returns 60m data with timestamps that are often in UTC
+        # Check timezone info:
+        # - If timezone-aware: convert to IST
+        # - If timezone-naive: assume UTC (yfinance behavior for hourly data)
+        if ts.tzinfo is not None:
+            ts_ist = ts.tz_convert(IST_TZ)
+        else:
+            # Assume UTC for timezone-naive hourly data from yfinance
+            ts_ist = ts.tz_localize("UTC").tz_convert(IST_TZ)
         # For 60m bars, show the bar END time (start + 1 hour)
-        bar_end = ts + pd.Timedelta(hours=1)
+        bar_end = ts_ist + pd.Timedelta(hours=1)
+        # Cap at market close (15:30)
+        market_close_time = bar_end.replace(hour=15, minute=30, second=0, microsecond=0)
+        if bar_end.time() > market_close_time.time():
+            bar_end = market_close_time
         return bar_end.strftime("%Y-%m-%d %H:%M")
     if interval=="1wk": return ts.to_period("W-FRI").end_time.date().isoformat()
     if interval=="1mo": return ts.to_period("M").end_time.date().isoformat()
     return ts.date().isoformat()
+
+def filter_nse_market_hours(df_or_series, interval: str):
+    """Filter data to only include NSE market hours (9:15 AM - 3:30 PM IST) for intraday data."""
+    if interval != "60m":
+        return df_or_series
+    
+    if df_or_series is None or (hasattr(df_or_series, 'empty') and df_or_series.empty):
+        return df_or_series
+    
+    idx = df_or_series.index
+    
+    # Convert to IST
+    if idx.tz is None:
+        idx_ist = idx.tz_localize("UTC").tz_convert(IST_TZ)
+    else:
+        idx_ist = idx.tz_convert(IST_TZ)
+    
+    # NSE market hours: 9:15 AM to 3:30 PM IST
+    # Valid bar START times: 9:xx to 14:xx (bars ending by 15:30)
+    # A bar starting at hour 9 ends around hour 10
+    # A bar starting at hour 14 ends around hour 15
+    # Any bar starting at hour 15 or later is invalid (ends after market close)
+    
+    valid_mask = []
+    for ts in idx_ist:
+        hour = ts.hour
+        minute = ts.minute
+        # Valid if:
+        # - Hour is 9-14 (bar will end within market hours)
+        # - Or hour is 9 with minute >= 0 (first bar can start at 9:xx)
+        # Invalid if:
+        # - Hour < 9 (before market open)
+        # - Hour >= 15 (after market would close for this bar)
+        is_valid = (9 <= hour <= 14)
+        valid_mask.append(is_valid)
+    
+    valid_mask = pd.Series(valid_mask, index=df_or_series.index)
+    filtered = df_or_series[valid_mask]
+    
+    return filtered
 
 def jdk_components(price: pd.Series, bench: pd.Series, win=14):
     df = pd.concat([price.rename("p"), bench.rename("b")], axis=1).dropna()
@@ -761,6 +814,11 @@ def download_block_with_benchmark(universe, benchmark, period, interval):
     if bench is None or bench.empty:
         return bench, {}
 
+    # Filter to NSE market hours for intraday data
+    bench = filter_nse_market_hours(bench, interval)
+    if bench is None or bench.empty:
+        return bench, {}
+
     # For intraday data, always drop the last bar if market is open
     # For daily/weekly/monthly, use the existing logic
     now_ist = _now_ist_cached()
@@ -787,11 +845,16 @@ def download_block_with_benchmark(universe, benchmark, period, interval):
     for t in universe:
         s=_pick(t)
         if not s.empty:
-            data[t]=_maybe_trim(s)
+            # Filter to NSE market hours
+            s = filter_nse_market_hours(s, interval)
+            if not s.empty:
+                data[t]=_maybe_trim(s)
         else:
             c=_load_cache(t,period,interval)
             if not c.empty:
-                data[t]=_maybe_trim(c)
+                c = filter_nse_market_hours(c, interval)
+                if not c.empty:
+                    data[t]=_maybe_trim(c)
 
     if not bench.empty:
         _save_cache(benchmark, bench, period, interval)
