@@ -14,163 +14,352 @@ warnings.filterwarnings('ignore')
 # ============================================================================
 st.set_page_config(
     layout="wide",
-    page_title="RRG Dashboard - Optuma Style",
+    page_title="RRG Dashboard - Multi Theme",
     initial_sidebar_state="collapsed"
 )
 
 # ============================================================================
-# THEME CONFIGURATION
+# THEME CONFIGURATION - Multiple Themes
 # ============================================================================
 THEMES = {
-    "light": {
-        "bg": "#f5f5f5",
-        "bg_card": "#ffffff",
-        "bg_secondary": "#f8f9fa",
-        "border": "#dee2e6",
-        "text": "#212529",
-        "text_secondary": "#495057",
-        "text_muted": "#6c757d",
-        "plot_bg": "#fafafa",
-        "paper_bg": "#f5f5f5",
-        "grid": "rgba(100,100,100,0.15)",
-        "table_header": "#e9ecef",
-        "table_row": "#ffffff",
-        "table_row_alt": "#f8f9fa",
-        "table_border": "#dee2e6",
-    },
     "dark": {
+        "name": "Dark Pro",
         "bg": "#0b0e13",
         "bg_card": "#10141b",
         "bg_secondary": "#1a1f2e",
-        "border": "#1f2732",
+        "bg_control": "#151a24",
+        "border": "#2d3748",
         "text": "#e6eaee",
-        "text_secondary": "#b3bdc7",
-        "text_muted": "#8892a0",
-        "plot_bg": "#10141b",
-        "paper_bg": "#0b0e13",
-        "grid": "rgba(150,150,150,0.2)",
+        "text_secondary": "#a0aec0",
+        "text_muted": "#718096",
+        "accent": "#4299e1",
+        "accent_hover": "#3182ce",
+        "success": "#48bb78",
         "table_header": "#1a2230",
         "table_row": "#0d1117",
         "table_row_alt": "#121823",
-        "table_border": "#1f2732",
-    }
+    },
+    "light": {
+        "name": "Light Classic",
+        "bg": "#f7fafc",
+        "bg_card": "#ffffff",
+        "bg_secondary": "#edf2f7",
+        "bg_control": "#e2e8f0",
+        "border": "#cbd5e0",
+        "text": "#1a202c",
+        "text_secondary": "#4a5568",
+        "text_muted": "#718096",
+        "accent": "#3182ce",
+        "accent_hover": "#2c5282",
+        "success": "#38a169",
+        "table_header": "#e2e8f0",
+        "table_row": "#ffffff",
+        "table_row_alt": "#f7fafc",
+    },
+    "matrix": {
+        "name": "Matrix Green",
+        "bg": "#0a0f0a",
+        "bg_card": "#0d140d",
+        "bg_secondary": "#142014",
+        "bg_control": "#0f1a0f",
+        "border": "#1a3d1a",
+        "text": "#00ff41",
+        "text_secondary": "#00cc33",
+        "text_muted": "#008f26",
+        "accent": "#00ff41",
+        "accent_hover": "#00cc33",
+        "success": "#00ff41",
+        "table_header": "#142014",
+        "table_row": "#0a0f0a",
+        "table_row_alt": "#0d140d",
+    },
+    "arctic": {
+        "name": "Arctic Blue",
+        "bg": "#0a1628",
+        "bg_card": "#0f1f3d",
+        "bg_secondary": "#142952",
+        "bg_control": "#0d1a33",
+        "border": "#1e3a5f",
+        "text": "#e0f2fe",
+        "text_secondary": "#7dd3fc",
+        "text_muted": "#38bdf8",
+        "accent": "#0ea5e9",
+        "accent_hover": "#0284c7",
+        "success": "#22d3ee",
+        "table_header": "#142952",
+        "table_row": "#0a1628",
+        "table_row_alt": "#0f1f3d",
+    },
+    "sunset": {
+        "name": "Sunset Trading",
+        "bg": "#1a1018",
+        "bg_card": "#261620",
+        "bg_secondary": "#331c28",
+        "bg_control": "#1f1218",
+        "border": "#4a2838",
+        "text": "#fce7f3",
+        "text_secondary": "#f9a8d4",
+        "text_muted": "#ec4899",
+        "accent": "#f97316",
+        "accent_hover": "#ea580c",
+        "success": "#fb923c",
+        "table_header": "#331c28",
+        "table_row": "#1a1018",
+        "table_row_alt": "#261620",
+    },
+    "cyberpunk": {
+        "name": "Cyberpunk Neon",
+        "bg": "#0d0221",
+        "bg_card": "#150530",
+        "bg_secondary": "#1a0a3e",
+        "bg_control": "#120428",
+        "border": "#6b21a8",
+        "text": "#f0abfc",
+        "text_secondary": "#e879f9",
+        "text_muted": "#c026d3",
+        "accent": "#f0f",
+        "accent_hover": "#d946ef",
+        "success": "#22d3ee",
+        "table_header": "#1a0a3e",
+        "table_row": "#0d0221",
+        "table_row_alt": "#150530",
+    },
 }
 
-# Initialize theme in session state
+# Chart colors - ALWAYS CONSISTENT (white bg with pastel quadrants)
+CHART_COLORS = {
+    "plot_bg": "#fafafa",
+    "paper_bg": "#ffffff",
+    "grid": "rgba(150,150,150,0.2)",
+    "axis_text": "#4a5568",
+    "axis_title": "#2d3748",
+}
+
+# Quadrant colors - same as Optuma reference
+QUADRANT_COLORS = {
+    "Leading": "#228B22",
+    "Improving": "#7c3aed",
+    "Weakening": "#d97706",
+    "Lagging": "#dc2626"
+}
+
+QUADRANT_BG_COLORS = {
+    "Leading": "rgba(187, 247, 208, 0.6)",
+    "Improving": "rgba(233, 213, 255, 0.6)",
+    "Weakening": "rgba(254, 243, 199, 0.6)",
+    "Lagging": "rgba(254, 202, 202, 0.6)"
+}
+
+# Initialize theme
 if "theme" not in st.session_state:
     st.session_state.theme = "dark"
 
-# Get current theme
 theme = THEMES[st.session_state.theme]
 
-# Dynamic CSS based on theme
+# ============================================================================
+# DYNAMIC CSS
+# ============================================================================
 st.markdown(f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 html, body, .stApp {{
-  background: {theme['bg']} !important;
-  font-family: 'Inter', system-ui, sans-serif !important;
+    background: {theme['bg']} !important;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
 }}
 
 .block-container {{
-  padding-top: 1rem;
-  max-width: 100% !important;
-  padding-left: 1rem !important;
-  padding-right: 1rem !important;
+    padding: 0.5rem 1rem !important;
+    max-width: 100% !important;
 }}
 
-/* All text elements */
-p, span, label, div {{
-  color: {theme['text']} !important;
+/* Control Bar Container */
+.control-bar {{
+    background: {theme['bg_control']};
+    border: 1px solid {theme['border']};
+    border-radius: 8px;
+    padding: 8px 16px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
 }}
 
-/* Selectbox and inputs */
-div[data-baseweb="select"] {{
-  background: {theme['bg_card']} !important;
+.control-group {{
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: fit-content;
 }}
 
+.control-label {{
+    font-size: 10px;
+    font-weight: 600;
+    color: {theme['text_muted']};
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}}
+
+.control-select {{
+    background: {theme['bg_card']};
+    border: 1px solid {theme['border']};
+    border-radius: 4px;
+    padding: 6px 10px;
+    color: {theme['text']};
+    font-size: 12px;
+    font-weight: 500;
+    min-width: 100px;
+}}
+
+.counts-display {{
+    background: {theme['accent']};
+    color: white;
+    padding: 6px 16px;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 13px;
+    white-space: nowrap;
+}}
+
+.date-badge {{
+    background: {theme['accent']};
+    color: white;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 12px;
+    white-space: nowrap;
+}}
+
+.btn-group {{
+    display: flex;
+    gap: 4px;
+}}
+
+.ctrl-btn {{
+    background: {theme['bg_card']};
+    border: 1px solid {theme['border']};
+    color: {theme['text']};
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+}}
+
+.ctrl-btn:hover {{
+    border-color: {theme['accent']};
+    color: {theme['accent']};
+}}
+
+.ctrl-btn.active {{
+    background: {theme['accent']};
+    color: white;
+    border-color: {theme['accent']};
+}}
+
+/* Streamlit overrides */
 div[data-baseweb="select"] > div {{
-  background: {theme['bg_card']} !important;
-  border-color: {theme['border']} !important;
+    background: {theme['bg_card']} !important;
+    border-color: {theme['border']} !important;
+    min-height: 32px !important;
 }}
 
-.stSelectbox label, .stNumberInput label {{
-  color: {theme['text_secondary']} !important;
+div[data-baseweb="select"] span {{
+    color: {theme['text']} !important;
+    font-size: 12px !important;
 }}
 
-/* Buttons */
+.stSelectbox, .stNumberInput {{
+    min-width: 80px;
+}}
+
+.stSelectbox > div > div {{
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}}
+
 .stButton > button {{
-  background: {theme['bg_card']} !important;
-  border: 1px solid {theme['border']} !important;
-  color: {theme['text']} !important;
+    background: {theme['bg_card']} !important;
+    border: 1px solid {theme['border']} !important;
+    color: {theme['text']} !important;
+    padding: 4px 12px !important;
+    font-size: 12px !important;
+    min-height: 32px !important;
 }}
 
 .stButton > button:hover {{
-  border-color: #2196F3 !important;
-  color: #2196F3 !important;
+    border-color: {theme['accent']} !important;
+    color: {theme['accent']} !important;
+}}
+
+.stCheckbox label span {{
+    color: {theme['text']} !important;
+    font-size: 12px !important;
+}}
+
+/* Success/info messages */
+.stSuccess, .stInfo {{
+    background: {theme['bg_secondary']} !important;
+    border: 1px solid {theme['border']} !important;
+    color: {theme['text']} !important;
+}}
+
+/* Slider */
+.stSlider > div > div > div {{
+    background: {theme['accent']} !important;
+}}
+
+.stSlider label {{
+    color: {theme['text']} !important;
+}}
+
+/* Expander */
+.streamlit-expanderHeader {{
+    background: {theme['bg_secondary']} !important;
+    color: {theme['text']} !important;
+    border-radius: 6px !important;
 }}
 
 /* Metrics */
 [data-testid="stMetric"] {{
-  background: {theme['bg_card']};
-  padding: 12px;
-  border-radius: 8px;
-  border: 1px solid {theme['border']};
-}}
-
-[data-testid="stMetricLabel"] {{
-  color: {theme['text_secondary']} !important;
+    background: {theme['bg_card']};
+    padding: 10px;
+    border-radius: 6px;
+    border: 1px solid {theme['border']};
 }}
 
 [data-testid="stMetricValue"] {{
-  color: {theme['text']} !important;
+    color: {theme['text']} !important;
+    font-size: 18px !important;
 }}
 
-/* Expanders */
-.streamlit-expanderHeader {{
-  background: {theme['bg_secondary']} !important;
-  color: {theme['text']} !important;
-  border-radius: 8px !important;
+[data-testid="stMetricLabel"] {{
+    color: {theme['text_secondary']} !important;
 }}
 
-/* Checkbox */
-.stCheckbox label {{
-  color: {theme['text']} !important;
+/* Hide defaults */
+#MainMenu, footer, header {{visibility: hidden;}}
+
+/* Radio buttons inline */
+.stRadio > div {{
+    flex-direction: row !important;
+    gap: 8px !important;
 }}
 
-/* Slider */
-.stSlider label {{
-  color: {theme['text']} !important;
-}}
-
-/* Radio */
 .stRadio label {{
-  color: {theme['text']} !important;
+    color: {theme['text']} !important;
+    font-size: 12px !important;
 }}
 
-/* Info box */
-.stAlert {{
-  background: {theme['bg_secondary']} !important;
-  border: 1px solid {theme['border']} !important;
-}}
-
-/* Success message */
-div[data-testid="stNotification"] {{
-  background: {theme['bg_card']} !important;
-}}
-
-/* Hide elements */
-#MainMenu {{visibility: hidden;}}
-footer {{visibility: hidden;}}
-header {{visibility: hidden;}}
-
-/* Data table container */
-.table-container {{
-  background: {theme['bg_card']};
-  border: 1px solid {theme['border']};
-  border-radius: 8px;
-  overflow: hidden;
+/* Number input compact */
+.stNumberInput > div > div > input {{
+    background: {theme['bg_card']} !important;
+    color: {theme['text']} !important;
+    border-color: {theme['border']} !important;
 }}
 </style>
 """, unsafe_allow_html=True)
@@ -196,26 +385,12 @@ TIMEFRAMES = {
 }
 
 DATE_RANGES = {
-    "1 Month": 21,
-    "3 Months": 63,
-    "6 Months": 126,
-    "1 Year": 252,
-    "2 Years": 504,
-    "3 Years": 756,
-}
-
-QUADRANT_COLORS = {
-    "Leading": "#228B22",
-    "Improving": "#8B5CF6",
-    "Weakening": "#D97706",
-    "Lagging": "#DC2626"
-}
-
-QUADRANT_BG_COLORS = {
-    "Leading": "rgba(144, 238, 144, 0.5)",
-    "Improving": "rgba(221, 214, 254, 0.5)",
-    "Weakening": "rgba(254, 215, 170, 0.5)",
-    "Lagging": "rgba(254, 178, 178, 0.5)"
+    "1M": 21,
+    "3M": 63,
+    "6M": 126,
+    "1Y": 252,
+    "2Y": 504,
+    "3Y": 756,
 }
 
 WINDOW = 14
@@ -318,33 +493,21 @@ def smooth_spline_curve(x_points, y_points, points_per_segment=8):
     return np.array(x_smooth), np.array(y_smooth)
 
 def get_tv_link(sym):
-    clean_sym = sym.replace('.NS', '')
-    return f"https://www.tradingview.com/chart/?symbol=NSE:{clean_sym}"
+    return f"https://www.tradingview.com/chart/?symbol=NSE:{sym.replace('.NS', '')}"
 
 def format_symbol(sym):
     return sym.replace('.NS', '')
 
 def get_heading_direction(heading):
-    if 22.5 <= heading < 67.5:
-        return "↗ NE"
-    elif 67.5 <= heading < 112.5:
-        return "↑ N"
-    elif 112.5 <= heading < 157.5:
-        return "↖ NW"
-    elif 157.5 <= heading < 202.5:
-        return "← W"
-    elif 202.5 <= heading < 247.5:
-        return "↙ SW"
-    elif 247.5 <= heading < 292.5:
-        return "↓ S"
-    elif 292.5 <= heading < 337.5:
-        return "↘ SE"
-    else:
-        return "→ E"
+    dirs = [("→ E", 0), ("↗ NE", 45), ("↑ N", 90), ("↖ NW", 135), 
+            ("← W", 180), ("↙ SW", 225), ("↓ S", 270), ("↘ SE", 315)]
+    for d, angle in dirs:
+        if abs(heading - angle) < 22.5 or abs(heading - angle - 360) < 22.5:
+            return d
+    return "→ E"
 
 def select_graph_stocks(df, min_stocks=50):
     graph_stocks = []
-    
     for status in ["Leading", "Improving", "Weakening", "Lagging"]:
         df_quad = df[df['Status'] == status].copy()
         if len(df_quad) == 0:
@@ -352,10 +515,7 @@ def select_graph_stocks(df, min_stocks=50):
         elif len(df_quad) < 15:
             graph_stocks.extend(df_quad.index.tolist())
         else:
-            if status in ["Leading", "Improving"]:
-                top = df_quad.nlargest(15, 'RRG Power')
-            else:
-                top = df_quad.nsmallest(15, 'RRG Power')
+            top = df_quad.nlargest(15, 'RRG Power') if status in ["Leading", "Improving"] else df_quad.nsmallest(15, 'RRG Power')
             graph_stocks.extend(top.index.tolist())
     
     if len(graph_stocks) < min_stocks:
@@ -365,306 +525,136 @@ def select_graph_stocks(df, min_stocks=50):
     
     return df.loc[graph_stocks]
 
-def generate_data_table_html(df, theme):
-    """Generate HTML table with theme support"""
+def generate_table_html(df, theme):
     industries = sorted(df['Industry'].unique().tolist())
-    industry_options = ''.join([f'<option value="{ind}">{ind}</option>' for ind in industries])
+    ind_opts = ''.join([f'<option value="{i}">{i}</option>' for i in industries])
     
-    table_rows = ""
-    for _, row in df.iterrows():
-        color, status = get_quadrant_color(row['RS-Ratio'], row['RS-Momentum'])
-        
-        table_rows += f"""
-        <tr>
-            <td style="text-align: center;">{int(row['Sl No.'])}</td>
-            <td><a href="{row['TV Link']}" target="_blank" style="color: #2196F3; font-weight: 600;">{row['Symbol']}</a></td>
-            <td>{row['Name'][:25]}</td>
-            <td>{row['Industry'][:20]}</td>
-            <td style="text-align: right;">₹{row['Price']:,.2f}</td>
-            <td style="text-align: center;"><span style="background:{color}; color:white; padding:2px 8px; border-radius:4px; font-size:11px;">{status}</span></td>
-            <td style="text-align: right;">{row['RS-Ratio']:.2f}</td>
-            <td style="text-align: right;">{row['RS-Momentum']:.2f}</td>
-            <td style="text-align: right; font-weight:600;">{row['RRG Power']:.2f}</td>
-            <td style="text-align: right;">{row['Distance']:.2f}</td>
-            <td style="text-align: center; color: #fbbf24;">{row['Direction']}</td>
-        </tr>
-        """
+    rows = ""
+    for _, r in df.iterrows():
+        c, s = get_quadrant_color(r['RS-Ratio'], r['RS-Momentum'])
+        rows += f"""<tr>
+            <td>{int(r['Sl No.'])}</td>
+            <td><a href="{r['TV Link']}" target="_blank" style="color:{theme['accent']};font-weight:600;">{r['Symbol']}</a></td>
+            <td>{r['Name'][:22]}</td>
+            <td>{r['Industry'][:18]}</td>
+            <td style="text-align:right;">₹{r['Price']:,.2f}</td>
+            <td><span style="background:{c};color:#fff;padding:2px 6px;border-radius:3px;font-size:10px;">{s}</span></td>
+            <td style="text-align:right;">{r['RS-Ratio']:.2f}</td>
+            <td style="text-align:right;">{r['RS-Momentum']:.2f}</td>
+            <td style="text-align:right;font-weight:600;">{r['RRG Power']:.2f}</td>
+            <td style="text-align:center;">{r['Direction']}</td>
+        </tr>"""
     
-    html = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        
-        * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-        
-        body {{
-            font-family: 'Inter', system-ui, sans-serif;
-            background: {theme['bg_card']};
-            color: {theme['text']};
-        }}
-        
-        .controls {{
-            padding: 12px 16px;
-            background: {theme['bg_secondary']};
-            border-bottom: 1px solid {theme['table_border']};
-            display: flex;
-            gap: 12px;
-            align-items: center;
-            flex-wrap: wrap;
-        }}
-        
-        .search-box, .filter-select {{
-            padding: 8px 12px;
-            background: {theme['bg_card']};
-            border: 1px solid {theme['border']};
-            border-radius: 6px;
-            color: {theme['text']};
-            font-size: 13px;
-            font-family: inherit;
-        }}
-        
-        .search-box {{ min-width: 200px; }}
-        .filter-select {{ min-width: 140px; }}
-        
-        .search-box:focus, .filter-select:focus {{
-            outline: none;
-            border-color: #2196F3;
-        }}
-        
-        .count-badge {{
-            background: #2196F3;
-            color: white;
-            padding: 6px 14px;
-            border-radius: 20px;
-            font-size: 13px;
-            font-weight: 600;
-        }}
-        
-        .table-wrapper {{
-            max-height: 500px;
-            overflow: auto;
-        }}
-        
-        table {{
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 13px;
-        }}
-        
-        th {{
-            position: sticky;
-            top: 0;
-            background: {theme['table_header']};
-            color: {theme['text_secondary']};
-            padding: 12px 10px;
-            text-align: left;
-            font-weight: 700;
-            border-bottom: 2px solid {theme['table_border']};
-            cursor: pointer;
-            white-space: nowrap;
-        }}
-        
-        th:hover {{ background: {theme['bg_secondary']}; }}
-        
-        td {{
-            padding: 10px;
-            border-bottom: 1px solid {theme['table_border']};
-            color: {theme['text']};
-        }}
-        
-        tr:nth-child(odd) {{ background: {theme['table_row']}; }}
-        tr:nth-child(even) {{ background: {theme['table_row_alt']}; }}
-        tr:hover {{ background: {theme['bg_secondary']}; }}
-        
-        .hidden {{ display: none; }}
-        
-        a {{ text-decoration: none; }}
-        a:hover {{ text-decoration: underline; }}
-    </style>
-    </head>
-    <body>
+    return f"""<!DOCTYPE html><html><head><style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+        *{{box-sizing:border-box;margin:0;padding:0;}}
+        body{{font-family:'Inter',sans-serif;background:{theme['bg_card']};color:{theme['text']};}}
+        .controls{{padding:10px;background:{theme['bg_secondary']};border-bottom:1px solid {theme['border']};display:flex;gap:10px;flex-wrap:wrap;}}
+        input,select{{padding:6px 10px;background:{theme['bg_card']};border:1px solid {theme['border']};border-radius:4px;color:{theme['text']};font-size:12px;}}
+        input:focus,select:focus{{outline:none;border-color:{theme['accent']};}}
+        .badge{{background:{theme['accent']};color:#fff;padding:5px 12px;border-radius:12px;font-size:12px;font-weight:600;}}
+        .wrap{{max-height:400px;overflow:auto;}}
+        table{{width:100%;border-collapse:collapse;font-size:12px;}}
+        th{{position:sticky;top:0;background:{theme['table_header']};color:{theme['text_secondary']};padding:10px 8px;text-align:left;font-weight:600;border-bottom:2px solid {theme['border']};cursor:pointer;}}
+        th:hover{{background:{theme['bg_secondary']};}}
+        td{{padding:8px;border-bottom:1px solid {theme['border']};}}
+        tr:nth-child(odd){{background:{theme['table_row']};}}
+        tr:nth-child(even){{background:{theme['table_row_alt']};}}
+        tr:hover{{background:{theme['bg_secondary']};}}
+        a{{text-decoration:none;}}
+        .hidden{{display:none;}}
+    </style></head><body>
     <div class="controls">
-        <input type="text" class="search-box" id="searchBox" placeholder="🔍 Search symbol or name..." onkeyup="filterTable()">
-        <select class="filter-select" id="statusFilter" onchange="filterTable()">
-            <option value="">All Status</option>
-            <option value="Leading">Leading</option>
-            <option value="Improving">Improving</option>
-            <option value="Weakening">Weakening</option>
-            <option value="Lagging">Lagging</option>
-        </select>
-        <select class="filter-select" id="industryFilter" onchange="filterTable()">
-            <option value="">All Industries</option>
-            {industry_options}
-        </select>
-        <span class="count-badge" id="countBadge">{len(df)} / {len(df)}</span>
+        <input type="text" id="search" placeholder="🔍 Search..." onkeyup="filter()" style="min-width:180px;">
+        <select id="statusF" onchange="filter()"><option value="">All Status</option><option>Leading</option><option>Improving</option><option>Weakening</option><option>Lagging</option></select>
+        <select id="indF" onchange="filter()"><option value="">All Industries</option>{ind_opts}</select>
+        <span class="badge" id="cnt">{len(df)}/{len(df)}</span>
     </div>
-    
-    <div class="table-wrapper">
-        <table>
-            <thead>
-                <tr>
-                    <th onclick="sortTable(0)">#</th>
-                    <th onclick="sortTable(1)">Symbol</th>
-                    <th onclick="sortTable(2)">Name</th>
-                    <th onclick="sortTable(3)">Industry</th>
-                    <th onclick="sortTable(4)">Price</th>
-                    <th onclick="sortTable(5)">Status</th>
-                    <th onclick="sortTable(6)">RS-Ratio</th>
-                    <th onclick="sortTable(7)">RS-Mom</th>
-                    <th onclick="sortTable(8)">Power</th>
-                    <th onclick="sortTable(9)">Distance</th>
-                    <th onclick="sortTable(10)">Direction</th>
-                </tr>
-            </thead>
-            <tbody id="tableBody">
-                {table_rows}
-            </tbody>
-        </table>
-    </div>
-    
+    <div class="wrap"><table><thead><tr>
+        <th onclick="sort(0)">#</th><th onclick="sort(1)">Symbol</th><th onclick="sort(2)">Name</th><th onclick="sort(3)">Industry</th>
+        <th onclick="sort(4)">Price</th><th onclick="sort(5)">Status</th><th onclick="sort(6)">RS-Ratio</th>
+        <th onclick="sort(7)">RS-Mom</th><th onclick="sort(8)">Power</th><th onclick="sort(9)">Dir</th>
+    </tr></thead><tbody id="tb">{rows}</tbody></table></div>
     <script>
-        const totalRows = {len(df)};
-        const sortDirection = {{}};
-        
-        function sortTable(columnIndex) {{
-            const tbody = document.getElementById('tableBody');
-            const rows = Array.from(tbody.getElementsByTagName('tr'));
-            
-            sortDirection[columnIndex] = !sortDirection[columnIndex];
-            const ascending = sortDirection[columnIndex];
-            
-            rows.sort((a, b) => {{
-                let aValue = a.cells[columnIndex].textContent.trim();
-                let bValue = b.cells[columnIndex].textContent.trim();
-                
-                aValue = aValue.replace(/[₹,%]/g, '');
-                bValue = bValue.replace(/[₹,%]/g, '');
-                
-                const aNum = parseFloat(aValue);
-                const bNum = parseFloat(bValue);
-                
-                if (!isNaN(aNum) && !isNaN(bNum)) {{
-                    return ascending ? aNum - bNum : bNum - aNum;
-                }}
-                return ascending ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
-            }});
-            
-            tbody.innerHTML = '';
-            rows.forEach(row => tbody.appendChild(row));
-        }}
-        
-        function filterTable() {{
-            const searchBox = document.getElementById("searchBox").value.toLowerCase();
-            const statusFilter = document.getElementById("statusFilter").value;
-            const industryFilter = document.getElementById("industryFilter").value;
-            const tbody = document.getElementById("tableBody");
-            const rows = tbody.getElementsByTagName("tr");
-            let visibleCount = 0;
-            
-            for (let row of rows) {{
-                const symbol = row.cells[1].textContent.toLowerCase();
-                const name = row.cells[2].textContent.toLowerCase();
-                const industry = row.cells[3].textContent;
-                const status = row.cells[5].textContent.trim();
-                
-                const matchesSearch = symbol.includes(searchBox) || name.includes(searchBox);
-                const matchesStatus = !statusFilter || status === statusFilter;
-                const matchesIndustry = !industryFilter || industry === industryFilter;
-                
-                if (matchesSearch && matchesStatus && matchesIndustry) {{
-                    row.classList.remove('hidden');
-                    visibleCount++;
-                }} else {{
-                    row.classList.add('hidden');
-                }}
-            }}
-            
-            document.getElementById('countBadge').textContent = visibleCount + ' / ' + totalRows;
-        }}
-    </script>
-    </body>
-    </html>
-    """
-    return html
+        const total={len(df)},dir={{}};
+        function sort(c){{const tb=document.getElementById('tb'),rs=Array.from(tb.rows);dir[c]=!dir[c];rs.sort((a,b)=>{{let av=a.cells[c].textContent.replace(/[₹,%]/g,''),bv=b.cells[c].textContent.replace(/[₹,%]/g,'');const an=parseFloat(av),bn=parseFloat(bv);if(!isNaN(an)&&!isNaN(bn))return dir[c]?an-bn:bn-an;return dir[c]?av.localeCompare(bv):bv.localeCompare(av);}});tb.innerHTML='';rs.forEach(r=>tb.appendChild(r));}}
+        function filter(){{const s=document.getElementById('search').value.toLowerCase(),st=document.getElementById('statusF').value,ind=document.getElementById('indF').value,tb=document.getElementById('tb'),rs=tb.rows;let v=0;for(let r of rs){{const sym=r.cells[1].textContent.toLowerCase(),nm=r.cells[2].textContent.toLowerCase(),i=r.cells[3].textContent,stat=r.cells[5].textContent.trim();const m=(sym.includes(s)||nm.includes(s))&&(!st||stat===st)&&(!ind||i===ind);r.classList.toggle('hidden',!m);if(m)v++;}}document.getElementById('cnt').textContent=v+'/'+total;}}
+    </script></body></html>"""
 
 # ============================================================================
 # SESSION STATE
 # ============================================================================
-if "load_clicked" not in st.session_state:
-    st.session_state.load_clicked = False
-if "df_cache" not in st.session_state:
-    st.session_state.df_cache = None
-if "rs_history_cache" not in st.session_state:
-    st.session_state.rs_history_cache = {}
-if "dates_cache" not in st.session_state:
-    st.session_state.dates_cache = []
-if "current_frame" not in st.session_state:
-    st.session_state.current_frame = 0
+for key, default in [("load_clicked", False), ("df_cache", None), ("rs_history_cache", {}), 
+                     ("dates_cache", []), ("current_frame", 0), ("is_playing", False)]:
+    if key not in st.session_state:
+        st.session_state[key] = default
 
 # ============================================================================
-# CONTROL BAR
+# CONTROL BAR - Compact Inline Layout
 # ============================================================================
-csv_files = list_csv_from_github()
-if not csv_files:
-    csv_files = ["NIFTY200"]
+csv_files = list_csv_from_github() or ["NIFTY200"]
+default_csv = next((i for i, c in enumerate(csv_files) if 'NIFTY200' in c.upper()), 0)
 
-default_csv_idx = 0
-for i, csv in enumerate(csv_files):
-    if 'NIFTY200' in csv.upper():
-        default_csv_idx = i
-        break
+# Row 1: All controls inline
+c1, c2, c3, c4, c5, c6, c7, c8 = st.columns([1.2, 1.2, 1, 1, 0.8, 0.8, 1.8, 1.2])
 
-# Row 1: Main controls
-ctrl_cols = st.columns([1.5, 1.2, 1.2, 1.2, 1.2, 1.5, 2])
+with c1:
+    st.markdown(f"<span style='font-size:10px;color:{theme['text_muted']};font-weight:600;'>BENCHMARK</span>", unsafe_allow_html=True)
+    csv_selected = st.selectbox("b", csv_files, index=default_csv, key="csv", label_visibility="collapsed")
 
-with ctrl_cols[0]:
-    st.markdown(f'<p style="font-size:11px; font-weight:600; color:{theme["text_muted"]}; margin-bottom:2px;">BENCHMARK</p>', unsafe_allow_html=True)
-    csv_selected = st.selectbox("", csv_files, index=default_csv_idx, key="csv_sel", label_visibility="collapsed")
+with c2:
+    st.markdown(f"<span style='font-size:10px;color:{theme['text_muted']};font-weight:600;'>VS INDEX</span>", unsafe_allow_html=True)
+    bench_name = st.selectbox("v", list(BENCHMARKS.keys()), index=2, key="bench", label_visibility="collapsed")
 
-with ctrl_cols[1]:
-    st.markdown(f'<p style="font-size:11px; font-weight:600; color:{theme["text_muted"]}; margin-bottom:2px;">VS INDEX</p>', unsafe_allow_html=True)
-    bench_name = st.selectbox("", list(BENCHMARKS.keys()), index=2, key="bench_sel", label_visibility="collapsed")
+with c3:
+    st.markdown(f"<span style='font-size:10px;color:{theme['text_muted']};font-weight:600;'>TIMEFRAME</span>", unsafe_allow_html=True)
+    tf_name = st.selectbox("t", list(TIMEFRAMES.keys()), index=5, key="tf", label_visibility="collapsed")
 
-with ctrl_cols[2]:
-    st.markdown(f'<p style="font-size:11px; font-weight:600; color:{theme["text_muted"]}; margin-bottom:2px;">TIMEFRAME</p>', unsafe_allow_html=True)
-    tf_name = st.selectbox("", list(TIMEFRAMES.keys()), index=5, key="tf_sel", label_visibility="collapsed")
+with c4:
+    st.markdown(f"<span style='font-size:10px;color:{theme['text_muted']};font-weight:600;'>DATE RANGE</span>", unsafe_allow_html=True)
+    date_range = st.selectbox("d", list(DATE_RANGES.keys()), index=1, key="dr", label_visibility="collapsed")
 
-with ctrl_cols[3]:
-    st.markdown(f'<p style="font-size:11px; font-weight:600; color:{theme["text_muted"]}; margin-bottom:2px;">DATE RANGE</p>', unsafe_allow_html=True)
-    date_range = st.selectbox("", list(DATE_RANGES.keys()), index=1, key="date_sel", label_visibility="collapsed")
+with c5:
+    st.markdown(f"<span style='font-size:10px;color:{theme['text_muted']};font-weight:600;'>COUNTS</span>", unsafe_allow_html=True)
+    trail_length = st.number_input("c", min_value=1, max_value=14, value=5, key="trail", label_visibility="collapsed")
 
-with ctrl_cols[4]:
-    st.markdown(f'<p style="font-size:11px; font-weight:600; color:{theme["text_muted"]}; margin-bottom:2px;">COUNTS</p>', unsafe_allow_html=True)
-    trail_length = st.number_input("", min_value=1, max_value=14, value=5, key="trail_input", label_visibility="collapsed")
+with c6:
+    st.markdown(f"<span style='font-size:10px;color:{theme['text_muted']};'>&nbsp;</span>", unsafe_allow_html=True)
+    st.markdown(f"<div style='background:{theme['accent']};color:white;padding:6px 12px;border-radius:4px;text-align:center;font-weight:600;font-size:13px;margin-top:2px;'>{trail_length} Days</div>", unsafe_allow_html=True)
 
-with ctrl_cols[5]:
-    st.markdown(f'<p style="font-size:11px; font-weight:600; color:{theme["text_muted"]}; margin-bottom:2px;">&nbsp;</p>', unsafe_allow_html=True)
-    st.markdown(f'<div style="background:#1565c0; border-radius:4px; padding:8px 12px; text-align:center; font-weight:600; color:white; font-size:13px;">{trail_length} Days</div>', unsafe_allow_html=True)
+with c7:
+    st.markdown(f"<span style='font-size:10px;color:{theme['text_muted']};'>&nbsp;</span>", unsafe_allow_html=True)
+    bc1, bc2, bc3, bc4 = st.columns(4)
+    with bc1:
+        load_btn = st.button("📥 Load", key="load", use_container_width=True)
+    with bc2:
+        play_btn = st.button("▶ Play", key="play", use_container_width=True)
+    with bc3:
+        stop_btn = st.button("⏹ Stop", key="stop", use_container_width=True)
+    with bc4:
+        label_on = st.checkbox("Label", value=True, key="lbl")
 
-with ctrl_cols[6]:
-    st.markdown(f'<p style="font-size:11px; font-weight:600; color:{theme["text_muted"]}; margin-bottom:2px;">&nbsp;</p>', unsafe_allow_html=True)
-    btn_cols = st.columns([1, 1, 1, 1, 1])
-    with btn_cols[0]:
-        load_btn = st.button("📥 Load", key="load_btn", use_container_width=True)
-    with btn_cols[1]:
-        play_btn = st.button("▶ Play", key="play_btn", use_container_width=True)
-    with btn_cols[2]:
-        stop_btn = st.button("⏹ Stop", key="stop_btn", use_container_width=True)
-    with btn_cols[3]:
-        label_toggle = st.checkbox("Label", value=True, key="label_chk")
-    with btn_cols[4]:
-        # Theme toggle
-        theme_btn = st.button("🌓", key="theme_btn", help="Toggle Dark/Light Theme")
+with c8:
+    st.markdown(f"<span style='font-size:10px;color:{theme['text_muted']};font-weight:600;'>THEME</span>", unsafe_allow_html=True)
+    theme_choice = st.selectbox("th", list(THEMES.keys()), 
+                                index=list(THEMES.keys()).index(st.session_state.theme),
+                                format_func=lambda x: THEMES[x]['name'],
+                                key="theme_sel", label_visibility="collapsed")
+
+# Handle theme change
+if theme_choice != st.session_state.theme:
+    st.session_state.theme = theme_choice
+    st.rerun()
 
 if load_btn:
     st.session_state.load_clicked = True
     st.session_state.current_frame = trail_length - 1
 
-if theme_btn:
-    st.session_state.theme = "light" if st.session_state.theme == "dark" else "dark"
-    st.rerun()
+if play_btn:
+    st.session_state.is_playing = True
+
+if stop_btn:
+    st.session_state.is_playing = False
 
 # ============================================================================
 # DATA LOADING
@@ -675,41 +665,30 @@ if st.session_state.load_clicked:
         universe = load_universe(csv_selected)
         
         if universe.empty:
-            st.error("❌ Failed to load universe data.")
+            st.error("❌ Failed to load data")
             st.stop()
         
         symbols = universe['Symbol'].tolist()
         names_dict = dict(zip(universe['Symbol'], universe['Company Name']))
         industries_dict = dict(zip(universe['Symbol'], universe['Industry']))
         
-        with st.spinner(f"📥 Loading {len(symbols)} symbols..."):
-            raw = yf.download(
-                symbols + [BENCHMARKS[bench_name]],
-                interval=interval,
-                period=yf_period,
-                auto_adjust=True,
-                progress=False,
-                threads=True
-            )
+        with st.spinner(f"Loading {len(symbols)} symbols..."):
+            raw = yf.download(symbols + [BENCHMARKS[bench_name]], interval=interval, 
+                            period=yf_period, auto_adjust=True, progress=False, threads=True)
         
         if BENCHMARKS[bench_name] not in raw['Close'].columns:
-            st.error(f"❌ Benchmark {bench_name} data unavailable.")
+            st.error("❌ Benchmark unavailable")
             st.stop()
         
         bench = raw['Close'][BENCHMARKS[bench_name]]
-        rows = []
-        rs_history = {}
+        rows, rs_history = [], {}
         dates_list = raw.index.tolist()[-DATE_RANGES[date_range]:]
         
         for s in symbols:
             if s not in raw['Close'].columns:
                 continue
-            
             try:
-                rs_ratio, rs_momentum, distance, heading, velocity = calculate_jdk_rrg(
-                    raw['Close'][s], bench, window=WINDOW
-                )
-                
+                rs_ratio, rs_momentum, distance, heading, velocity = calculate_jdk_rrg(raw['Close'][s], bench)
                 if rs_ratio is None or len(rs_ratio) < 3:
                     continue
                 
@@ -720,51 +699,32 @@ if st.session_state.load_clicked:
                     'dates': [d.strftime('%Y-%m-%d') if hasattr(d, 'strftime') else str(d)[:10] for d in dates_list[-max_hist:]]
                 }
                 
-                rsr_current = rs_ratio.iloc[-1]
-                rsm_current = rs_momentum.iloc[-1]
-                dist_current = distance.iloc[-1]
-                head_current = heading.iloc[-1]
-                
-                power = np.sqrt((rsr_current - 100) ** 2 + (rsm_current - 100) ** 2)
-                current_price = raw['Close'][s].iloc[-1]
-                status = quadrant(rsr_current, rsm_current)
-                direction = get_heading_direction(head_current)
-                
+                rsr, rsm = rs_ratio.iloc[-1], rs_momentum.iloc[-1]
                 rows.append({
-                    'Symbol': format_symbol(s),
-                    'Name': names_dict.get(s, s),
-                    'Industry': industries_dict.get(s, 'N/A'),
-                    'Price': round(current_price, 2),
-                    'RS-Ratio': round(rsr_current, 2),
-                    'RS-Momentum': round(rsm_current, 2),
-                    'RRG Power': round(power, 2),
-                    'Distance': round(dist_current, 2),
-                    'Heading': round(head_current, 1),
-                    'Direction': direction,
-                    'Status': status,
-                    'TV Link': get_tv_link(s)
+                    'Symbol': format_symbol(s), 'Name': names_dict.get(s, s),
+                    'Industry': industries_dict.get(s, 'N/A'), 'Price': round(raw['Close'][s].iloc[-1], 2),
+                    'RS-Ratio': round(rsr, 2), 'RS-Momentum': round(rsm, 2),
+                    'RRG Power': round(np.sqrt((rsr-100)**2 + (rsm-100)**2), 2),
+                    'Distance': round(distance.iloc[-1], 2), 'Direction': get_heading_direction(heading.iloc[-1]),
+                    'Status': quadrant(rsr, rsm), 'TV Link': get_tv_link(s)
                 })
-            except Exception:
+            except:
                 continue
         
         if rows:
             df = pd.DataFrame(rows)
             df['Rank'] = df['RRG Power'].rank(ascending=False, method='min').astype(int)
             df = df.sort_values('Rank')
-            df['Sl No.'] = range(1, len(df) + 1)
-            
+            df['Sl No.'] = range(1, len(df)+1)
             st.session_state.df_cache = df
             st.session_state.rs_history_cache = rs_history
-            st.session_state.dates_cache = dates_list
             st.session_state.current_frame = trail_length - 1
-            
             st.success(f"✅ Loaded {len(df)} symbols")
         else:
-            st.error("No data available.")
+            st.error("No data")
             st.stop()
-            
     except Exception as e:
-        st.error(f"❌ Error: {str(e)}")
+        st.error(f"Error: {e}")
         st.stop()
 
 # ============================================================================
@@ -774,69 +734,49 @@ if st.session_state.df_cache is not None:
     df = st.session_state.df_cache
     rs_history = st.session_state.rs_history_cache
     
-    # Timeline controls
+    # Timeline
     if rs_history:
-        max_history_len = max([len(rs_history[sym]['rs_ratio']) for sym in rs_history], default=1)
-        sample_sym = list(rs_history.keys())[0] if rs_history else None
-        dates_available = rs_history[sample_sym].get('dates', []) if sample_sym else []
+        max_hist = max(len(rs_history[s]['rs_ratio']) for s in rs_history)
+        sample = list(rs_history.keys())[0]
+        dates_avail = rs_history[sample].get('dates', [])
         
-        st.markdown("---")
-        
-        timeline_cols = st.columns([1, 8, 1])
-        with timeline_cols[0]:
-            view_mode = st.radio("", ["Static", "Animate"], horizontal=True, key="view_mode", label_visibility="collapsed")
-        
-        with timeline_cols[1]:
-            if view_mode == "Static":
-                frame_idx = st.slider(
-                    "Timeline",
-                    min_value=trail_length - 1,
-                    max_value=max_history_len - 1,
-                    value=max_history_len - 1,
-                    key="timeline_slider",
-                    label_visibility="collapsed"
-                )
-            else:
-                frame_idx = st.slider(
-                    "Timeline",
-                    min_value=trail_length - 1,
-                    max_value=max_history_len - 1,
-                    value=st.session_state.current_frame,
-                    key="anim_slider",
-                    label_visibility="collapsed"
-                )
+        tc1, tc2, tc3 = st.columns([1, 7, 1.5])
+        with tc1:
+            mode = st.radio("", ["Static", "Animate"], horizontal=True, key="mode", label_visibility="collapsed")
+        with tc2:
+            frame_idx = st.slider("Timeline", trail_length-1, max_hist-1, 
+                                 max_hist-1 if mode == "Static" else st.session_state.current_frame,
+                                 key="timeline", label_visibility="collapsed")
+            if mode == "Animate":
                 st.session_state.current_frame = frame_idx
+        with tc3:
+            if dates_avail and frame_idx < len(dates_avail):
+                st.markdown(f"<div style='background:{theme['accent']};color:white;padding:8px 12px;border-radius:4px;text-align:center;font-weight:600;font-size:12px;margin-top:18px;'>{dates_avail[frame_idx]}</div>", unsafe_allow_html=True)
         
-        with timeline_cols[2]:
-            if dates_available and len(dates_available) > frame_idx:
-                st.markdown(f'<div style="background:#1565c0; padding:8px 12px; border-radius:4px; text-align:center; font-weight:600; color:white; font-size:12px; margin-top:5px;">{dates_available[frame_idx]}</div>', unsafe_allow_html=True)
-        
-        # Auto-play for animation mode
-        if view_mode == "Animate" and play_btn:
+        # Auto-play
+        if mode == "Animate" and st.session_state.is_playing:
             import time
-            if frame_idx < max_history_len - 1:
-                time.sleep(0.3)
+            if frame_idx < max_hist - 1:
+                time.sleep(0.25)
                 st.session_state.current_frame = frame_idx + 1
                 st.rerun()
+            else:
+                st.session_state.is_playing = False
     else:
         frame_idx = trail_length - 1
-        max_history_len = trail_length
+        max_hist = trail_length
     
-    # Select stocks for graph
-    df_graph = select_graph_stocks(df, min_stocks=50)
+    # Graph
+    df_graph = select_graph_stocks(df, 50)
     
-    # Calculate range
-    x_min = df['RS-Ratio'].min() - 2
-    x_max = df['RS-Ratio'].max() + 2
-    y_min = df['RS-Momentum'].min() - 2
-    y_max = df['RS-Momentum'].max() + 2
+    x_min, x_max = df['RS-Ratio'].min() - 2, df['RS-Ratio'].max() + 2
+    y_min, y_max = df['RS-Momentum'].min() - 2, df['RS-Momentum'].max() + 2
     x_range = max(abs(100 - x_min), abs(x_max - 100))
     y_range = max(abs(100 - y_min), abs(y_max - 100))
     
-    # Create figure
     fig = go.Figure()
     
-    # Quadrant backgrounds
+    # Quadrants (always same colors)
     fig.add_shape(type="rect", x0=100, y0=100, x1=100+x_range+2, y1=100+y_range+2,
                   fillcolor=QUADRANT_BG_COLORS["Leading"], line_width=0, layer="below")
     fig.add_shape(type="rect", x0=100-x_range-2, y0=100, x1=100, y1=100+y_range+2,
@@ -847,218 +787,116 @@ if st.session_state.df_cache is not None:
                   fillcolor=QUADRANT_BG_COLORS["Weakening"], line_width=0, layer="below")
     
     # Center lines
-    fig.add_hline(y=100, line_color="rgba(100,100,100,0.6)", line_width=1.5)
-    fig.add_vline(x=100, line_color="rgba(100,100,100,0.6)", line_width=1.5)
+    fig.add_hline(y=100, line_color="rgba(100,100,100,0.5)", line_width=1.5)
+    fig.add_vline(x=100, line_color="rgba(100,100,100,0.5)", line_width=1.5)
     
-    # Quadrant labels
-    label_offset_x = x_range * 0.65
-    label_offset_y = y_range * 0.75
-    fig.add_annotation(x=100+label_offset_x, y=100+label_offset_y, text="<b>LEADING</b>",
-                       showarrow=False, font=dict(size=14, color=QUADRANT_COLORS["Leading"]))
-    fig.add_annotation(x=100-label_offset_x, y=100+label_offset_y, text="<b>IMPROVING</b>",
-                       showarrow=False, font=dict(size=14, color=QUADRANT_COLORS["Improving"]))
-    fig.add_annotation(x=100-label_offset_x, y=100-label_offset_y, text="<b>LAGGING</b>",
-                       showarrow=False, font=dict(size=14, color=QUADRANT_COLORS["Lagging"]))
-    fig.add_annotation(x=100+label_offset_x, y=100-label_offset_y, text="<b>WEAKENING</b>",
-                       showarrow=False, font=dict(size=14, color=QUADRANT_COLORS["Weakening"]))
+    # Labels
+    ox, oy = x_range * 0.65, y_range * 0.75
+    for txt, x, y, c in [("LEADING", 100+ox, 100+oy, "Leading"), ("IMPROVING", 100-ox, 100+oy, "Improving"),
+                         ("LAGGING", 100-ox, 100-oy, "Lagging"), ("WEAKENING", 100+ox, 100-oy, "Weakening")]:
+        fig.add_annotation(x=x, y=y, text=f"<b>{txt}</b>", showarrow=False, 
+                          font=dict(size=13, color=QUADRANT_COLORS[c]))
     
-    # Plot stocks
+    # Stocks
     for _, row in df_graph.iterrows():
         sym = row['Symbol']
-        
         if sym not in rs_history:
             continue
         
-        hist = rs_history[sym]
-        end_idx = min(frame_idx + 1, len(hist['rs_ratio']))
-        start_idx = max(0, end_idx - trail_length)
+        h = rs_history[sym]
+        end = min(frame_idx + 1, len(h['rs_ratio']))
+        start = max(0, end - trail_length)
         
-        x_pts = np.array(hist['rs_ratio'][start_idx:end_idx], dtype=float)
-        y_pts = np.array(hist['rs_momentum'][start_idx:end_idx], dtype=float)
-        n_pts = len(x_pts)
+        xp = np.array(h['rs_ratio'][start:end], dtype=float)
+        yp = np.array(h['rs_momentum'][start:end], dtype=float)
         
-        if n_pts == 0:
+        if len(xp) == 0:
             continue
         
-        head_x, head_y = x_pts[-1], y_pts[-1]
-        color, status = get_quadrant_color(head_x, head_y)
+        hx, hy = xp[-1], yp[-1]
+        color, status = get_quadrant_color(hx, hy)
         
         # Trail
-        if n_pts >= 2:
-            if n_pts >= 3:
-                x_smooth, y_smooth = smooth_spline_curve(x_pts, y_pts, points_per_segment=6)
-            else:
-                x_smooth, y_smooth = x_pts, y_pts
-            
-            for i in range(len(x_smooth) - 1):
-                prog = i / max(1, len(x_smooth) - 2)
-                fig.add_trace(go.Scatter(
-                    x=[x_smooth[i], x_smooth[i+1]],
-                    y=[y_smooth[i], y_smooth[i+1]],
-                    mode='lines',
-                    line=dict(color=color, width=2 + prog * 3),
-                    opacity=0.3 + prog * 0.7,
-                    hoverinfo='skip',
-                    showlegend=False,
-                ))
+        if len(xp) >= 2:
+            xs, ys = (smooth_spline_curve(xp, yp, 6) if len(xp) >= 3 else (xp, yp))
+            for i in range(len(xs)-1):
+                p = i / max(1, len(xs)-2)
+                fig.add_trace(go.Scatter(x=[xs[i], xs[i+1]], y=[ys[i], ys[i+1]], mode='lines',
+                    line=dict(color=color, width=2+p*3), opacity=0.3+p*0.7, hoverinfo='skip', showlegend=False))
             
             # Arrow
-            dx, dy = x_pts[-1] - x_pts[-2], y_pts[-1] - y_pts[-2]
-            length = np.sqrt(dx**2 + dy**2)
-            if length > 0.01:
-                fig.add_annotation(
-                    x=x_pts[-1], y=y_pts[-1],
-                    ax=x_pts[-1] - dx/length * 0.35,
-                    ay=y_pts[-1] - dy/length * 0.35,
-                    xref='x', yref='y', axref='x', ayref='y',
-                    showarrow=True, arrowhead=2, arrowsize=1.5, arrowwidth=2.5, arrowcolor=color,
-                )
+            dx, dy = xp[-1]-xp[-2], yp[-1]-yp[-2]
+            l = np.sqrt(dx**2+dy**2)
+            if l > 0.01:
+                fig.add_annotation(x=xp[-1], y=yp[-1], ax=xp[-1]-dx/l*0.3, ay=yp[-1]-dy/l*0.3,
+                    xref='x', yref='y', axref='x', ayref='y', showarrow=True, arrowhead=2, 
+                    arrowsize=1.5, arrowwidth=2.5, arrowcolor=color)
         
         # Head
-        fig.add_trace(go.Scatter(
-            x=[head_x], y=[head_y],
-            mode='markers',
-            marker=dict(size=12, color=color, line=dict(color='white', width=2)),
-            hovertemplate=f"<b>{sym}</b><br>RS: {head_x:.2f}<br>Mom: {head_y:.2f}<extra></extra>",
-            showlegend=False,
-        ))
+        fig.add_trace(go.Scatter(x=[hx], y=[hy], mode='markers',
+            marker=dict(size=11, color=color, line=dict(color='white', width=2)),
+            hovertemplate=f"<b>{sym}</b><br>RS:{hx:.2f}<br>Mom:{hy:.2f}<extra></extra>", showlegend=False))
         
-        # Label
-        if label_toggle:
-            fig.add_annotation(
-                x=head_x, y=head_y,
-                text=f"<b>{sym}</b>",
-                showarrow=False,
-                font=dict(size=9, color=color),
-                yshift=12,
-            )
+        if label_on:
+            fig.add_annotation(x=hx, y=hy, text=f"<b>{sym}</b>", showarrow=False,
+                              font=dict(size=9, color=color), yshift=12)
     
     # Legend
-    for status in ["Leading", "Improving", "Weakening", "Lagging"]:
-        fig.add_trace(go.Scatter(
-            x=[None], y=[None],
-            mode='markers',
-            marker=dict(size=12, color=QUADRANT_COLORS[status]),
-            name=status,
-            showlegend=True
-        ))
+    for s in ["Leading", "Improving", "Weakening", "Lagging"]:
+        fig.add_trace(go.Scatter(x=[None], y=[None], mode='markers',
+            marker=dict(size=10, color=QUADRANT_COLORS[s]), name=s, showlegend=True))
     
-    # Layout
+    # Layout - WHITE CHART ALWAYS
     fig.update_layout(
-        height=550,
-        plot_bgcolor=theme['plot_bg'],
-        paper_bgcolor=theme['paper_bg'],
-        font=dict(color=theme['text'], size=12, family='Inter, sans-serif'),
-        xaxis=dict(
-            title=dict(text="<b>JdK RS-RATIO</b>", font=dict(size=12, color=theme['text_secondary'])),
-            range=[100-x_range-1, 100+x_range+1],
-            gridcolor=theme['grid'],
-            zeroline=False,
-            tickfont=dict(color=theme['text_muted'])
-        ),
-        yaxis=dict(
-            title=dict(text="<b>JdK RS-MOMENTUM</b>", font=dict(size=12, color=theme['text_secondary'])),
-            range=[100-y_range-1, 100+y_range+1],
-            gridcolor=theme['grid'],
-            zeroline=False,
-            tickfont=dict(color=theme['text_muted'])
-        ),
-        legend=dict(
-            orientation="h",
-            yanchor="top",
-            y=-0.08,
-            xanchor="center",
-            x=0.5,
-            bgcolor='rgba(0,0,0,0)',
-            font=dict(size=12, color=theme['text'])
-        ),
+        height=520,
+        plot_bgcolor=CHART_COLORS['plot_bg'],
+        paper_bgcolor=CHART_COLORS['paper_bg'],
+        font=dict(color=CHART_COLORS['axis_text'], size=11, family='Inter'),
+        xaxis=dict(title="<b>JdK RS-RATIO</b>", range=[100-x_range-1, 100+x_range+1],
+                   gridcolor=CHART_COLORS['grid'], zeroline=False, tickfont=dict(color=CHART_COLORS['axis_text'])),
+        yaxis=dict(title="<b>JdK RS-MOMENTUM</b>", range=[100-y_range-1, 100+y_range+1],
+                   gridcolor=CHART_COLORS['grid'], zeroline=False, tickfont=dict(color=CHART_COLORS['axis_text'])),
+        legend=dict(orientation="h", y=-0.12, x=0.5, xanchor="center", bgcolor='rgba(255,255,255,0.8)'),
         hovermode='closest',
-        margin=dict(l=60, r=30, t=20, b=80),
+        margin=dict(l=50, r=20, t=10, b=70),
     )
     
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': True, 'displaylogo': False})
     
-    # ========================================================================
-    # QUADRANT SUMMARY (horizontal bar)
-    # ========================================================================
-    quad_cols = st.columns(4)
-    status_counts = df['Status'].value_counts()
+    # Quadrant summary
+    qc = st.columns(4)
+    counts = df['Status'].value_counts()
+    for i, (s, icon) in enumerate([("Leading","🟢"), ("Improving","🟣"), ("Weakening","🟡"), ("Lagging","🔴")]):
+        with qc[i]:
+            df_s = df[df['Status']==s].head(8)
+            with st.expander(f"{icon} {s} ({counts.get(s,0)})", expanded=(s=="Leading")):
+                for _, r in df_s.iterrows():
+                    st.markdown(f"<div style='padding:3px 6px;background:{theme['bg_secondary']};border-left:3px solid {QUADRANT_COLORS[s]};border-radius:3px;margin:2px 0;font-size:11px;'><a href='{r['TV Link']}' target='_blank' style='color:{QUADRANT_COLORS[s]};font-weight:600;'>{r['Symbol']}</a> <span style='color:{theme['text_muted']}'>RS:{r['RS-Ratio']:.1f} Mom:{r['RS-Momentum']:.1f}</span></div>", unsafe_allow_html=True)
     
-    for idx, (status, icon) in enumerate([("Leading", "🟢"), ("Improving", "🟣"), ("Weakening", "🟡"), ("Lagging", "🔴")]):
-        with quad_cols[idx]:
-            count = status_counts.get(status, 0)
-            df_status = df[df['Status'] == status].head(10)
-            color = QUADRANT_COLORS[status]
-            
-            with st.expander(f"{icon} {status} ({count})", expanded=(status == "Leading")):
-                for _, row in df_status.iterrows():
-                    st.markdown(f"""
-                    <div style="padding:4px 8px; margin:2px 0; background:{theme['bg_secondary']}; border-left:3px solid {color}; border-radius:4px;">
-                        <a href="{row['TV Link']}" target="_blank" style="font-weight:600; color:{color}; text-decoration:none;">{row['Symbol']}</a>
-                        <span style="font-size:10px; color:{theme['text_muted']};"> RS: {row['RS-Ratio']:.1f} | Mom: {row['RS-Momentum']:.1f}</span>
-                    </div>
-                    """, unsafe_allow_html=True)
-    
-    # ========================================================================
-    # DATA TABLE
-    # ========================================================================
+    # Table
     st.markdown("---")
-    st.markdown(f"### 📊 Detailed Analysis ({len(df)} stocks)")
-    
-    # Generate and display table
-    table_html = generate_data_table_html(df, theme)
-    st.components.v1.html(table_html, height=600, scrolling=False)
+    st.markdown(f"<h4 style='color:{theme['text']};margin:10px 0;'>📊 Analysis Table ({len(df)} stocks)</h4>", unsafe_allow_html=True)
+    st.components.v1.html(generate_table_html(df, theme), height=480, scrolling=False)
     
     # Export
-    st.markdown("---")
-    exp_col1, exp_col2, exp_col3 = st.columns([1, 1, 4])
-    with exp_col1:
-        csv_buffer = io.StringIO()
-        df.to_csv(csv_buffer, index=False)
-        st.download_button(
-            label="📥 Download CSV",
-            data=csv_buffer.getvalue(),
-            file_name=f"RRG_{csv_selected}_{datetime.now().strftime('%Y%m%d')}.csv",
-            mime="text/csv"
-        )
-    with exp_col2:
-        theme_label = '🌙 Dark' if st.session_state.theme == 'dark' else '☀️ Light'
-        st.markdown(f"<small style='color:{theme['text_muted']}'>Theme: {theme_label}</small>", unsafe_allow_html=True)
+    col1, col2 = st.columns([1, 5])
+    with col1:
+        buf = io.StringIO()
+        df.to_csv(buf, index=False)
+        st.download_button("📥 CSV", buf.getvalue(), f"RRG_{csv_selected}_{datetime.now():%Y%m%d}.csv", "text/csv")
 
 else:
-    # Welcome screen
     st.markdown(f"""
-    <div style="text-align:center; padding:60px 20px; background:{theme['bg_card']}; border-radius:12px; border:1px solid {theme['border']}; margin-top:40px;">
-        <h2 style="color:{theme['text']}; margin-bottom:20px;">📈 Relative Rotation Graph Dashboard</h2>
-        <p style="color:{theme['text_secondary']}; font-size:16px; margin-bottom:30px;">
-            Analyze stock rotation patterns with Optuma-style RRG visualization.<br>
-            Select your parameters above and click <b>Load</b> to begin.
-        </p>
-        <div style="display:flex; justify-content:center; gap:40px; margin-top:30px;">
-            <div style="text-align:center;">
-                <div style="width:50px; height:50px; background:#90EE90; border-radius:8px; margin:0 auto 10px;"></div>
-                <p style="font-weight:600; color:#228B22;">Leading</p>
-            </div>
-            <div style="text-align:center;">
-                <div style="width:50px; height:50px; background:#DDD6FE; border-radius:8px; margin:0 auto 10px;"></div>
-                <p style="font-weight:600; color:#8B5CF6;">Improving</p>
-            </div>
-            <div style="text-align:center;">
-                <div style="width:50px; height:50px; background:#FED7AA; border-radius:8px; margin:0 auto 10px;"></div>
-                <p style="font-weight:600; color:#D97706;">Weakening</p>
-            </div>
-            <div style="text-align:center;">
-                <div style="width:50px; height:50px; background:#FEB2B2; border-radius:8px; margin:0 auto 10px;"></div>
-                <p style="font-weight:600; color:#DC2626;">Lagging</p>
-            </div>
+    <div style="text-align:center;padding:50px;background:{theme['bg_card']};border-radius:10px;border:1px solid {theme['border']};margin-top:30px;">
+        <h2 style="color:{theme['text']};">📈 RRG Dashboard</h2>
+        <p style="color:{theme['text_secondary']};">Select parameters and click <b>Load</b> to start</p>
+        <div style="display:flex;justify-content:center;gap:30px;margin-top:25px;">
+            <div><div style="width:40px;height:40px;background:#bbf7d0;border-radius:6px;margin:auto;"></div><p style="color:#228B22;font-weight:600;margin-top:5px;">Leading</p></div>
+            <div><div style="width:40px;height:40px;background:#e9d5ff;border-radius:6px;margin:auto;"></div><p style="color:#7c3aed;font-weight:600;margin-top:5px;">Improving</p></div>
+            <div><div style="width:40px;height:40px;background:#fef3c7;border-radius:6px;margin:auto;"></div><p style="color:#d97706;font-weight:600;margin-top:5px;">Weakening</p></div>
+            <div><div style="width:40px;height:40px;background:#fecaca;border-radius:6px;margin:auto;"></div><p style="color:#dc2626;font-weight:600;margin-top:5px;">Lagging</p></div>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-# Footer
-st.markdown("---")
-st.markdown(f"""
-<div style="text-align:center; color:{theme['text_muted']}; font-size:11px;">
-    RRG Analysis | Data: Yahoo Finance | Reference: <a href="https://www.optuma.com/blog/scripting-for-rrgs" style="color:#2196F3;">Optuma RRG Guide</a>
-</div>
-""", unsafe_allow_html=True)
+st.markdown(f"<div style='text-align:center;color:{theme['text_muted']};font-size:10px;margin-top:10px;'>RRG Dashboard | Theme: {theme['name']} | <a href='https://www.optuma.com/blog/scripting-for-rrgs' style='color:{theme['accent']}'>Optuma Reference</a></div>", unsafe_allow_html=True)
