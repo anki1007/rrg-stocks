@@ -6,7 +6,6 @@ import plotly.graph_objects as go
 import requests
 from datetime import datetime, timedelta
 import io
-import contextlib
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -147,7 +146,6 @@ TIMEFRAMES = {
 }
 
 PERIOD_MAP = {
-    "3M": 63,
     "6M": 126,
     "1Y": 252,
     "2Y": 504,
@@ -396,32 +394,7 @@ default_bench_index = 2
 bench_name = st.sidebar.selectbox("Benchmark", bench_list, index=default_bench_index, key="bench_select")
 
 tf_name = st.sidebar.selectbox("Strength vs Timeframe", list(TIMEFRAMES.keys()), key="tf_select")
-
-# Dynamic default Period based on selected timeframe
-period_keys = list(PERIOD_MAP.keys())
-if tf_name in ["5 min", "15 min", "30 min", "1 hr"]:
-    default_period = "3M"
-elif tf_name == "Daily":
-    default_period = "6M"
-elif tf_name == "Weekly":
-    default_period = "1Y"
-else:
-    default_period = "6M"
-
-if "prev_tf_name" not in st.session_state:
-    st.session_state.prev_tf_name = tf_name
-if "period_select" not in st.session_state:
-    st.session_state.period_select = default_period
-if st.session_state.prev_tf_name != tf_name:
-    st.session_state.period_select = default_period
-    st.session_state.prev_tf_name = tf_name
-
-period_name = st.sidebar.selectbox(
-    "Period",
-    period_keys,
-    index=period_keys.index(st.session_state.period_select),
-    key="period_select"
-)
+period_name = st.sidebar.selectbox("Period", list(PERIOD_MAP.keys()), index=0, key="period_select")
 rank_by = st.sidebar.selectbox(
     "Rank by",
     ["RRG Power", "RS-Ratio", "RS-Momentum", "Distance", "Price % Change"],
@@ -441,10 +414,10 @@ export_csv = st.sidebar.checkbox("Export CSV", value=True)
 
 st.sidebar.markdown("---")
 
-if st.sidebar.button("📥 Load Data", width="stretch", key="load_btn", type="primary"):
+if st.sidebar.button("📥 Load Data", use_container_width=True, key="load_btn", type="primary"):
     st.session_state.load_clicked = True
 
-if st.sidebar.button("🔄 Clear", width="stretch", key="clear_btn"):
+if st.sidebar.button("🔄 Clear", use_container_width=True, key="clear_btn"):
     st.session_state.load_clicked = False
     st.session_state.df_cache = None
     st.session_state.rs_history_cache = {}
@@ -480,8 +453,7 @@ if st.session_state.load_clicked:
         industries_dict = dict(zip(universe['Symbol'], universe['Industry']))
         
         with st.spinner(f"📥 Downloading {len(symbols)} symbols from {tf_name}..."):
-            with contextlib.redirect_stdout(io.StringIO()):
-                raw = yf.download(
+            raw = yf.download(
                 symbols + [BENCHMARKS[bench_name]],
                 interval=interval,
                 period=yf_period,
@@ -592,7 +564,7 @@ if st.session_state.df_cache is not None:
     df = st.session_state.df_cache
     rs_history = st.session_state.rs_history_cache
     
-    col_left, col_main, col_right = st.columns([1, 4, 1], gap="medium")
+    col_left, col_main, col_right = st.columns([1, 3, 1], gap="medium")
     
     # ========================================================================
     # LEFT SIDEBAR
@@ -817,19 +789,21 @@ if st.session_state.df_cache is not None:
                     x=0.5
                 ),
                 xaxis=dict(
-                    title=dict(text="<b>JdK RS-Ratio</b>", font=dict(color='#e6eaee')),
+                    title="<b>JdK RS-Ratio</b>",
                     range=[100-x_range-1, 100+x_range+1],
                     showgrid=True,
                     gridcolor='rgba(150,150,150,0.2)',
                     tickfont=dict(color='#b3bdc7'),
-),
+                    titlefont=dict(color='#e6eaee')
+                ),
                 yaxis=dict(
-                    title=dict(text="<b>JdK RS-Momentum</b>", font=dict(color='#e6eaee')),
+                    title="<b>JdK RS-Momentum</b>",
                     range=[100-y_range-1, 100+y_range+1],
                     showgrid=True,
                     gridcolor='rgba(150,150,150,0.2)',
                     tickfont=dict(color='#b3bdc7'),
-),
+                    titlefont=dict(color='#e6eaee')
+                ),
                 plot_bgcolor='#fafafa',
                 paper_bgcolor='#0b0e13',
                 font=dict(color='#e6eaee', size=12, family='Plus Jakarta Sans, sans-serif'),
@@ -838,7 +812,7 @@ if st.session_state.df_cache is not None:
                 margin=dict(l=60, r=30, t=80, b=60),
             )
             
-            st.plotly_chart(fig_rrg, width="stretch", config={'displayModeBar': True, 'displaylogo': False})
+            st.plotly_chart(fig_rrg, use_container_width=True, config={'displayModeBar': True, 'displaylogo': False})
             
             st.markdown("---")
             
@@ -881,7 +855,6 @@ if st.session_state.df_cache is not None:
                         border-radius: 10px;
                         overflow: hidden;
                         border: 1px solid #1f2732;
-                        width: 100%;
                     }}
                     
                     .search-container {{
@@ -933,7 +906,6 @@ if st.session_state.df_cache is not None:
                     .table-wrapper {{
                         max-height: 550px;
                         overflow: auto;
-                        width: 100%;
                     }}
                     
                     .rrg-table {{
@@ -1177,18 +1149,19 @@ if st.session_state.df_cache is not None:
                 anim_frames = []
                 for frame_idx in range(1, max_frames + 1):
                     frame_data = []
-                    for status in ["Leading", "Improving", "Weakening", "Lagging"]:
-                        df_status = df_graph[df_graph['Status'] == status]
-                        for _, row in df_status.iterrows():
-                            if row['Symbol'] in animation_history:
-                                hist = animation_history[row['Symbol']]
-                                if frame_idx <= len(hist['rs_ratio']):
-                                    frame_data.append({
-                                        'symbol': row['Symbol'],
-                                        'x': hist['rs_ratio'][frame_idx - 1],
-                                        'y': hist['rs_momentum'][frame_idx - 1],
-                                        'status': status
-                                    })
+                    for _, row in df_graph.iterrows():
+                        sym = row['Symbol']
+                        if sym in animation_history:
+                            hist = animation_history[sym]
+                            if frame_idx <= len(hist['rs_ratio']):
+                                x_val = hist['rs_ratio'][frame_idx - 1]
+                                y_val = hist['rs_momentum'][frame_idx - 1]
+                                frame_data.append({
+                                    'symbol': sym,
+                                    'x': x_val,
+                                    'y': y_val,
+                                    'status': quadrant(x_val, y_val)
+                                })
                     anim_frames.append(frame_data)
 
                 # Create animated figure
@@ -1265,6 +1238,7 @@ if st.session_state.df_cache is not None:
                         updatemenus=[{
                             'type': 'buttons',
                             'showactive': False,
+                            'direction': 'right',
                             'buttons': [
                                 {'label': '▶ Play', 'method': 'animate',
                                  'args': [None, {'frame': {'duration': 800, 'redraw': True},
@@ -1274,7 +1248,7 @@ if st.session_state.df_cache is not None:
                                  'args': [[None], {'frame': {'duration': 0, 'redraw': False},
                                                   'mode': 'immediate', 'transition': {'duration': 0}}]}
                             ],
-                            'x': 0.1, 'y': 1.15, 'xanchor': 'left', 'yanchor': 'top'
+                            'x': 0.02, 'y': 1.15, 'xanchor': 'left', 'yanchor': 'top', 'pad': {'r': 10, 't': 0}
                         }],
                         sliders=[{
                             'active': 0,
@@ -1294,10 +1268,10 @@ if st.session_state.df_cache is not None:
                         plot_bgcolor='#fafafa',
                         paper_bgcolor='#0b0e13',
                         font=dict(color='#e6eaee', size=12, family='Plus Jakarta Sans, sans-serif'),
-                        xaxis=dict(title=dict(text="<b>JdK RS-Ratio</b>", font=dict(color='#e6eaee')), gridcolor='rgba(150,150,150,0.2)',
+                        xaxis=dict(title="<b>JdK RS-Ratio</b>", gridcolor='rgba(150,150,150,0.2)',
                                   range=[100-x_range-1, 100+x_range+1], zeroline=False,
                                   tickfont=dict(color='#b3bdc7')),
-                        yaxis=dict(title=dict(text="<b>JdK RS-Momentum</b>", font=dict(color='#e6eaee')), gridcolor='rgba(150,150,150,0.2)',
+                        yaxis=dict(title="<b>JdK RS-Momentum</b>", gridcolor='rgba(150,150,150,0.2)',
                                   range=[100-y_range-1, 100+y_range+1], zeroline=False,
                                   tickfont=dict(color='#b3bdc7')),
                         legend=dict(x=1.02, y=1, bgcolor='rgba(30, 30, 30, 0.8)',
@@ -1307,7 +1281,7 @@ if st.session_state.df_cache is not None:
                                   font=dict(size=16, color='#e6eaee'), x=0.5, xanchor='center')
                     )
 
-                    st.plotly_chart(fig_anim, width="stretch", config={'displayModeBar': True})
+                    st.plotly_chart(fig_anim, use_container_width=True, config={'displayModeBar': True})
                     st.success(f"✅ Animation: {len(anim_frames)} periods | Trail: {trail_length}")
             else:
                 st.warning("No animation data available. Load data first.")
