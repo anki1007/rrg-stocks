@@ -278,7 +278,7 @@ def calculate_jdk_rrg(ticker_series, benchmark_series, window=WINDOW):
             velocity.iloc[-min_len:].reset_index(drop=True))
 
 def quadrant(x, y):
-    """Determine RRG quadrant"""
+    """Determine RRG quadrant based on position"""
     if x > 100 and y > 100:
         return "Leading"
     elif x < 100 and y > 100:
@@ -287,6 +287,11 @@ def quadrant(x, y):
         return "Lagging"
     else:
         return "Weakening"
+
+def get_quadrant_color(x, y):
+    """Get color based on actual position - ENSURES VISUAL CONSISTENCY"""
+    status = quadrant(x, y)
+    return QUADRANT_COLORS[status], status
 
 def get_heading_direction(heading):
     """Convert heading degrees to compass direction"""
@@ -684,8 +689,6 @@ if st.session_state.df_cache is not None:
             # Add data points with smooth tails
             for _, row in df_graph.iterrows():
                 sym = row['Symbol']
-                status = row['Status']
-                color = QUADRANT_COLORS[status]
                 
                 if sym in rs_history:
                     tail_data = rs_history[sym]
@@ -695,6 +698,11 @@ if st.session_state.df_cache is not None:
                     x_pts = np.array(rs_ratio_tail, dtype=float)
                     y_pts = np.array(rs_momentum_tail, dtype=float)
                     n_original = len(x_pts)
+                    
+                    # DYNAMIC COLOR based on ACTUAL HEAD POSITION
+                    head_x = x_pts[-1] if len(x_pts) > 0 else row['RS-Ratio']
+                    head_y = y_pts[-1] if len(y_pts) > 0 else row['RS-Momentum']
+                    color, status = get_quadrant_color(head_x, head_y)
                     
                     if n_original >= 2:
                         # Apply Catmull-Rom spline smoothing
@@ -762,53 +770,56 @@ if st.session_state.df_cache is not None:
                                 arrowwidth=3,
                                 arrowcolor=color,
                             )
+                    else:
+                        # Single point - use dynamic color
+                        color, status = get_quadrant_color(row['RS-Ratio'], row['RS-Momentum'])
                 
-                # Hover text
-                hover_info = (
-                    f"<b>{row['Symbol']}</b> - {row['Name']}<br>"
-                    f"<b>Status:</b> {row['Status']}<br>"
-                    f"<b>RS-Ratio:</b> {row['RS-Ratio']:.2f}<br>"
-                    f"<b>RS-Momentum:</b> {row['RS-Momentum']:.2f}<br>"
-                    f"<b>Momentum Score:</b> {row['RRG Power']:.2f}<br>"
-                    f"<b>Price:</b> ₹{row['Price']:,.2f}<br>"
-                    f"<b>Change %:</b> {row['Change %']:+.2f}%<br>"
-                    f"<b>Industry:</b> {row['Industry']}<br>"
-                    f"<b>Direction:</b> {row['Direction']}"
-                )
-                
-                # Head marker (larger, with white border)
-                fig_rrg.add_trace(go.Scatter(
-                    x=[row['RS-Ratio']],
-                    y=[row['RS-Momentum']],
-                    mode='markers',
-                    marker=dict(
-                        size=14,
-                        color=color,
-                        line=dict(color='white', width=2.5)
-                    ),
-                    text=[hover_info],
-                    hoverinfo='text',
-                    hoverlabel=dict(bgcolor="#1a1f2e", bordercolor=color, 
-                                   font=dict(family="Plus Jakarta Sans, sans-serif", size=12, color="white")),
-                    showlegend=False,
-                ))
-                
-                # Add label for selected stocks
-                if show_labels and sym in label_candidates:
-                    fig_rrg.add_annotation(
-                        x=row['RS-Ratio'],
-                        y=row['RS-Momentum'],
-                        text=f"<b>{sym}</b>",
-                        showarrow=True,
-                        arrowhead=0,
-                        arrowwidth=1.5,
-                        arrowcolor=color,
-                        ax=25,
-                        ay=-20,
-                        font=dict(size=10, color=color),
-                        bgcolor='rgba(0,0,0,0)',
-                        borderwidth=0,
+                    # Hover text
+                    hover_info = (
+                        f"<b>{row['Symbol']}</b> - {row['Name']}<br>"
+                        f"<b>Status:</b> {status}<br>"
+                        f"<b>RS-Ratio:</b> {head_x:.2f}<br>"
+                        f"<b>RS-Momentum:</b> {head_y:.2f}<br>"
+                        f"<b>Momentum Score:</b> {row['RRG Power']:.2f}<br>"
+                        f"<b>Price:</b> ₹{row['Price']:,.2f}<br>"
+                        f"<b>Change %:</b> {row['Change %']:+.2f}%<br>"
+                        f"<b>Industry:</b> {row['Industry']}<br>"
+                        f"<b>Direction:</b> {row['Direction']}"
                     )
+                    
+                    # Head marker (larger, with white border)
+                    fig_rrg.add_trace(go.Scatter(
+                        x=[head_x],
+                        y=[head_y],
+                        mode='markers',
+                        marker=dict(
+                            size=14,
+                            color=color,
+                            line=dict(color='white', width=2.5)
+                        ),
+                        text=[hover_info],
+                        hoverinfo='text',
+                        hoverlabel=dict(bgcolor="#1a1f2e", bordercolor=color, 
+                                       font=dict(family="Plus Jakarta Sans, sans-serif", size=12, color="white")),
+                        showlegend=False,
+                    ))
+                    
+                    # Add label for selected stocks
+                    if show_labels and sym in label_candidates:
+                        fig_rrg.add_annotation(
+                            x=head_x,
+                            y=head_y,
+                            text=f"<b>{sym}</b>",
+                            showarrow=True,
+                            arrowhead=0,
+                            arrowwidth=1.5,
+                            arrowcolor=color,
+                            ax=25,
+                            ay=-20,
+                            font=dict(size=10, color=color),
+                            bgcolor='rgba(0,0,0,0)',
+                            borderwidth=0,
+                        )
             
             # Enhanced dark theme layout
             fig_rrg.update_layout(
@@ -849,8 +860,8 @@ if st.session_state.df_cache is not None:
                 # Generate full-width table HTML
                 table_rows = ""
                 for _, row in df.iterrows():
-                    status = row['Status']
-                    status_color = QUADRANT_COLORS.get(status, "#808080")
+                    # Use dynamic color based on actual position
+                    color, status = get_quadrant_color(row['RS-Ratio'], row['RS-Momentum'])
                     chg_color = "#4ade80" if row['Change %'] > 0 else "#f87171" if row['Change %'] < 0 else "#9ca3af"
                     
                     table_rows += f"""
@@ -861,7 +872,7 @@ if st.session_state.df_cache is not None:
                         <td class="industry-cell">{row['Industry']}</td>
                         <td style="text-align: right;">₹{row['Price']:,.2f}</td>
                         <td style="text-align: right; color: {chg_color}; font-weight: 600;">{row['Change %']:+.2f}%</td>
-                        <td style="text-align: center;"><span class="status-badge" style="background:{status_color};">{status}</span></td>
+                        <td style="text-align: center;"><span class="status-badge" style="background:{color};">{status}</span></td>
                         <td style="text-align: right;">{row['RS-Ratio']:.2f}</td>
                         <td style="text-align: right;">{row['RS-Momentum']:.2f}</td>
                         <td class="power-cell" style="text-align: right;">{row['RRG Power']:.2f}</td>
@@ -1158,7 +1169,7 @@ if st.session_state.df_cache is not None:
             
             st.info(f"Analyze rotation patterns over {trail_length} periods | Trail always visible")
 
-            # Prepare animation data
+            # Prepare animation data - using raw rs_history values
             animation_history = {}
             for sym in df_graph['Symbol']:
                 if sym in rs_history:
@@ -1166,8 +1177,7 @@ if st.session_state.df_cache is not None:
                     max_len = min(trail_length, len(tail_data['rs_ratio']))
                     animation_history[sym] = {
                         'rs_ratio': tail_data['rs_ratio'][-max_len:],
-                        'rs_momentum': tail_data['rs_momentum'][-max_len:],
-                        'status': df_graph[df_graph['Symbol'] == sym]['Status'].iloc[0]
+                        'rs_momentum': tail_data['rs_momentum'][-max_len:]
                     }
 
             if animation_history:
@@ -1209,96 +1219,99 @@ if st.session_state.df_cache is not None:
 
                 # Add smooth trails for each symbol - SAME AESTHETIC AS STATIC
                 for sym, hist in animation_history.items():
-                    status = hist['status']
-                    color = QUADRANT_COLORS[status]
-                    
                     x_pts = np.array(hist['rs_ratio'], dtype=float)
                     y_pts = np.array(hist['rs_momentum'], dtype=float)
                     n_original = len(x_pts)
                     
-                    if n_original >= 2:
-                        # Apply Catmull-Rom spline smoothing (SAME AS STATIC)
-                        if n_original >= 3:
-                            x_smooth, y_smooth = smooth_spline_curve(x_pts, y_pts, points_per_segment=8)
-                        else:
-                            x_smooth, y_smooth = x_pts, y_pts
+                    if n_original >= 1:
+                        # DYNAMIC COLOR based on ACTUAL HEAD POSITION (fixes mismatch!)
+                        head_x = x_pts[-1]
+                        head_y = y_pts[-1]
+                        color, status = get_quadrant_color(head_x, head_y)
                         
-                        n_smooth = len(x_smooth)
-                        
-                        # Draw smooth trail with gradient width and opacity (SAME AS STATIC)
-                        if n_smooth >= 2:
-                            for i in range(n_smooth - 1):
-                                prog = i / max(1, n_smooth - 2)
-                                line_width = 2.5 + prog * 3  # Width: 2.5 -> 5.5
-                                opacity = 0.4 + prog * 0.6   # Opacity: 0.4 -> 1.0
+                        if n_original >= 2:
+                            # Apply Catmull-Rom spline smoothing (SAME AS STATIC)
+                            if n_original >= 3:
+                                x_smooth, y_smooth = smooth_spline_curve(x_pts, y_pts, points_per_segment=8)
+                            else:
+                                x_smooth, y_smooth = x_pts, y_pts
+                            
+                            n_smooth = len(x_smooth)
+                            
+                            # Draw smooth trail with gradient width and opacity (SAME AS STATIC)
+                            if n_smooth >= 2:
+                                for i in range(n_smooth - 1):
+                                    prog = i / max(1, n_smooth - 2)
+                                    line_width = 2.5 + prog * 3  # Width: 2.5 -> 5.5
+                                    opacity = 0.4 + prog * 0.6   # Opacity: 0.4 -> 1.0
+                                    fig_anim.add_trace(
+                                        go.Scatter(
+                                            x=[x_smooth[i], x_smooth[i+1]],
+                                            y=[y_smooth[i], y_smooth[i+1]],
+                                            mode='lines',
+                                            line=dict(color=color, width=line_width),
+                                            opacity=opacity,
+                                            hoverinfo='skip',
+                                            showlegend=False,
+                                        )
+                                    )
+                            
+                            # Trail marker points - gradient size (SAME AS STATIC)
+                            trail_sizes = [5 + (i / max(1, n_original - 1)) * 5 for i in range(n_original)]
+                            if n_original > 1:
                                 fig_anim.add_trace(
                                     go.Scatter(
-                                        x=[x_smooth[i], x_smooth[i+1]],
-                                        y=[y_smooth[i], y_smooth[i+1]],
-                                        mode='lines',
-                                        line=dict(color=color, width=line_width),
-                                        opacity=opacity,
+                                        x=x_pts[:-1],
+                                        y=y_pts[:-1],
+                                        mode='markers',
+                                        marker=dict(
+                                            size=trail_sizes[:-1],
+                                            color=color,
+                                            opacity=0.7,
+                                            line=dict(color='white', width=1)
+                                        ),
                                         hoverinfo='skip',
                                         showlegend=False,
                                     )
                                 )
-                        
-                        # Trail marker points - gradient size (SAME AS STATIC)
-                        trail_sizes = [5 + (i / max(1, n_original - 1)) * 5 for i in range(n_original)]
-                        if n_original > 1:
-                            fig_anim.add_trace(
-                                go.Scatter(
-                                    x=x_pts[:-1],
-                                    y=y_pts[:-1],
-                                    mode='markers',
-                                    marker=dict(
-                                        size=trail_sizes[:-1],
-                                        color=color,
-                                        opacity=0.7,
-                                        line=dict(color='white', width=1)
-                                    ),
-                                    hoverinfo='skip',
-                                    showlegend=False,
+                            
+                            # Arrow head showing direction (SAME AS STATIC)
+                            dx = x_pts[-1] - x_pts[-2]
+                            dy = y_pts[-1] - y_pts[-2]
+                            length = np.sqrt(dx**2 + dy**2)
+                            if length > 0.01:
+                                fig_anim.add_annotation(
+                                    x=x_pts[-1],
+                                    y=y_pts[-1],
+                                    ax=x_pts[-1] - dx/length * 0.4,
+                                    ay=y_pts[-1] - dy/length * 0.4,
+                                    xref='x',
+                                    yref='y',
+                                    axref='x',
+                                    ayref='y',
+                                    showarrow=True,
+                                    arrowhead=2,
+                                    arrowsize=1.8,
+                                    arrowwidth=3,
+                                    arrowcolor=color,
                                 )
-                            )
                         
-                        # Arrow head showing direction (SAME AS STATIC)
-                        dx = x_pts[-1] - x_pts[-2]
-                        dy = y_pts[-1] - y_pts[-2]
-                        length = np.sqrt(dx**2 + dy**2)
-                        if length > 0.01:
-                            fig_anim.add_annotation(
-                                x=x_pts[-1],
-                                y=y_pts[-1],
-                                ax=x_pts[-1] - dx/length * 0.4,
-                                ay=y_pts[-1] - dy/length * 0.4,
-                                xref='x',
-                                yref='y',
-                                axref='x',
-                                ayref='y',
-                                showarrow=True,
-                                arrowhead=2,
-                                arrowsize=1.8,
-                                arrowwidth=3,
-                                arrowcolor=color,
-                            )
-                    
-                    # Head marker with symbol label - QUADRANT COLORED DARK BOLD TEXT
-                    fig_anim.add_trace(go.Scatter(
-                        x=[x_pts[-1]],
-                        y=[y_pts[-1]],
-                        mode='markers+text',
-                        marker=dict(
-                            size=14,
-                            color=color,
-                            line=dict(color='white', width=2.5)
-                        ),
-                        text=[f"<b>{sym}</b>"],
-                        textposition='top center',
-                        textfont=dict(size=11, color=color, family='Plus Jakarta Sans'),
-                        hovertemplate=f'<b>{sym}</b><br>RS-Ratio: %{{x:.2f}}<br>RS-Momentum: %{{y:.2f}}<extra></extra>',
-                        showlegend=False,
-                    ))
+                        # Head marker with symbol label - QUADRANT COLORED DARK BOLD TEXT
+                        fig_anim.add_trace(go.Scatter(
+                            x=[head_x],
+                            y=[head_y],
+                            mode='markers+text',
+                            marker=dict(
+                                size=14,
+                                color=color,
+                                line=dict(color='white', width=2.5)
+                            ),
+                            text=[f"<b>{sym}</b>"],
+                            textposition='top center',
+                            textfont=dict(size=11, color=color, family='Plus Jakarta Sans'),
+                            hovertemplate=f'<b>{sym}</b><br>Status: {status}<br>RS-Ratio: %{{x:.2f}}<br>RS-Momentum: %{{y:.2f}}<extra></extra>',
+                            showlegend=False,
+                        ))
 
                 # Add legend traces (SAME AS STATIC)
                 for status in ["Leading", "Improving", "Weakening", "Lagging"]:
