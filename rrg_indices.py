@@ -32,8 +32,8 @@ DEFAULT_TF = "Weekly"
 WINDOW = 14
 DEFAULT_TAIL = 8
 PERIOD_MAP = {"3M": "3mo", "6M": "6mo", "1Y": "1y", "2Y": "2y", "3Y": "3y", "5Y": "5y", "10Y": "10y"}
-TF_LABELS = ["60 Min", "240 Min","Daily", "Weekly", "Monthly"]
-TF_TO_INTERVAL = {"60 Min": "60m","240 Min": "240m", "Daily": "1d", "Weekly": "1wk", "Monthly": "1mo"}
+TF_LABELS = ["60 Min", "Daily", "Weekly", "Monthly"]
+TF_TO_INTERVAL = {"60 Min": "60m", "Daily": "1d", "Weekly": "1wk", "Monthly": "1mo"}
 BENCH_CHOICES = {"Nifty 500": "^CRSLDX", "Nifty 200": "^CNX200", "Nifty 50": "^NSEI"}
 
 IST_TZ = "Asia/Kolkata"
@@ -378,10 +378,10 @@ else:
 
 tail_len = st.sidebar.slider("Tail Length", 1, 20, DEFAULT_TAIL, 1)
 
-# Show Labels - default to True (checked)
+# Show Labels - initialize only if not exists
 if "show_labels" not in st.session_state:
     st.session_state.show_labels = True
-show_labels = st.sidebar.checkbox("Show Labels", value=st.session_state.show_labels, key="show_labels")
+show_labels = st.sidebar.checkbox("Show Labels", key="show_labels")
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("**Animation**")
