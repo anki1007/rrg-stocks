@@ -905,7 +905,7 @@ with plot_col:
             fig.add_annotation(
                 x=rr_last,
                 y=mm_last,
-                text=f"<b>{symbol}</b>",
+                text=f"<b>{name}</b>",
                 showarrow=True,
                 arrowhead=0,
                 arrowwidth=1.5,
@@ -1528,4 +1528,5 @@ with c2:
     )
 
 st.caption("Names open TradingView. Use Play/Pause to watch rotation; Speed controls frame interval; Loop wraps frames.")
+
 
