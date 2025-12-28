@@ -44,7 +44,7 @@ THEMES = {
         "bg": "#f7fafc",
         "bg_card": "#ffffff",
         "bg_secondary": "#edf2f7",
-        "bg_control": "#9F9F9C",
+        "bg_control": "#87CEEB",
         "border": "#cbd5e0",
         "text": "#1a202c",
         "text_secondary": "#4a5568",
@@ -900,4 +900,5 @@ else:
     """, unsafe_allow_html=True)
 
 st.markdown(f"<div style='text-align:center;color:{theme['text_muted']};font-size:10px;margin-top:10px;'>RRG Dashboard | Theme: {theme['name']} | <a href='https://www.optuma.com/blog/scripting-for-rrgs' style='color:{theme['accent']}'>Optuma Reference</a></div>", unsafe_allow_html=True)
+
 
