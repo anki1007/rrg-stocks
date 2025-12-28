@@ -9,25 +9,25 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 import streamlit as st
+from scipy.interpolate import make_interp_spline, CubicSpline
 
-# --- NEW: safe autorefresh imports ---
 try:
     from streamlit_autorefresh import st_autorefresh
 except Exception:
     st_autorefresh = None
 import streamlit.components.v1 as components
-# -------------------------------------
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.colors import to_hex
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 # -------------------- Config --------------------
 GITHUB_USER = "anki1007"
 GITHUB_REPO = "rrg-stocks"
 GITHUB_BRANCH = "main"
-CSV_BASENAME = "niftyindices.csv"  # CSV path under /ticker
+CSV_BASENAME = "niftyindices.csv"
 RAW_BASE = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/{GITHUB_BRANCH}/"
 
 DEFAULT_TF = "Weekly"
@@ -45,27 +45,20 @@ NET_TIME_MAX_AGE = 300
 CACHE_DIR = pathlib.Path("cache")
 CACHE_DIR.mkdir(exist_ok=True)
 
-# -------------------- Matplotlib --------------------
 mpl.rcParams["figure.dpi"] = 120
 mpl.rcParams["font.size"] = 15
 mpl.rcParams["font.sans-serif"] = ["Inter", "Segoe UI", "DejaVu Sans", "Arial"]
 mpl.rcParams["axes.grid"] = False
-mpl.rcParams["axes.edgecolor"] = "#222"
-mpl.rcParams["axes.labelcolor"] = "#111"
-mpl.rcParams["xtick.color"] = "#333"
-mpl.rcParams["ytick.color"] = "#333"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 
-# -------------------- Streamlit Page --------------------
 st.set_page_config(page_title="Relative Rotation Graphs – Indices", layout="wide")
 
-# Advanced Plus Jakarta Sans dark theme - FULLY DARK
+# -------------------- CSS Styling --------------------
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
-/* Design tokens */
 :root {
   --app-font: 'Plus Jakarta Sans', system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
   --bg: #0b0e13;
@@ -74,357 +67,159 @@ st.markdown("""
   --border: #1f2732;
   --border-soft: #1a2230;
   --text: #e6eaee;
-  --text-dim: #b3bdc7;
+  --text-dim: #8b949e;
   --accent: #7a5cff;
   --accent-2: #2bb0ff;
+  --leading: #22c55e;
+  --improving: #a855f7;
+  --weakening: #eab308;
+  --lagging: #ef4444;
 }
 
-/* Global app - EVERYTHING DARK */
 html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stAppViewBlockContainer"] {
   background: var(--bg) !important;
   color: var(--text) !important;
   font-family: var(--app-font) !important;
 }
 
-/* Fix Streamlit header - make it dark */
 header[data-testid="stHeader"] {
   background: var(--bg) !important;
   border-bottom: 1px solid var(--border) !important;
 }
 
-/* Fix toolbar */
-[data-testid="stToolbar"] {
-  background: var(--bg) !important;
-}
+[data-testid="stToolbar"] { background: var(--bg) !important; }
 
-/* Main container */
 .main .block-container {
   background: var(--bg) !important;
-  padding-top: 2rem;
+  padding-top: 1rem;
   max-width: 100%;
 }
 
-/* Hero title style */
 .hero-title {
   font-weight: 800;
-  font-size: clamp(26px, 4.5vw, 40px);
+  font-size: clamp(24px, 4vw, 36px);
   line-height: 1.05;
-  margin: 4px 0 14px 0;
+  margin: 0 0 8px 0;
   background: linear-gradient(90deg, var(--accent-2), var(--accent) 60%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  letter-spacing: .2px;
 }
 
-/* Sidebar – pro skin */
+/* Sidebar */
 section[data-testid="stSidebar"] {
   background: var(--bg-2) !important;
   border-right: 1px solid var(--border);
+  width: 280px !important;
 }
-section[data-testid="stSidebar"] * {
-  color: var(--text) !important;
-}
-section[data-testid="stSidebar"] label {
-  font-weight: 700;
-  color: var(--text-dim) !important;
-}
-section[data-testid="stSidebar"] > div {
-  background: var(--bg-2) !important;
-}
+section[data-testid="stSidebar"] * { color: var(--text) !important; }
+section[data-testid="stSidebar"] label { font-weight: 600; color: var(--text-dim) !important; font-size: 13px; }
+section[data-testid="stSidebar"] > div { background: var(--bg-2) !important; }
 
-/* Buttons */
-.stButton button {
-  background: linear-gradient(180deg, #1b2432, #131922);
-  color: var(--text);
+/* Checkbox panel styling */
+.checkbox-panel {
+  background: var(--bg-2);
   border: 1px solid var(--border);
   border-radius: 10px;
-}
-.stButton button:hover {
-  filter: brightness(1.06);
-}
-
-/* Ranking list typography */
-.rrg-rank { font-weight: 700; line-height: 1.25; font-size: 1.05rem; white-space: pre; }
-.rrg-rank .row { display: flex; gap: 8px; align-items: baseline; margin: 2px 0; }
-.rrg-rank .name { color: #9ecbff; }
-
-/* Scrollable table with sticky header */
-.rrg-wrap { max-height: calc(100vh - 260px); overflow: auto; border: 1px solid var(--border-soft); border-radius: 10px; }
-.rrg-table { width: 100%; border-collapse: collapse; font-family: var(--app-font); }
-.rrg-table th, .rrg-table td { border-bottom: 1px solid var(--border-soft); padding: 8px 10px; font-size: 13px; }
-.rrg-table th { position: sticky; top: 0; z-index: 2; text-align: left; background: #121823; color: var(--text-dim); font-weight: 800; letter-spacing: .2px; }
-.rrg-name a { color: #9ecbff; text-decoration: none; }
-.rrg-name a:hover { text-decoration: underline; }
-
-/* WebKit scrollbars */
-.rrg-wrap::-webkit-scrollbar { height: 12px; width: 12px; }
-.rrg-wrap::-webkit-scrollbar-thumb { background:#2e3745; border-radius: 8px; }
-
-/* General links (TradingView, etc.) */
-a { text-decoration: none; color: #9ecbff; }
-a:hover { text-decoration: underline; }
-
-/* Headings in main area */
-h1, h2, h3, h4, h5, h6,
-.stMarkdown h1, .stMarkdown h2, .stMarkdown h3,
-.stMarkdown h4, .stMarkdown h5, .stMarkdown h6 {
-  color: var(--text) !important;
+  max-height: 500px;
+  overflow-y: auto;
+  padding: 8px;
 }
 
-/* EXPANDER - FULLY DARK */
-div[data-testid="stExpander"] {
-  background: var(--bg-2) !important;
-  border: 1px solid var(--border) !important;
-  border-radius: 10px !important;
-}
-
-div[data-testid="stExpander"] > details {
-  background: var(--bg-2) !important;
-  border-radius: 10px !important;
-}
-
-div[data-testid="stExpander"] summary {
-  background: var(--bg-2) !important;
-  color: var(--text) !important;
-  border-radius: 10px !important;
-  padding: 12px 16px !important;
-}
-
-div[data-testid="stExpander"] summary:hover {
-  background: var(--bg-3) !important;
-}
-
-div[data-testid="stExpander"] summary span {
-  color: var(--text) !important;
-}
-
-div[data-testid="stExpander"] summary svg {
-  fill: var(--text) !important;
-  stroke: var(--text) !important;
-}
-
-div[data-testid="stExpander"] > details > div {
-  background: var(--bg-2) !important;
-}
-
-/* Streamlit expander content area */
-.streamlit-expanderContent {
-  background: var(--bg-2) !important;
-}
-
-/* Enhanced Table Styles */
-.rrg-table-container {
-  background: var(--bg-2);
-  border-radius: 12px;
-  padding: 16px;
-  border: 1px solid var(--border);
-}
-
-.rrg-filter-row {
+.checkbox-item {
   display: flex;
-  gap: 12px;
-  margin-bottom: 12px;
-  flex-wrap: wrap;
   align-items: center;
-}
-
-.rrg-filter-row input, .rrg-filter-row select {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  color: var(--text);
-  padding: 8px 12px;
-  border-radius: 8px;
-  font-family: var(--app-font);
+  padding: 6px 10px;
+  border-radius: 6px;
+  margin: 2px 0;
+  cursor: pointer;
+  transition: background 0.15s;
   font-size: 13px;
 }
 
-.rrg-filter-row input:focus, .rrg-filter-row select:focus {
-  outline: none;
-  border-color: var(--accent);
+.checkbox-item:hover {
+  background: var(--bg-3);
 }
 
-.rrg-filter-row input::placeholder {
-  color: var(--text-dim);
+.checkbox-item input[type="checkbox"] {
+  margin-right: 10px;
+  accent-color: var(--accent);
+  width: 16px;
+  height: 16px;
 }
 
-.rrg-table th {
-  cursor: pointer;
-  user-select: none;
-  transition: background 0.2s;
+.checkbox-item .tail-bar {
+  width: 20px;
+  height: 8px;
+  border-radius: 2px;
+  margin-right: 10px;
 }
 
-.rrg-table th:hover {
-  background: #1a2233 !important;
-}
-
-.rrg-table th .sort-icon {
-  margin-left: 6px;
-  opacity: 0.5;
-  font-size: 11px;
-}
-
-.rrg-table th.sort-asc .sort-icon::after { content: '▲'; opacity: 1; }
-.rrg-table th.sort-desc .sort-icon::after { content: '▼'; opacity: 1; }
-.rrg-table th:not(.sort-asc):not(.sort-desc) .sort-icon::after { content: '⇅'; }
-
-.rrg-table tr.hidden-row { display: none; }
-
-.filter-badge {
-  background: var(--accent);
-  color: white;
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-/* Plotly chart container */
-.plotly-chart-container {
-  border-radius: 12px;
+.checkbox-item .name {
+  flex: 1;
+  white-space: nowrap;
   overflow: hidden;
-  border: 1px solid var(--border);
+  text-overflow: ellipsis;
 }
 
-/* Sidebar selectbox dropdown styling for dark theme */
-section[data-testid="stSidebar"] .stSelectbox > div > div {
-  background: var(--bg) !important;
-  border: 1px solid var(--border) !important;
-  color: var(--text) !important;
+.checkbox-item .price {
+  color: var(--text-dim);
+  font-size: 12px;
+  margin-left: 8px;
 }
 
-section[data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] > div {
-  background: var(--bg) !important;
-  border-color: var(--border) !important;
+.checkbox-item .change {
+  font-size: 12px;
+  font-weight: 600;
+  margin-left: 8px;
+  min-width: 55px;
+  text-align: right;
 }
 
-section[data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] span {
-  color: var(--text) !important;
-}
+.change-positive { color: #4ade80; }
+.change-negative { color: #f87171; }
 
-section[data-testid="stSidebar"] .stSelectbox svg {
-  fill: var(--text) !important;
-}
-
-/* Multiselect styling */
-section[data-testid="stSidebar"] .stMultiSelect > div > div {
-  background: var(--bg) !important;
-  border: 1px solid var(--border) !important;
-}
-
-section[data-testid="stSidebar"] .stMultiSelect [data-baseweb="select"] > div {
-  background: var(--bg) !important;
-}
-
-section[data-testid="stSidebar"] .stMultiSelect span {
-  color: var(--text) !important;
-}
-
-/* Dropdown menu styling */
-[data-baseweb="popover"] {
-  background: var(--bg-2) !important;
-  border: 1px solid var(--border) !important;
-}
-
-[data-baseweb="popover"] li {
-  background: var(--bg-2) !important;
-  color: var(--text) !important;
-}
-
-[data-baseweb="popover"] li:hover {
-  background: #1a2233 !important;
-}
-
-/* Selected option in multiselect */
-[data-baseweb="tag"] {
-  background: var(--accent) !important;
-  color: white !important;
-}
-
-[data-baseweb="tag"] span {
-  color: white !important;
-}
-
-/* Slider styling - make it dark */
-.stSlider > div > div {
-  background: var(--bg) !important;
-}
-
-.stSlider [data-testid="stTickBar"] > div {
-  background: var(--border) !important;
-}
-
-/* Slider track and thumb */
-.stSlider [data-baseweb="slider"] > div {
-  background: var(--border) !important;
-}
-
-.stSlider [data-baseweb="slider"] [role="slider"] {
-  background: var(--accent) !important;
-  border-color: var(--accent) !important;
-}
-
-/* Date slider container - above chart like StockCharts */
-.date-slider-container {
+/* Top control bar */
+.top-control-bar {
   background: var(--bg-2);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 16px 24px;
-  margin-bottom: 16px;
-}
-
-.date-slider-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  border-radius: 10px;
+  padding: 12px 16px;
   margin-bottom: 12px;
-}
-
-.date-display {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: var(--text);
-}
-
-.date-range-info {
-  font-size: 0.85rem;
-  color: var(--text-dim);
-}
-
-/* Timeline visualization above slider */
-.timeline-viz {
-  height: 40px;
-  background: linear-gradient(90deg, #1a2233 0%, var(--bg-3) 100%);
-  border-radius: 8px;
-  margin-bottom: 8px;
-  position: relative;
-  overflow: hidden;
-}
-
-.timeline-marker {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: var(--accent);
-  border-radius: 2px;
-}
-
-/* View controls row */
-.view-controls {
   display: flex;
-  gap: 12px;
   align-items: center;
-  margin-top: 12px;
+  gap: 20px;
+  flex-wrap: wrap;
 }
 
+.control-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.control-label {
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.control-value {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* View buttons */
 .view-btn {
-  padding: 6px 14px;
+  padding: 6px 12px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--text-dim);
-  font-size: 13px;
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -440,6 +235,92 @@ section[data-testid="stSidebar"] .stMultiSelect span {
   border-color: var(--accent);
 }
 
+/* Timeline sparkline container */
+.timeline-container {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+}
+
+.timeline-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.timeline-date {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.timeline-range {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+/* Buttons */
+.stButton button {
+  background: linear-gradient(180deg, #1b2432, #131922);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 13px;
+}
+.stButton button:hover { filter: brightness(1.1); }
+
+/* Expander */
+div[data-testid="stExpander"] {
+  background: var(--bg-2) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 10px !important;
+}
+div[data-testid="stExpander"] > details { background: var(--bg-2) !important; border-radius: 10px !important; }
+div[data-testid="stExpander"] summary { background: var(--bg-2) !important; color: var(--text) !important; }
+div[data-testid="stExpander"] summary span { color: var(--text) !important; }
+div[data-testid="stExpander"] > details > div { background: var(--bg-2) !important; }
+.streamlit-expanderContent { background: var(--bg-2) !important; }
+
+/* Table styles */
+.rrg-wrap { max-height: calc(100vh - 300px); overflow: auto; border: 1px solid var(--border-soft); border-radius: 10px; }
+.rrg-table { width: 100%; border-collapse: collapse; font-family: var(--app-font); }
+.rrg-table th, .rrg-table td { border-bottom: 1px solid var(--border-soft); padding: 8px 10px; font-size: 13px; }
+.rrg-table th { position: sticky; top: 0; z-index: 2; text-align: left; background: #121823; color: var(--text-dim); font-weight: 700; }
+.rrg-name a { color: #58a6ff; text-decoration: none; }
+.rrg-name a:hover { text-decoration: underline; }
+
+/* Scrollbars */
+.rrg-wrap::-webkit-scrollbar, .checkbox-panel::-webkit-scrollbar { height: 10px; width: 10px; }
+.rrg-wrap::-webkit-scrollbar-thumb, .checkbox-panel::-webkit-scrollbar-thumb { background:#2e3745; border-radius: 8px; }
+
+/* Links */
+a { text-decoration: none; color: #58a6ff; }
+a:hover { text-decoration: underline; }
+
+/* Headings */
+h1, h2, h3, h4, h5, h6,
+.stMarkdown h1, .stMarkdown h2, .stMarkdown h3 { color: var(--text) !important; }
+
+/* Selectbox/Multiselect dark theme */
+section[data-testid="stSidebar"] .stSelectbox > div > div,
+section[data-testid="stSidebar"] .stMultiSelect > div > div {
+  background: var(--bg) !important;
+  border: 1px solid var(--border) !important;
+}
+[data-baseweb="popover"] { background: var(--bg-2) !important; border: 1px solid var(--border) !important; }
+[data-baseweb="popover"] li { background: var(--bg-2) !important; color: var(--text) !important; }
+[data-baseweb="popover"] li:hover { background: #1a2233 !important; }
+[data-baseweb="tag"] { background: var(--accent) !important; }
+[data-baseweb="tag"] span { color: white !important; }
+
+/* Slider */
+.stSlider > div > div { background: var(--bg) !important; }
+.stSlider [data-baseweb="slider"] [role="slider"] { background: var(--accent) !important; border-color: var(--accent) !important; }
+
 /* Download buttons */
 .stDownloadButton button {
   background: var(--bg-2) !important;
@@ -447,33 +328,15 @@ section[data-testid="stSidebar"] .stMultiSelect span {
   color: var(--text) !important;
 }
 
-.stDownloadButton button:hover {
-  background: var(--bg-3) !important;
-  border-color: var(--accent) !important;
-}
-
-/* Caption text */
-.stCaption, small {
-  color: var(--text-dim) !important;
-}
+/* Caption */
+.stCaption, small { color: var(--text-dim) !important; }
 
 /* Checkbox styling */
-.stCheckbox label span {
-  color: var(--text) !important;
-}
-
-/* Toggle styling */
-div[data-testid="stToggle"] label span {
-  color: var(--text) !important;
-}
+.stCheckbox label span { color: var(--text) !important; }
+div[data-testid="stCheckbox"] { margin: 2px 0 !important; }
+div[data-testid="stCheckbox"] label { padding: 4px 0 !important; }
 </style>
 """, unsafe_allow_html=True)
-
-# Hero title above the dynamic date title
-st.markdown(
-    '<div class="hero-title">Relative Rotation Graphs – Indices</div>',
-    unsafe_allow_html=True,
-)
 
 # -------------------- Helpers --------------------
 def _normalize_cols(cols: List[str]) -> Dict[str, str]:
@@ -483,9 +346,8 @@ def _to_yahoo_symbol(raw_sym: str) -> str:
     s = str(raw_sym).strip().upper()
     if s.endswith(".NS") or s.startswith("^"):
         return s
-    return "^" + s  # map index codes like CNXIT -> ^CNXIT
+    return "^" + s
 
-# ---- CSV loaders (GitHub with cache-bust, or uploaded override) ----
 @st.cache_data(ttl=600)
 def load_universe_from_github_csv(basename: str, cache_bust: str) -> Tuple[List[str], Dict[str, Dict[str, str]]]:
     url = RAW_BASE + basename
@@ -495,7 +357,7 @@ def load_universe_from_github_csv(basename: str, cache_bust: str) -> Tuple[List[
     if sym_col is None:
         raise ValueError("CSV must contain 'Symbol' column.")
     name_col = next((c for c,k in mapping.items() if k in ("companyname","name","company","companyfullname")), sym_col)
-    ind_col  = next((c for c,k in mapping.items() if k in ("industry","sector","industries")), None)
+    ind_col = next((c for c,k in mapping.items() if k in ("industry","sector","industries")), None)
     if ind_col is None:
         ind_col = "Industry"
         df[ind_col] = "-"
@@ -503,7 +365,6 @@ def load_universe_from_github_csv(basename: str, cache_bust: str) -> Tuple[List[
     sel = df[[sym_col, name_col, ind_col]].copy()
     sel.columns = ["Symbol","Company Name","Industry"]
     sel = sel[sel["Symbol"].astype(str).str.strip() != ""].drop_duplicates(subset=["Symbol"])
-
     sel["Yahoo"] = sel["Symbol"].apply(_to_yahoo_symbol)
     universe = sel["Yahoo"].tolist()
     meta = {
@@ -515,37 +376,7 @@ def load_universe_from_github_csv(basename: str, cache_bust: str) -> Tuple[List[
         }
         for _, r in sel.iterrows()
     }
-    # cache_bust is unused in code but varies the cache key
     _ = cache_bust
-    return universe, meta
-
-def load_universe_from_uploaded_csv(file) -> Tuple[List[str], Dict[str, Dict[str, str]]]:
-    df = pd.read_csv(file)
-    mapping = _normalize_cols(df.columns.tolist())
-    sym_col = next((c for c,k in mapping.items() if k in ("symbol","ticker","symbols")), None)
-    if sym_col is None:
-        raise ValueError("Uploaded CSV must contain 'Symbol' column.")
-    name_col = next((c for c,k in mapping.items() if k in ("companyname","name","company","companyfullname")), sym_col)
-    ind_col  = next((c for c,k in mapping.items() if k in ("industry","sector","industries")), None)
-    if ind_col is None:
-        ind_col = "Industry"
-        df[ind_col] = "-"
-
-    sel = df[[sym_col, name_col, ind_col]].copy()
-    sel.columns = ["Symbol","Company Name","Industry"]
-    sel = sel[sel["Symbol"].astype(str).str.strip() != ""].drop_duplicates(subset=["Symbol"])
-    sel["Yahoo"] = sel["Symbol"].apply(_to_yahoo_symbol)
-
-    universe = sel["Yahoo"].tolist()
-    meta = {
-        r["Yahoo"]: {
-            "name": (r["Company Name"] or r["Yahoo"]),
-            "industry": (r["Industry"] or "-"),
-            "raw_symbol": r["Symbol"],
-            "is_equity": r["Yahoo"].endswith(".NS"),
-        }
-        for _, r in sel.iterrows()
-    }
     return universe, meta
 
 def pick_close(df, symbol: str) -> pd.Series:
@@ -570,18 +401,11 @@ def tv_link_for_symbol(yahoo_sym: str) -> str:
 def format_bar_date(ts: pd.Timestamp, interval: str) -> str:
     ts = pd.Timestamp(ts)
     if interval=="60m":
-        # yfinance returns 60m data with timestamps that are often in UTC
-        # Check timezone info:
-        # - If timezone-aware: convert to IST
-        # - If timezone-naive: assume UTC (yfinance behavior for hourly data)
         if ts.tzinfo is not None:
             ts_ist = ts.tz_convert(IST_TZ)
         else:
-            # Assume UTC for timezone-naive hourly data from yfinance
             ts_ist = ts.tz_localize("UTC").tz_convert(IST_TZ)
-        # For 60m bars, show the bar END time (start + 1 hour)
         bar_end = ts_ist + pd.Timedelta(hours=1)
-        # Cap at market close (15:30)
         market_close_time = bar_end.replace(hour=15, minute=30, second=0, microsecond=0)
         if bar_end.time() > market_close_time.time():
             bar_end = market_close_time
@@ -591,44 +415,18 @@ def format_bar_date(ts: pd.Timestamp, interval: str) -> str:
     return ts.date().isoformat()
 
 def filter_nse_market_hours(df_or_series, interval: str):
-    """Filter data to only include NSE market hours (9:15 AM - 3:30 PM IST) for intraday data."""
     if interval != "60m":
         return df_or_series
-    
     if df_or_series is None or (hasattr(df_or_series, 'empty') and df_or_series.empty):
         return df_or_series
-    
     idx = df_or_series.index
-    
-    # Convert to IST
     if idx.tz is None:
         idx_ist = idx.tz_localize("UTC").tz_convert(IST_TZ)
     else:
         idx_ist = idx.tz_convert(IST_TZ)
-    
-    # NSE market hours: 9:15 AM to 3:30 PM IST
-    # Valid bar START times: 9:xx to 14:xx (bars ending by 15:30)
-    # A bar starting at hour 9 ends around hour 10
-    # A bar starting at hour 14 ends around hour 15
-    # Any bar starting at hour 15 or later is invalid (ends after market close)
-    
-    valid_mask = []
-    for ts in idx_ist:
-        hour = ts.hour
-        minute = ts.minute
-        # Valid if:
-        # - Hour is 9-14 (bar will end within market hours)
-        # - Or hour is 9 with minute >= 0 (first bar can start at 9:xx)
-        # Invalid if:
-        # - Hour < 9 (before market open)
-        # - Hour >= 15 (after market would close for this bar)
-        is_valid = (9 <= hour <= 14)
-        valid_mask.append(is_valid)
-    
+    valid_mask = [(9 <= ts.hour <= 14) for ts in idx_ist]
     valid_mask = pd.Series(valid_mask, index=df_or_series.index)
-    filtered = df_or_series[valid_mask]
-    
-    return filtered
+    return df_or_series[valid_mask]
 
 def jdk_components(price: pd.Series, bench: pd.Series, win=14):
     df = pd.concat([price.rename("p"), bench.rename("b")], axis=1).dropna()
@@ -658,32 +456,30 @@ def get_status(x, y):
     if x>=100 and y<=100: return "Weakening"
     return "Unknown"
 
-# Quadrant colors - PASTEL like StockCharts reference
-# Trail colors (saturated) - used for lines and dots
+# Quadrant colors
 QUADRANT_COLORS = {
-    "Leading": "#1a7a3a",      # Darker green for better visibility
-    "Improving": "#6a4a9a",    # Darker purple for better visibility
-    "Weakening": "#9a7a0a",    # Darker gold for better visibility
-    "Lagging": "#b03030",      # Darker red for better visibility
+    "Leading": "#22c55e",
+    "Improving": "#a855f7",
+    "Weakening": "#eab308",
+    "Lagging": "#ef4444",
 }
 
-# Background colors (pastel) - for quadrant fills
 QUADRANT_BG_COLORS = {
-    "Leading": "rgba(144, 238, 144, 0.5)",      # Light green - mint
-    "Improving": "rgba(200, 180, 230, 0.5)",    # Light purple - lavender
-    "Weakening": "rgba(255, 230, 150, 0.5)",    # Light yellow - cream
-    "Lagging": "rgba(255, 180, 180, 0.5)",      # Light red - pink
+    "Leading": "rgba(187, 247, 208, 0.6)",
+    "Improving": "rgba(233, 213, 255, 0.6)",
+    "Weakening": "rgba(254, 249, 195, 0.6)",
+    "Lagging": "rgba(254, 202, 202, 0.6)",
 }
 
-def status_bg_color(x, y):
+def status_color(x, y):
     return QUADRANT_COLORS.get(get_status(x, y), "#888888")
 
-# -------------------- IST closed-bar checks --------------------
+# -------------------- IST time checks --------------------
 def _utc_now_from_network(timeout=2.5) -> pd.Timestamp:
     try:
         import ntplib
         c=ntplib.NTPClient()
-        for host in ("time.google.com","time.cloudflare.com","pool.ntp.org","asia.pool.ntp.org"):
+        for host in ("time.google.com","time.cloudflare.com","pool.ntp.org"):
             try:
                 r=c.request(host, version=3, timeout=timeout)
                 return pd.Timestamp(r.tx_time, unit="s", tz="UTC")
@@ -691,7 +487,7 @@ def _utc_now_from_network(timeout=2.5) -> pd.Timestamp:
                 continue
     except Exception:
         pass
-    for url in ("https://www.google.com/generate_204","https://www.cloudflare.com","https://www.nseindia.com","https://www.bseindia.com"):
+    for url in ("https://www.google.com/generate_204","https://www.cloudflare.com"):
         try:
             req=_urlreq.Request(url, method="HEAD")
             with _urlreq.urlopen(req, timeout=timeout) as resp:
@@ -723,28 +519,11 @@ def _is_bar_complete_for_timestamp(last_ts, interval, now=None):
     last_date=last_ist.date(); today=now_ist.date(); wd_now=now_ist.weekday()
 
     if interval=="60m":
-        # NSE market hours: 9:15 AM to 3:30 PM IST
-        # Last complete hourly bar of the day starts at 14:15 (ends at 15:15)
-        # A bar is complete if:
-        # 1. It's from a previous trading day, OR
-        # 2. It's from today and next bar's end time has passed
-        
-        last_bar_hour = last_ist.hour
-        last_bar_minute = last_ist.minute
-        
-        # If bar is from a previous day, it's complete
-        if last_date < today:
-            return True
-        
-        # If bar is from today, check if the bar has closed
-        # Bar starting at HH:15 closes at (HH+1):15
-        bar_close_hour = last_bar_hour + 1
-        bar_close_minute = last_bar_minute
-        
-        # Check if current time is past the bar close time
+        if last_date < today: return True
+        bar_close_hour = last_ist.hour + 1
+        bar_close_minute = last_ist.minute
         current_minutes = now_ist.hour * 60 + now_ist.minute
         bar_close_minutes = bar_close_hour * 60 + bar_close_minute
-        
         return current_minutes >= bar_close_minutes
     if interval=="1d":
         if last_date < today: return True
@@ -801,7 +580,7 @@ def retry(n=4, delay=1.5, backoff=2.0):
         return wrap
     return deco
 
-@st.cache_data(show_spinner=False, ttl=300)  # 5 min cache for fresher data
+@st.cache_data(show_spinner=False, ttl=300)
 def download_block_with_benchmark(universe, benchmark, period, interval):
     @retry()
     def _dl():
@@ -814,27 +593,16 @@ def download_block_with_benchmark(universe, benchmark, period, interval):
     if bench is None or bench.empty:
         return bench, {}
 
-    # Filter to NSE market hours for intraday data
     bench = filter_nse_market_hours(bench, interval)
     if bench is None or bench.empty:
         return bench, {}
 
-    # For intraday data, always drop the last bar if market is open
-    # For daily/weekly/monthly, use the existing logic
     now_ist = _now_ist_cached()
     
     if interval == "60m":
-        # For 60m, check if we're during market hours on a trading day
-        # Market hours: 9:15 AM - 3:30 PM IST, Mon-Fri
         is_weekday = now_ist.weekday() < 5
         market_open = now_ist.hour >= 9 and (now_ist.hour < 15 or (now_ist.hour == 15 and now_ist.minute < 30))
-        
-        if is_weekday and market_open:
-            # During market hours - drop the last (incomplete) bar
-            drop_last = True
-        else:
-            # After market or weekend - last bar should be complete
-            drop_last = False
+        drop_last = is_weekday and market_open
     else:
         drop_last = not _is_bar_complete_for_timestamp(bench.index[-1], interval, now=now_ist)
     
@@ -845,7 +613,6 @@ def download_block_with_benchmark(universe, benchmark, period, interval):
     for t in universe:
         s=_pick(t)
         if not s.empty:
-            # Filter to NSE market hours
             s = filter_nse_market_hours(s, interval)
             if not s.empty:
                 data[t]=_maybe_trim(s)
@@ -866,39 +633,59 @@ def symbol_color_map(symbols):
     tab = plt.get_cmap("tab20").colors
     return {s: to_hex(tab[i % len(tab)], keep_alpha=False) for i, s in enumerate(symbols)}
 
-# -------------------- Controls --------------------
-st.sidebar.header("Controls")
+# -------------------- Smooth Spline for Curved Trails --------------------
+def smooth_spline_curve(x_points, y_points, num_smooth=50):
+    """Create smooth curved trail using cubic spline interpolation"""
+    if len(x_points) < 3:
+        return x_points, y_points
+    
+    # Parameter t from 0 to 1
+    t = np.linspace(0, 1, len(x_points))
+    t_smooth = np.linspace(0, 1, num_smooth)
+    
+    try:
+        # Use cubic spline for smooth interpolation
+        cs_x = CubicSpline(t, x_points)
+        cs_y = CubicSpline(t, y_points)
+        
+        x_smooth = cs_x(t_smooth)
+        y_smooth = cs_y(t_smooth)
+        
+        return x_smooth, y_smooth
+    except Exception:
+        return x_points, y_points
+
+# -------------------- Hero Title --------------------
+st.markdown('<div class="hero-title">Relative Rotation Graphs – Indices</div>', unsafe_allow_html=True)
+
+# -------------------- Sidebar Controls --------------------
+st.sidebar.header("⚙️ Controls")
 
 bench_label = st.sidebar.selectbox("Benchmark", list(BENCH_CHOICES.keys()), index=0)
-interval_label = st.sidebar.selectbox("Strength vs (TF)", TF_LABELS, index=TF_LABELS.index(DEFAULT_TF))
+interval_label = st.sidebar.selectbox("Timeframe", TF_LABELS, index=TF_LABELS.index(DEFAULT_TF))
 interval = TF_TO_INTERVAL[interval_label]
 
-# For 60m interval, yfinance supports up to ~730 days of hourly data
 if interval == "60m":
     PERIOD_MAP_60M = {"1M": "1mo", "3M": "3mo", "6M": "6mo"}
     default_period_for_tf = "3M"
-    period_label = st.sidebar.selectbox("Period", list(PERIOD_MAP_60M.keys()), index=list(PERIOD_MAP_60M.keys()).index(default_period_for_tf))
+    period_label = st.sidebar.selectbox("Date Range", list(PERIOD_MAP_60M.keys()), index=list(PERIOD_MAP_60M.keys()).index(default_period_for_tf))
     period = PERIOD_MAP_60M[period_label]
 else:
     default_period_for_tf = {"1d": "1Y", "1wk": "1Y", "1mo": "10Y"}[interval]
-    period_label = st.sidebar.selectbox("Period", list(PERIOD_MAP.keys()), index=list(PERIOD_MAP.keys()).index(default_period_for_tf))
+    period_label = st.sidebar.selectbox("Date Range", list(PERIOD_MAP.keys()), index=list(PERIOD_MAP.keys()).index(default_period_for_tf))
     period = PERIOD_MAP[period_label]
 
-rank_modes = ["Momentum Score", "RS-Ratio", "RS-Momentum", "Price %Δ (tail)", "Momentum Slope (tail)"]
-rank_mode = st.sidebar.selectbox("Rank by", rank_modes, index=0)
-tail_len = st.sidebar.slider("Trail Length", 1, 20, DEFAULT_TAIL, 1)
-show_labels = st.sidebar.toggle("Show labels on chart", value=False)
-label_top_n = st.sidebar.slider("Label top N by distance", 3, 30, 12, 1, disabled=not show_labels)
+tail_len = st.sidebar.slider("Tail Length (Counts)", 1, 20, DEFAULT_TAIL, 1)
+show_labels = st.sidebar.checkbox("Show Labels", value=True)
 
-diag = st.sidebar.checkbox("Show diagnostics", value=False)
-
+st.sidebar.markdown("---")
+st.sidebar.markdown("**Animation**")
 if "playing" not in st.session_state:
     st.session_state.playing = False
-st.sidebar.toggle("Play / Pause", value=st.session_state.playing, key="playing")
-speed_ms = st.sidebar.slider("Speed (ms/frame)", 1000, 3000, 1500, 50)
+st.sidebar.toggle("▶ Play", value=st.session_state.playing, key="playing")
+speed_ms = st.sidebar.slider("Speed (ms/frame)", 500, 3000, 1200, 100)
 looping = st.sidebar.checkbox("Loop", value=True)
 
-# Add refresh button
 st.sidebar.markdown("---")
 if st.sidebar.button("🔄 Refresh Data", use_container_width=True):
     st.cache_data.clear()
@@ -909,7 +696,6 @@ UNIVERSE, META = load_universe_from_github_csv(
     CSV_BASENAME,
     cache_bust=str(pd.Timestamp.utcnow().floor("1min"))
 )
-
 
 bench_symbol = BENCH_CHOICES[bench_label]
 benchmark_data, tickers_data = download_block_with_benchmark(UNIVERSE, bench_symbol, period, interval)
@@ -936,62 +722,28 @@ if not tickers:
     st.warning("After alignment, no symbols have enough coverage. Try a longer period.")
     st.stop()
 
-# Optional diagnostics
-if diag:
-    kept = set(rs_ratio_map.keys())
-    dropped = [s for s in UNIVERSE if s not in kept and s != bench_symbol]
-    st.info(f"CSV universe: {len(UNIVERSE)} | Eligible after coverage: {len(kept)} | Ranked shown: {len(kept)}")
-    if dropped:
-        st.warning(f"Dropped (no data/insufficient coverage): {len(dropped)}")
-        st.write(dropped)
-
-# Initialize visible set BEFORE ranking/perf is computed
-if "visible_set" not in st.session_state:
-    st.session_state.visible_set = set(tickers)
-
-# Sync visible_set with available tickers (remove any that no longer exist)
-st.session_state.visible_set = st.session_state.visible_set.intersection(set(tickers))
-
-# Add multiselect in sidebar for index selection
-st.sidebar.markdown("---")
-st.sidebar.markdown("**Select Indices**")
-index_names = {t: META.get(t, {}).get("name", t) for t in tickers}
-sorted_tickers = sorted(tickers, key=lambda t: index_names[t])
-display_options = {index_names[t]: t for t in sorted_tickers}
-
-# Get currently selected display names
-current_selection = [index_names[t] for t in sorted_tickers if t in st.session_state.visible_set]
-
-selected_names = st.sidebar.multiselect(
-    "Show on chart:",
-    options=list(display_options.keys()),
-    default=current_selection,
-    help="Select which indices to display on the RRG chart"
-)
-
-# Update visible_set based on selection
-st.session_state.visible_set = {display_options[name] for name in selected_names}
-
-# Quick buttons for select/deselect all
-col1, col2 = st.sidebar.columns(2)
-with col1:
-    if st.button("Select All", use_container_width=True):
-        st.session_state.visible_set = set(tickers)
-        st.rerun()
-with col2:
-    if st.button("Clear All", use_container_width=True):
-        st.session_state.visible_set = set()
-        st.rerun()
-
 SYMBOL_COLORS = symbol_color_map(tickers)
 idx = bench_idx
 idx_len = len(idx)
 
-# -------------------- Date index + Animation --------------------
+# -------------------- Initialize Session State --------------------
+if "chart_visible" not in st.session_state:
+    st.session_state.chart_visible = {t: True for t in tickers}
+
+# Sync with available tickers
+for t in tickers:
+    if t not in st.session_state.chart_visible:
+        st.session_state.chart_visible[t] = True
+st.session_state.chart_visible = {t: v for t, v in st.session_state.chart_visible.items() if t in tickers}
+
 if "end_idx" not in st.session_state:
     st.session_state.end_idx = idx_len - 1
 st.session_state.end_idx = min(max(st.session_state.end_idx, DEFAULT_TAIL), idx_len - 1)
 
+if "view_mode" not in st.session_state:
+    st.session_state.view_mode = "Fit"
+
+# Animation
 if st.session_state.playing:
     nxt = st.session_state.end_idx + 1
     if nxt > idx_len - 1:
@@ -999,739 +751,439 @@ if st.session_state.playing:
         if not looping:
             st.session_state.playing = False
     st.session_state.end_idx = nxt
-    # --- FIX: use st_autorefresh or JS fallback ---
     if st_autorefresh:
         st_autorefresh(interval=speed_ms, limit=None, key="rrg_auto_refresh")
     else:
-        components.html(
-            f"<script>setTimeout(function(){{window.parent.location.reload()}},{int(speed_ms)});</script>",
-            height=0,
-        )
+        components.html(f"<script>setTimeout(function(){{window.parent.location.reload()}},{int(speed_ms)});</script>", height=0)
 
-# -------- DATE SLIDER - ABOVE CHART like StockCharts --------
+end_idx = st.session_state.end_idx
+start_idx = max(end_idx - tail_len, 0)
+date_str = format_bar_date(idx[end_idx], interval)
 start_date_str = format_bar_date(idx[DEFAULT_TAIL], interval)
 end_date_full = format_bar_date(idx[-1], interval)
 
-# Store values in session state for callbacks to access
-st.session_state._idx_len = idx_len
-st.session_state._default_tail = DEFAULT_TAIL
+# -------------------- Main Layout: Left Panel + Chart --------------------
+left_col, main_col = st.columns([1, 3.5])
 
-# Date slider container with timeline visualization
-st.markdown(f"""
-<div class="date-slider-container">
-    <div class="date-slider-header">
-        <span class="date-display" id="current-date-display">{format_bar_date(idx[st.session_state.end_idx], interval)}</span>
-        <span class="date-range-info">{start_date_str} to {end_date_full}</span>
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
-end_idx = st.slider(
-    "Date",
-    min_value=DEFAULT_TAIL,
-    max_value=idx_len - 1,
-    step=1,
-    key="end_idx",
-    format=" ",
-    label_visibility="collapsed"
-)
-
-# View controls row - use callbacks to modify state before next rerun
-# Callbacks must use session_state for values since local variables aren't available
-def go_prev():
-    if "_default_tail" in st.session_state and "end_idx" in st.session_state:
-        if st.session_state.end_idx > st.session_state._default_tail:
-            st.session_state.end_idx -= 1
-
-def go_next():
-    if "_idx_len" in st.session_state and "end_idx" in st.session_state:
-        if st.session_state.end_idx < st.session_state._idx_len - 1:
-            st.session_state.end_idx += 1
-
-def go_latest():
-    if "_idx_len" in st.session_state:
-        st.session_state.end_idx = st.session_state._idx_len - 1
-
-def go_center():
-    if "_idx_len" in st.session_state and "_default_tail" in st.session_state:
-        st.session_state.end_idx = (st.session_state._default_tail + st.session_state._idx_len - 1) // 2
-
-ctrl_cols = st.columns([1, 1, 1, 1, 4])
-with ctrl_cols[0]:
-    st.button("◀ Prev", use_container_width=True, on_click=go_prev)
-with ctrl_cols[1]:
-    st.button("Next ▶", use_container_width=True, on_click=go_next)
-with ctrl_cols[2]:
-    st.button("Latest", use_container_width=True, on_click=go_latest)
-with ctrl_cols[3]:
-    st.button("Center", use_container_width=True, on_click=go_center)
-
-start_idx = max(end_idx - tail_len, 0)
-date_str = format_bar_date(idx[end_idx], interval)
-
-# -------------------- Ranking Metric (1 = strongest) --------------------
-def ranking_value(t: str) -> float:
-    rr_last = rs_ratio_map[t].iloc[end_idx]
-    mm_last = rs_mom_map[t].iloc[end_idx]
-    if rank_mode == "Momentum Score":
-        return float(np.hypot(rr_last - 100.0, mm_last - 100.0))
-    if rank_mode == "RS-Ratio":
-        return float(rr_last)
-    if rank_mode == "RS-Momentum":
-        return float(mm_last)
-    if rank_mode == "Price %Δ (tail)":
+# -------------------- Left Panel: Checkbox List --------------------
+with left_col:
+    st.markdown("**Symbols**")
+    
+    # Search box
+    search_term = st.text_input("🔍 Search", placeholder="Filter indices...", label_visibility="collapsed")
+    
+    # Filter type
+    filter_type = st.selectbox("Filter", ["All", "Only Indices", "Only Stocks"], label_visibility="collapsed")
+    
+    # Select All / Clear All buttons
+    btn_cols = st.columns(2)
+    with btn_cols[0]:
+        if st.button("Select All", use_container_width=True, key="select_all"):
+            for t in tickers:
+                st.session_state.chart_visible[t] = True
+            st.rerun()
+    with btn_cols[1]:
+        if st.button("Clear All", use_container_width=True, key="clear_all"):
+            for t in tickers:
+                st.session_state.chart_visible[t] = False
+            st.rerun()
+    
+    st.markdown("---")
+    
+    # Build list of indices with checkboxes
+    # Sort by current status and momentum
+    def sort_key(t):
+        rr = float(rs_ratio_map[t].iloc[end_idx]) if not pd.isna(rs_ratio_map[t].iloc[end_idx]) else 0
+        mm = float(rs_mom_map[t].iloc[end_idx]) if not pd.isna(rs_mom_map[t].iloc[end_idx]) else 0
+        return -np.hypot(rr - 100, mm - 100)  # Sort by distance from center (strongest first)
+    
+    sorted_tickers = sorted(tickers, key=sort_key)
+    
+    # Filter by search term
+    if search_term:
+        sorted_tickers = [t for t in sorted_tickers if search_term.lower() in META.get(t, {}).get("name", t).lower()]
+    
+    # Create scrollable checkbox list
+    for t in sorted_tickers:
+        meta = META.get(t, {})
+        name = meta.get("name", t)
+        
+        # Get current values
+        rr = float(rs_ratio_map[t].iloc[end_idx]) if not pd.isna(rs_ratio_map[t].iloc[end_idx]) else 100
+        mm = float(rs_mom_map[t].iloc[end_idx]) if not pd.isna(rs_mom_map[t].iloc[end_idx]) else 100
+        color = status_color(rr, mm)
+        
+        # Get price and change
         px = tickers_data[t].reindex(idx).dropna()
-        return float((px.iloc[end_idx] / px.iloc[start_idx] - 1) * 100.0) if len(px.iloc[start_idx:end_idx+1]) >= 2 else float("-inf")
-    if rank_mode == "Momentum Slope (tail)":
-        series = rs_mom_map[t].iloc[start_idx:end_idx+1].dropna()
-        if len(series) >= 2:
-            x = np.arange(len(series)); A = np.vstack([x, np.ones(len(x))]).T
-            return float(np.linalg.lstsq(A, series.values, rcond=None)[0][0])
-        return float("-inf")
-    return float("-inf")
+        price = float(px.iloc[end_idx]) if end_idx < len(px) else 0
+        chg = ((px.iloc[end_idx] / px.iloc[start_idx] - 1) * 100.0) if (end_idx < len(px) and start_idx < len(px) and px.iloc[start_idx] != 0) else 0
+        
+        # Checkbox with colored indicator
+        col1, col2 = st.columns([0.15, 0.85])
+        with col1:
+            # Color indicator bar
+            st.markdown(f'<div style="width:16px;height:16px;background:{color};border-radius:3px;margin-top:8px;"></div>', unsafe_allow_html=True)
+        with col2:
+            # Checkbox
+            is_visible = st.checkbox(
+                f"{name[:25]}{'...' if len(name) > 25 else ''}",
+                value=st.session_state.chart_visible.get(t, True),
+                key=f"cb_{t}"
+            )
+            st.session_state.chart_visible[t] = is_visible
 
-# Precompute perf (strongest → weakest)
-perf = [(t, ranking_value(t)) for t in tickers if t in st.session_state.visible_set]
-perf.sort(key=lambda x: x[1], reverse=True)
+# -------------------- Main Panel --------------------
+with main_col:
+    # Timeline sparkline + Date controls
+    st.markdown(f"""
+    <div class="timeline-container">
+        <div class="timeline-header">
+            <span class="timeline-date">{date_str}</span>
+            <span class="timeline-range">{start_date_str} to {end_date_full}</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Create mini benchmark sparkline
+    spark_fig = go.Figure()
+    spark_fig.add_trace(go.Scatter(
+        x=list(range(len(benchmark_data))),
+        y=benchmark_data.values,
+        mode='lines',
+        line=dict(color='#3b82f6', width=1.5),
+        fill='tozeroy',
+        fillcolor='rgba(59, 130, 246, 0.1)',
+        hoverinfo='skip'
+    ))
+    # Add current position marker
+    spark_fig.add_vline(x=end_idx, line_color='#ef4444', line_width=2)
+    spark_fig.update_layout(
+        height=60,
+        margin=dict(l=0, r=0, t=0, b=0),
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        xaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
+        yaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
+        showlegend=False
+    )
+    st.plotly_chart(spark_fig, use_container_width=True, config={'displayModeBar': False})
+    
+    # Date slider
+    end_idx = st.slider(
+        "Date",
+        min_value=DEFAULT_TAIL,
+        max_value=idx_len - 1,
+        step=1,
+        key="end_idx",
+        format=" ",
+        label_visibility="collapsed"
+    )
+    
+    # View controls row
+    ctrl_cols = st.columns([1, 1, 1, 1, 1, 1, 3])
+    
+    def go_prev():
+        if st.session_state.end_idx > DEFAULT_TAIL:
+            st.session_state.end_idx -= 1
+    def go_next():
+        if st.session_state.end_idx < idx_len - 1:
+            st.session_state.end_idx += 1
+    def go_latest():
+        st.session_state.end_idx = idx_len - 1
+    
+    with ctrl_cols[0]:
+        st.button("◀ Prev", use_container_width=True, on_click=go_prev)
+    with ctrl_cols[1]:
+        st.button("Next ▶", use_container_width=True, on_click=go_next)
+    with ctrl_cols[2]:
+        st.button("Latest", use_container_width=True, on_click=go_latest)
+    with ctrl_cols[3]:
+        if st.button("Fit", use_container_width=True):
+            st.session_state.view_mode = "Fit"
+    with ctrl_cols[4]:
+        if st.button("Center", use_container_width=True):
+            st.session_state.view_mode = "Center"
+    with ctrl_cols[5]:
+        if st.button("Max", use_container_width=True):
+            st.session_state.view_mode = "Max"
+    
+    # Recalculate indices after slider
+    start_idx = max(end_idx - tail_len, 0)
+    date_str = format_bar_date(idx[end_idx], interval)
+    
+    # -------------------- RRG Chart with Curved Trails --------------------
+    # Determine axis range based on view mode
+    all_rr, all_mm = [], []
+    for t in tickers:
+        if st.session_state.chart_visible.get(t, True):
+            rr = rs_ratio_map[t].iloc[start_idx:end_idx+1].dropna()
+            mm = rs_mom_map[t].iloc[start_idx:end_idx+1].dropna()
+            all_rr.extend(rr.values)
+            all_mm.extend(mm.values)
+    
+    if st.session_state.view_mode == "Fit" and all_rr and all_mm:
+        padding = 1.0
+        x_min, x_max = min(all_rr) - padding, max(all_rr) + padding
+        y_min, y_max = min(all_mm) - padding, max(all_mm) + padding
+        # Ensure we show the 100 lines
+        x_min, x_max = min(x_min, 99), max(x_max, 101)
+        y_min, y_max = min(y_min, 99), max(y_max, 101)
+    elif st.session_state.view_mode == "Center":
+        x_min, x_max = 97, 103
+        y_min, y_max = 97, 103
+    else:  # Max
+        x_min, x_max = 94, 106
+        y_min, y_max = 94, 106
+    
+    fig = go.Figure()
+    
+    # Quadrant backgrounds
+    fig.add_shape(type="rect", x0=x_min, y0=y_min, x1=100, y1=100,
+                  fillcolor=QUADRANT_BG_COLORS["Lagging"], line_width=0, layer="below")
+    fig.add_shape(type="rect", x0=100, y0=y_min, x1=x_max, y1=100,
+                  fillcolor=QUADRANT_BG_COLORS["Weakening"], line_width=0, layer="below")
+    fig.add_shape(type="rect", x0=100, y0=100, x1=x_max, y1=y_max,
+                  fillcolor=QUADRANT_BG_COLORS["Leading"], line_width=0, layer="below")
+    fig.add_shape(type="rect", x0=x_min, y0=100, x1=100, y1=y_max,
+                  fillcolor=QUADRANT_BG_COLORS["Improving"], line_width=0, layer="below")
+    
+    # Center lines
+    fig.add_hline(y=100, line_dash="solid", line_color="rgba(80, 80, 80, 0.8)", line_width=1.5)
+    fig.add_vline(x=100, line_dash="solid", line_color="rgba(80, 80, 80, 0.8)", line_width=1.5)
+    
+    # Quadrant labels
+    label_offset_x = (x_max - x_min) * 0.15
+    label_offset_y = (y_max - y_min) * 0.08
+    fig.add_annotation(x=x_min + label_offset_x, y=y_max - label_offset_y, text="<b>IMPROVING</b>", showarrow=False,
+                       font=dict(size=13, color="#7c3aed", family="Plus Jakarta Sans"))
+    fig.add_annotation(x=x_max - label_offset_x, y=y_max - label_offset_y, text="<b>LEADING</b>", showarrow=False,
+                       font=dict(size=13, color="#16a34a", family="Plus Jakarta Sans"))
+    fig.add_annotation(x=x_max - label_offset_x, y=y_min + label_offset_y, text="<b>WEAKENING</b>", showarrow=False,
+                       font=dict(size=13, color="#ca8a04", family="Plus Jakarta Sans"))
+    fig.add_annotation(x=x_min + label_offset_x, y=y_min + label_offset_y, text="<b>LAGGING</b>", showarrow=False,
+                       font=dict(size=13, color="#dc2626", family="Plus Jakarta Sans"))
+    
+    # Plot each ticker with SMOOTH CURVED trails
+    for t in tickers:
+        if not st.session_state.chart_visible.get(t, True):
+            continue
+        
+        rr = rs_ratio_map[t].iloc[start_idx + 1 : end_idx + 1].dropna()
+        mm = rs_mom_map[t].iloc[start_idx + 1 : end_idx + 1].dropna()
+        rr, mm = rr.align(mm, join="inner")
+        if len(rr) < 2:
+            continue
+        
+        name = META.get(t, {}).get("name", t)
+        industry = META.get(t, {}).get("industry", "-")
+        
+        rr_last = float(rr.values[-1])
+        mm_last = float(mm.values[-1])
+        status = get_status(rr_last, mm_last)
+        color = status_color(rr_last, mm_last)
+        
+        px = tickers_data[t].reindex(idx).dropna()
+        price = float(px.iloc[end_idx]) if end_idx < len(px) else np.nan
+        chg = ((px.iloc[end_idx] / px.iloc[start_idx] - 1) * 100.0) if (end_idx < len(px) and start_idx < len(px)) else np.nan
+        rrg_power = float(np.hypot(rr_last - 100.0, mm_last - 100.0))
+        
+        hover_text = (
+            f"<b>{name}</b><br>" +
+            f"<b>Status:</b> {status}<br>" +
+            f"<b>RS-Ratio:</b> {rr_last:.2f}<br>" +
+            f"<b>RS-Momentum:</b> {mm_last:.2f}<br>" +
+            f"<b>Momentum Score:</b> {rrg_power:.2f}<br>" +
+            f"<b>Price:</b> ₹{price:,.2f}<br>" +
+            f"<b>Change %:</b> {chg:+.2f}%"
+        )
+        
+        # Create smooth curved trail using spline interpolation
+        x_pts = rr.values.astype(float)
+        y_pts = mm.values.astype(float)
+        
+        if len(x_pts) >= 3:
+            x_smooth, y_smooth = smooth_spline_curve(x_pts, y_pts, num_smooth=50)
+            
+            # Draw gradient trail with increasing width and opacity
+            n_segments = len(x_smooth) - 1
+            for i in range(n_segments):
+                seg_width = 1.0 + (i / n_segments) * 2.5
+                seg_opacity = 0.3 + (i / n_segments) * 0.7
+                
+                fig.add_trace(go.Scatter(
+                    x=[x_smooth[i], x_smooth[i+1]], 
+                    y=[y_smooth[i], y_smooth[i+1]],
+                    mode='lines',
+                    line=dict(color=color, width=seg_width),
+                    opacity=seg_opacity,
+                    hoverinfo='skip',
+                    showlegend=False
+                ))
+        else:
+            # Fallback for short trails
+            for i in range(len(x_pts) - 1):
+                seg_width = 1.5 + (i / max(1, len(x_pts) - 2)) * 2.0
+                seg_opacity = 0.4 + (i / max(1, len(x_pts) - 2)) * 0.6
+                
+                fig.add_trace(go.Scatter(
+                    x=[x_pts[i], x_pts[i+1]], 
+                    y=[y_pts[i], y_pts[i+1]],
+                    mode='lines',
+                    line=dict(color=color, width=seg_width),
+                    opacity=seg_opacity,
+                    hoverinfo='skip',
+                    showlegend=False
+                ))
+        
+        # Head marker (current position)
+        fig.add_trace(go.Scatter(
+            x=[rr_last], y=[mm_last],
+            mode='markers',
+            marker=dict(size=12, color=color, line=dict(color='white', width=2)),
+            text=[hover_text],
+            hoverinfo='text',
+            hoverlabel=dict(bgcolor='#1a1f2e', bordercolor=color, font=dict(family='Plus Jakarta Sans', size=12, color='white')),
+            showlegend=False
+        ))
+        
+        # Arrow showing direction
+        if len(x_pts) >= 2:
+            x0, y0 = float(x_pts[-2]), float(y_pts[-2])
+            x1, y1 = float(x_pts[-1]), float(y_pts[-1])
+            dx, dy = x1 - x0, y1 - y0
+            length = np.sqrt(dx**2 + dy**2)
+            
+            if length > 0.01:
+                arrow_scale = 0.3
+                ax_offset = (dx / length) * arrow_scale
+                ay_offset = (dy / length) * arrow_scale
+                
+                fig.add_annotation(
+                    x=x1, y=y1,
+                    ax=x1 - ax_offset, ay=y1 - ay_offset,
+                    xref='x', yref='y', axref='x', ayref='y',
+                    showarrow=True, arrowhead=2, arrowsize=1.5, arrowwidth=2.5, arrowcolor=color
+                )
+        
+        # Label
+        if show_labels:
+            fig.add_annotation(
+                x=rr_last, y=mm_last,
+                text=f"<b>{name}</b>",
+                showarrow=True, arrowhead=0, arrowsize=1, arrowwidth=1, arrowcolor=color,
+                ax=25, ay=-20,
+                font=dict(size=10, color='#1a1f2e', family="Plus Jakarta Sans"),
+                bgcolor='rgba(255,255,255,0.9)',
+                bordercolor=color, borderwidth=1, borderpad=2
+            )
+    
+    fig.update_layout(
+        title=dict(text=f"<b>Relative Rotation Graph</b> | {date_str}", font=dict(size=18, family='Plus Jakarta Sans', color='#e6eaee'), x=0.5),
+        xaxis=dict(title="<b>JdK RS-Ratio</b>", range=[x_min, x_max], showgrid=True, gridcolor='rgba(150,150,150,0.2)', zeroline=False, tickfont=dict(color='#b3bdc7', size=11), linecolor='#444'),
+        yaxis=dict(title="<b>JdK RS-Momentum</b>", range=[y_min, y_max], showgrid=True, gridcolor='rgba(150,150,150,0.2)', zeroline=False, tickfont=dict(color='#b3bdc7', size=11), linecolor='#444'),
+        plot_bgcolor='#fafafa',
+        paper_bgcolor='#0b0e13',
+        margin=dict(l=60, r=30, t=60, b=60),
+        height=650
+    )
+    
+    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': True, 'modeBarButtonsToRemove': ['lasso2d', 'select2d'], 'displaylogo': False})
 
-# Ranked symbols and rank-map used for BOTH the right panel and the table
-ranked_syms = [sym for sym, _ in perf]
-rank_dict = {sym: i for i, sym in enumerate(ranked_syms, start=1)}
+# -------------------- Table (Always shows ALL indices) --------------------
+def make_table_html(rows):
+    table_id = "rrg_tbl_" + str(abs(hash(str(len(rows)))) % 10000)
+    
+    headers = ["#", "Name", "Status", "Industry", "RS-Ratio", "RS-Mom", "Score", "Price", "Chg %"]
+    
+    th = "<tr>" + "".join(f'<th>{h}</th>' for h in headers) + "</tr>"
+    
+    tr_list = []
+    for r in rows:
+        rr_txt = f"{r['rs_ratio']:.2f}" if not pd.isna(r['rs_ratio']) else "-"
+        mm_txt = f"{r['rs_mom']:.2f}" if not pd.isna(r['rs_mom']) else "-"
+        score_txt = f"{r['score']:.2f}" if not pd.isna(r['score']) else "-"
+        price_txt = f"₹{r['price']:,.2f}" if not pd.isna(r['price']) else "-"
+        chg_txt = f"{r['chg']:+.2f}%" if not pd.isna(r['chg']) else "-"
+        chg_color = "#4ade80" if r.get('chg', 0) and r['chg'] > 0 else "#f87171" if r.get('chg', 0) and r['chg'] < 0 else "#9ca3af"
+        
+        tr_list.append(
+            f"<tr style='background:#0d1117;'>" +
+            f"<td style='text-align:center;color:#8b949e;font-weight:700;'>{r['rank']}</td>" +
+            f"<td class='rrg-name'><a href='{r['tv']}' target='_blank'>{r['name']}</a></td>" +
+            f"<td><span style='background:{r['bg']};color:#fff;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:700;'>{r['status']}</span></td>" +
+            f"<td style='color:#8b949e;font-size:12px;'>{r['industry']}</td>" +
+            f"<td>{rr_txt}</td>" +
+            f"<td>{mm_txt}</td>" +
+            f"<td style='color:#a78bfa;font-weight:600;'>{score_txt}</td>" +
+            f"<td>{price_txt}</td>" +
+            f"<td style='color:{chg_color};font-weight:600;'>{chg_txt}</td>" +
+            "</tr>"
+        )
+    
+    return f"""
+    <div class="rrg-wrap" style="max-height:400px;">
+        <table class="rrg-table">
+            <thead>{th}</thead>
+            <tbody>{''.join(tr_list)}</tbody>
+        </table>
+    </div>
+    """
 
-# -------------------- Plot (Full Width) --------------------
-# Helper function for label filtering
-def dist_last(t):
+# Build table rows for ALL tickers (not filtered by visibility)
+def ranking_value(t):
     rr_last = rs_ratio_map[t].iloc[end_idx]
     mm_last = rs_mom_map[t].iloc[end_idx]
     return float(np.hypot(rr_last - 100.0, mm_last - 100.0))
 
-allow_labels = {t for t, _ in sorted([(t, dist_last(t)) for t in tickers],
-                                     key=lambda x: x[1], reverse=True)[:label_top_n]} if show_labels else set()
+perf = [(t, ranking_value(t)) for t in tickers]
+perf.sort(key=lambda x: x[1], reverse=True)
+ranked_syms = [sym for sym, _ in perf]
 
-# Build interactive Plotly RRG chart with PASTEL quadrant colors like StockCharts
-fig = go.Figure()
-
-# Add quadrant backgrounds - PASTEL like StockCharts
-# Lagging (bottom-left) - Light Pink
-fig.add_shape(type="rect", x0=94, y0=94, x1=100, y1=100,
-              fillcolor=QUADRANT_BG_COLORS["Lagging"], line_width=0, layer="below")
-# Weakening (bottom-right) - Light Yellow/Cream
-fig.add_shape(type="rect", x0=100, y0=94, x1=106, y1=100,
-              fillcolor=QUADRANT_BG_COLORS["Weakening"], line_width=0, layer="below")
-# Leading (top-right) - Light Green/Mint
-fig.add_shape(type="rect", x0=100, y0=100, x1=106, y1=106,
-              fillcolor=QUADRANT_BG_COLORS["Leading"], line_width=0, layer="below")
-# Improving (top-left) - Light Purple/Lavender
-fig.add_shape(type="rect", x0=94, y0=100, x1=100, y1=106,
-              fillcolor=QUADRANT_BG_COLORS["Improving"], line_width=0, layer="below")
-
-# Add center lines - darker for visibility on pastel background
-fig.add_hline(y=100, line_dash="solid", line_color="rgba(100, 100, 100, 0.6)", line_width=1.5)
-fig.add_vline(x=100, line_dash="solid", line_color="rgba(100, 100, 100, 0.6)", line_width=1.5)
-
-# Add quadrant labels with darker colors for better visibility on pastel backgrounds
-fig.add_annotation(x=97, y=105.5, text="<b>IMPROVING</b>", showarrow=False,
-                   font=dict(size=14, color="#4a3a7a", family="Plus Jakarta Sans"))
-fig.add_annotation(x=103, y=105.5, text="<b>LEADING</b>", showarrow=False,
-                   font=dict(size=14, color="#0d5c2e", family="Plus Jakarta Sans"))
-fig.add_annotation(x=103, y=94.5, text="<b>WEAKENING</b>", showarrow=False,
-                   font=dict(size=14, color="#6a5a0a", family="Plus Jakarta Sans"))
-fig.add_annotation(x=97, y=94.5, text="<b>LAGGING</b>", showarrow=False,
-                   font=dict(size=14, color="#8a2a2a", family="Plus Jakarta Sans"))
-
-# Plot each ticker with THIN gradient trail width like StockCharts
-for t in tickers:
-    if t not in st.session_state.visible_set:
-        continue
-    rr = rs_ratio_map[t].iloc[start_idx + 1 : end_idx + 1].dropna()
-    mm = rs_mom_map[t].iloc[start_idx + 1 : end_idx + 1].dropna()
-    rr, mm = rr.align(mm, join="inner")
-    if len(rr) < 2:
-        continue
-    
-    name = META.get(t, {}).get("name", t)
-    industry = META.get(t, {}).get("industry", "-")
-    
-    # Get current values for hover
-    rr_last = float(rr.values[-1])
-    mm_last = float(mm.values[-1])
-    status = get_status(rr_last, mm_last)
-    
-    # Color based on current quadrant (head position)
-    color = status_bg_color(rr_last, mm_last)
-    
-    # Calculate price and change
-    px = tickers_data[t].reindex(idx).dropna()
-    price = float(px.iloc[end_idx]) if end_idx < len(px) else np.nan
-    chg = ((px.iloc[end_idx] / px.iloc[start_idx] - 1) * 100.0) if (end_idx < len(px) and start_idx < len(px)) else np.nan
-    
-    # Calculate Momentum Score (distance from center, higher = stronger)
-    rrg_power = float(np.hypot(rr_last - 100.0, mm_last - 100.0))
-    
-    # Build hover text for last point
-    hover_text = (
-        f"<b>{name}</b><br>" +
-        f"<b>Status:</b> {status}<br>" +
-        f"<b>RS-Ratio:</b> {rr_last:.2f}<br>" +
-        f"<b>RS-Momentum:</b> {mm_last:.2f}<br>" +
-        f"<b>Momentum Score:</b> {rrg_power:.2f}<br>" +
-        f"<b>Price:</b> ₹{price:,.2f}<br>" +
-        f"<b>Change %:</b> {chg:+.2f}%<br>" +
-        f"<b>Industry:</b> {industry}"
-    )
-    
-    # Draw trail segments with gradient width - slightly thicker for visibility
-    n_points = len(rr)
-    for i in range(n_points - 1):
-        # Width increases from 1.5 to 3.0 along the trail
-        seg_width = 1.5 + (i / max(1, n_points - 2)) * 1.5
-        # Opacity increases from 0.5 to 1.0
-        seg_opacity = 0.5 + (i / max(1, n_points - 2)) * 0.5
-        
-        fig.add_trace(go.Scatter(
-            x=[rr.values[i], rr.values[i+1]], 
-            y=[mm.values[i], mm.values[i+1]],
-            mode='lines',
-            line=dict(color=color, width=seg_width),
-            opacity=seg_opacity,
-            hoverinfo='skip',
-            showlegend=False
-        ))
-    
-    # Trail points - small dots, larger for current head
-    sizes = [5] * (len(rr) - 1) + [12]
-    
-    fig.add_trace(go.Scatter(
-        x=rr.values, y=mm.values,
-        mode='markers',
-        marker=dict(
-            size=sizes,
-            color=color,
-            line=dict(color='rgba(255,255,255,0.8)', width=1)
-        ),
-        text=[hover_text] * len(rr),
-        hoverinfo='text',
-        hoverlabel=dict(
-            bgcolor='#1a1f2e',
-            bordercolor=color,
-            font=dict(family='Plus Jakarta Sans, sans-serif', size=12, color='white')
-        ),
-        showlegend=False
-    ))
-    
-    # Add arrow head showing direction
-    if len(rr) >= 2:
-        # Calculate direction from second-to-last to last point
-        x0, y0 = float(rr.values[-2]), float(mm.values[-2])
-        x1, y1 = float(rr.values[-1]), float(mm.values[-1])
-        
-        # Calculate arrow direction
-        dx = x1 - x0
-        dy = y1 - y0
-        length = np.sqrt(dx**2 + dy**2)
-        
-        if length > 0.01:  # Only add arrow if there's movement
-            # Normalize and scale arrow
-            arrow_scale = 0.4
-            ax_offset = (dx / length) * arrow_scale
-            ay_offset = (dy / length) * arrow_scale
-            
-            fig.add_annotation(
-                x=x1, y=y1,
-                ax=x1 - ax_offset, ay=y1 - ay_offset,
-                xref='x', yref='y',
-                axref='x', ayref='y',
-                showarrow=True,
-                arrowhead=2,
-                arrowsize=1.5,
-                arrowwidth=2,
-                arrowcolor=color,
-                opacity=1.0
-            )
-    
-    # Add label for top N by distance - IMPROVED VISIBILITY
-    if show_labels and t in allow_labels:
-        # Use darker color that matches quadrant but is readable
-        label_colors = {
-            "Leading": "#0d5c2e",      # Dark green
-            "Improving": "#4a3a7a",    # Dark purple
-            "Weakening": "#6a5a0a",    # Dark gold
-            "Lagging": "#8a2a2a",      # Dark red
-        }
-        label_color = label_colors.get(status, "#333")
-        
-        fig.add_annotation(
-            x=rr_last, y=mm_last,
-            text=f"<b>{name}</b>",
-            showarrow=True,
-            arrowhead=0,
-            arrowsize=1,
-            arrowwidth=1,
-            arrowcolor=label_color,
-            ax=20, ay=-15,
-            font=dict(size=11, color=label_color, family="Plus Jakarta Sans"),
-            bgcolor='rgba(255,255,255,0.85)',
-            bordercolor=label_color,
-            borderwidth=1,
-            borderpad=3
-        )
-
-# Update layout with LIGHT chart area but visible labels on dark surroundings
-fig.update_layout(
-    title=dict(
-        text=f"<b>Relative Rotation Graph</b>",
-        font=dict(size=20, family='Plus Jakarta Sans, sans-serif', color='#e6eaee'),
-        x=0.5
-    ),
-    xaxis=dict(
-        title=dict(text="<b>JdK RS-Ratio</b>", font=dict(size=14, color='#e6eaee')),
-        range=[94, 106],
-        showgrid=True,
-        gridcolor='rgba(150,150,150,0.3)',
-        zeroline=False,
-        tickfont=dict(color='#b3bdc7', size=11),
-        linecolor='#555',
-    ),
-    yaxis=dict(
-        title=dict(text="<b>JdK RS-Momentum</b>", font=dict(size=14, color='#e6eaee')),
-        range=[94, 106],
-        showgrid=True,
-        gridcolor='rgba(150,150,150,0.3)',
-        zeroline=False,
-        tickfont=dict(color='#b3bdc7', size=11),
-        linecolor='#555',
-    ),
-    plot_bgcolor='#fafafa',
-    paper_bgcolor='#0b0e13',
-    margin=dict(l=70, r=40, t=70, b=70),
-    hoverlabel=dict(align='left'),
-    height=700  # Larger chart
-)
-
-st.plotly_chart(fig, use_container_width=True, config={
-    'displayModeBar': True,
-    'modeBarButtonsToRemove': ['lasso2d', 'select2d'],
-    'displaylogo': False
-})
-
-# -------------------- Table --------------------
-def make_interactive_table(rows):
-    """Generate a fully self-contained interactive HTML table with sorting and filtering"""
-    table_id = "rrg_table_" + str(abs(hash(str(len(rows)))) % 10000)
-    
-    headers = ["Ranking", "Name", "Status", "Industry", "RS-Ratio", "RS-Momentum", "Momentum Score", "Price", "Change %"]
-    header_keys = ["rank", "name", "status", "industry", "rs_ratio", "rs_mom", "rrg_power", "price", "chg"]
-    
-    # Build header with sort icons
-    th_cells = []
-    for i, h in enumerate(headers):
-        sort_class = "sort-asc" if i == 0 else ""
-        th_cells.append(f'<th class="{sort_class}" data-col="{i}" data-key="{header_keys[i]}"><span>{h}</span><span class="sort-icon"></span></th>')
-    th = "<tr>" + "".join(th_cells) + "</tr>"
-    
-    # Build rows with data attributes for filtering/sorting
-    tr_list = []
-    for r in rows:
-        rr_val = r["rs_ratio"] if not pd.isna(r["rs_ratio"]) else 0
-        mm_val = r["rs_mom"] if not pd.isna(r["rs_mom"]) else 0
-        price_val = r["price"] if not pd.isna(r["price"]) else 0
-        chg_val = r["chg"] if not pd.isna(r["chg"]) else 0
-        
-        # Calculate Momentum Score (distance from center)
-        rrg_power_val = float(np.hypot(rr_val - 100.0, mm_val - 100.0))
-        
-        rr_txt = "-" if pd.isna(r["rs_ratio"]) else f"{r['rs_ratio']:.2f}"
-        mm_txt = "-" if pd.isna(r["rs_mom"]) else f"{r['rs_mom']:.2f}"
-        rrg_power_txt = f"{rrg_power_val:.2f}"
-        price_txt = "-" if pd.isna(r["price"]) else f"₹{r['price']:,.2f}"
-        chg_txt = "-" if pd.isna(r["chg"]) else f"{r['chg']:+.2f}%"
-        
-        # Color for change % column
-        chg_color = "#4ade80" if r.get("chg", 0) and r.get("chg", 0) > 0 else "#f87171" if r.get("chg", 0) and r.get("chg", 0) < 0 else "#9ca3af"
-        
-        # Status badge color (only for status column)
-        status_bg = r['bg']
-        status_fg = r['fg']
-        
-        # Escape single quotes in name for data attribute
-        safe_name = r['name'].replace("'", "&#39;").lower()
-        safe_industry = r['industry'].replace("'", "&#39;").lower()
-        
-        tr_list.append(
-            f"<tr class='rrg-row' " +
-            f"data-rank='{r['rank']}' data-name='{safe_name}' data-status='{r['status'].lower()}' " +
-            f"data-industry='{safe_industry}' data-rs_ratio='{rr_val}' data-rs_mom='{mm_val}' " +
-            f"data-rrg_power='{rrg_power_val}' data-price='{price_val}' data-chg='{chg_val}'>" +
-            f"<td class='rank-cell'>{r['rank']}</td>" +
-            f"<td class='rrg-name'><a href='{r['tv']}' target='_blank'>{r['name']}</a></td>" +
-            f"<td><span class='status-badge' style='background:{status_bg}; color:{status_fg}'>{r['status']}</span></td>" +
-            f"<td class='industry-cell'>{r['industry']}</td>" +
-            f"<td>{rr_txt}</td>" +
-            f"<td>{mm_txt}</td>" +
-            f"<td class='power-cell'>{rrg_power_txt}</td>" +
-            f"<td>{price_txt}</td>" +
-            f"<td class='chg-cell' style='color:{chg_color}'>{chg_txt}</td>" +
-            "</tr>"
-        )
-    
-    # Get unique values for dropdowns
-    statuses = sorted(set(r['status'] for r in rows))
-    industries = sorted(set(r['industry'] for r in rows if r['industry'] != '-'))
-    
-    status_options = '<option value="">All Statuses</option>' + ''.join(f'<option value="{s.lower()}">{s}</option>' for s in statuses)
-    industry_options = '<option value="">All Industries</option>' + ''.join(f'<option value="{ind.lower()}">{ind}</option>' for ind in industries)
-    
-    # Calculate height based on rows
-    table_height = min(650, 90 + len(rows) * 44)
-    
-    html_content = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <style>
-            @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
-            
-            * {{
-                box-sizing: border-box;
-                margin: 0;
-                padding: 0;
-            }}
-            
-            body {{
-                font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
-                background: #10141b;
-                color: #e6eaee;
-                padding: 12px;
-            }}
-            
-            .filter-row {{
-                display: flex;
-                gap: 10px;
-                margin-bottom: 12px;
-                flex-wrap: wrap;
-                align-items: center;
-            }}
-            
-            .filter-row input, .filter-row select {{
-                background: #0b0e13;
-                border: 1px solid #1f2732;
-                color: #e6eaee;
-                padding: 8px 12px;
-                border-radius: 8px;
-                font-family: inherit;
-                font-size: 13px;
-            }}
-            
-            .filter-row input:focus, .filter-row select:focus {{
-                outline: none;
-                border-color: #7a5cff;
-            }}
-            
-            .filter-row input::placeholder {{
-                color: #b3bdc7;
-            }}
-            
-            .filter-badge {{
-                background: #7a5cff;
-                color: white;
-                padding: 5px 12px;
-                border-radius: 20px;
-                font-size: 12px;
-                font-weight: 700;
-            }}
-            
-            .table-wrap {{
-                max-height: {table_height - 60}px;
-                overflow: auto;
-                border: 1px solid #1f2732;
-                border-radius: 10px;
-            }}
-            
-            table {{
-                width: 100%;
-                border-collapse: collapse;
-            }}
-            
-            th, td {{
-                border-bottom: 1px solid #1a2230;
-                padding: 10px 12px;
-                font-size: 13px;
-                text-align: left;
-            }}
-            
-            th {{
-                position: sticky;
-                top: 0;
-                z-index: 2;
-                background: #121823;
-                color: #b3bdc7;
-                font-weight: 800;
-                cursor: pointer;
-                user-select: none;
-                transition: background 0.2s;
-                white-space: nowrap;
-            }}
-            
-            th:hover {{
-                background: #1a2233;
-            }}
-            
-            .sort-icon {{
-                margin-left: 6px;
-                opacity: 0.5;
-                font-size: 10px;
-            }}
-            
-            th.sort-asc .sort-icon::after {{ content: '▲'; opacity: 1; }}
-            th.sort-desc .sort-icon::after {{ content: '▼'; opacity: 1; }}
-            th:not(.sort-asc):not(.sort-desc) .sort-icon::after {{ content: '⇅'; }}
-            
-            /* Row styling - neutral background */
-            .rrg-row {{
-                background: #0d1117;
-                transition: background 0.15s;
-            }}
-            
-            .rrg-row:hover {{
-                background: #161b22;
-            }}
-            
-            .rrg-row:nth-child(even) {{
-                background: #0f1419;
-            }}
-            
-            .rrg-row:nth-child(even):hover {{
-                background: #161b22;
-            }}
-            
-            /* Name column link */
-            .rrg-name a {{
-                color: #58a6ff;
-                text-decoration: none;
-                font-weight: 600;
-            }}
-            
-            .rrg-name a:hover {{
-                text-decoration: underline;
-                color: #79b8ff;
-            }}
-            
-            /* Rank column */
-            .rank-cell {{
-                font-weight: 700;
-                color: #8b949e;
-                text-align: center;
-                width: 70px;
-            }}
-            
-            /* Status badge - this is where the color shows */
-            .status-badge {{
-                display: inline-block;
-                padding: 4px 10px;
-                border-radius: 6px;
-                font-size: 12px;
-                font-weight: 700;
-                text-transform: uppercase;
-                letter-spacing: 0.3px;
-            }}
-            
-            /* Industry column */
-            .industry-cell {{
-                color: #8b949e;
-                font-size: 12px;
-            }}
-            
-            /* Change % column */
-            .chg-cell {{
-                font-weight: 700;
-                text-align: right;
-            }}
-            
-            /* Momentum Score column */
-            .power-cell {{
-                font-weight: 600;
-                color: #a78bfa;
-            }}
-            
-            tr.hidden-row {{
-                display: none;
-            }}
-            
-            /* Scrollbar */
-            .table-wrap::-webkit-scrollbar {{
-                height: 10px;
-                width: 10px;
-            }}
-            .table-wrap::-webkit-scrollbar-thumb {{
-                background: #2e3745;
-                border-radius: 8px;
-            }}
-            .table-wrap::-webkit-scrollbar-track {{
-                background: #10141b;
-            }}
-        </style>
-    </head>
-    <body>
-        <div class="filter-row">
-            <input type="text" id="{table_id}_search" placeholder="🔍 Search by name..." style="min-width: 180px;">
-            <select id="{table_id}_status">{status_options}</select>
-            <select id="{table_id}_industry">{industry_options}</select>
-            <span class="filter-badge" id="{table_id}_count">{len(rows)} / {len(rows)}</span>
-        </div>
-        <div class="table-wrap">
-            <table id="{table_id}">
-                <thead>{th}</thead>
-                <tbody>{''.join(tr_list)}</tbody>
-            </table>
-        </div>
-        
-        <script>
-        (function() {{
-            const table = document.getElementById('{table_id}');
-            const headers = table.querySelectorAll('th');
-            const tbody = table.querySelector('tbody');
-            const rows = Array.from(tbody.querySelectorAll('tr'));
-            const searchInput = document.getElementById('{table_id}_search');
-            const statusFilter = document.getElementById('{table_id}_status');
-            const industryFilter = document.getElementById('{table_id}_industry');
-            const countBadge = document.getElementById('{table_id}_count');
-            
-            let currentSort = {{ col: 0, asc: true }};
-            
-            function updateCount() {{
-                const visible = rows.filter(r => !r.classList.contains('hidden-row')).length;
-                countBadge.textContent = visible + ' / ' + rows.length;
-            }}
-            
-            function sortTable(colIndex, key) {{
-                const isNumeric = ['rank', 'rs_ratio', 'rs_mom', 'rrg_power', 'price', 'chg'].includes(key);
-                const asc = currentSort.col === colIndex ? !currentSort.asc : (colIndex === 0);
-                currentSort = {{ col: colIndex, asc: asc }};
-                
-                headers.forEach((h, i) => {{
-                    h.classList.remove('sort-asc', 'sort-desc');
-                    if (i === colIndex) {{
-                        h.classList.add(asc ? 'sort-asc' : 'sort-desc');
-                    }}
-                }});
-                
-                rows.sort((a, b) => {{
-                    let aVal = a.dataset[key] || '';
-                    let bVal = b.dataset[key] || '';
-                    
-                    if (isNumeric) {{
-                        aVal = parseFloat(aVal) || 0;
-                        bVal = parseFloat(bVal) || 0;
-                        return asc ? aVal - bVal : bVal - aVal;
-                    }} else {{
-                        return asc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
-                    }}
-                }});
-                
-                rows.forEach(row => tbody.appendChild(row));
-            }}
-            
-            function filterTable() {{
-                const searchTerm = searchInput.value.toLowerCase();
-                const statusTerm = statusFilter.value;
-                const industryTerm = industryFilter.value;
-                
-                rows.forEach(row => {{
-                    const name = row.dataset.name || '';
-                    const status = row.dataset.status || '';
-                    const industry = row.dataset.industry || '';
-                    
-                    const matchesSearch = !searchTerm || name.includes(searchTerm);
-                    const matchesStatus = !statusTerm || status === statusTerm;
-                    const matchesIndustry = !industryTerm || industry === industryTerm;
-                    
-                    if (matchesSearch && matchesStatus && matchesIndustry) {{
-                        row.classList.remove('hidden-row');
-                    }} else {{
-                        row.classList.add('hidden-row');
-                    }}
-                }});
-                
-                updateCount();
-            }}
-            
-            headers.forEach((header, index) => {{
-                header.addEventListener('click', () => {{
-                    sortTable(index, header.dataset.key);
-                }});
-            }});
-            
-            searchInput.addEventListener('input', filterTable);
-            statusFilter.addEventListener('change', filterTable);
-            industryFilter.addEventListener('change', filterTable);
-            
-            updateCount();
-        }})();
-        </script>
-    </body>
-    </html>
-    """
-    
-    return html_content, table_height
-
-# Build table rows IN RANK ORDER so it matches the right panel
 rows = []
-for t in ranked_syms:
-    rr = float(rs_ratio_map[t].iloc[end_idx])
-    mm = float(rs_mom_map[t].iloc[end_idx])
+for rank, t in enumerate(ranked_syms, 1):
+    rr = float(rs_ratio_map[t].iloc[end_idx]) if not pd.isna(rs_ratio_map[t].iloc[end_idx]) else np.nan
+    mm = float(rs_mom_map[t].iloc[end_idx]) if not pd.isna(rs_mom_map[t].iloc[end_idx]) else np.nan
     status = get_status(rr, mm)
-    bg = status_bg_color(rr, mm)
-    fg = "#ffffff"
+    bg = status_color(rr, mm)
     px = tickers_data[t].reindex(idx).dropna()
     price = float(px.iloc[end_idx]) if end_idx < len(px) else np.nan
     chg = ((px.iloc[end_idx] / px.iloc[start_idx] - 1) * 100.0) if (end_idx < len(px) and start_idx < len(px)) else np.nan
+    score = np.hypot(rr - 100, mm - 100) if not (pd.isna(rr) or pd.isna(mm)) else np.nan
+    
     rows.append({
-        "rank": rank_dict.get(t, ""),
+        "rank": rank,
         "name": META.get(t, {}).get("name", t),
         "status": status,
         "industry": META.get(t, {}).get("industry", "-"),
         "rs_ratio": rr,
         "rs_mom": mm,
+        "score": score,
         "price": price,
         "chg": chg,
         "bg": bg,
-        "fg": fg,
         "tv": tv_link_for_symbol(t),
     })
 
-with st.expander("📊 Table", expanded=True):
-    table_html, table_height = make_interactive_table(rows)
-    components.html(table_html, height=table_height, scrolling=False)
+with st.expander("📊 Full Rankings Table", expanded=True):
+    st.markdown(make_table_html(rows), unsafe_allow_html=True)
 
 # -------------------- Downloads --------------------
-def export_ranks_csv(perf_sorted):
-    out=[]
-    for t,_m in perf_sorted:
-        rr=float(rs_ratio_map[t].iloc[end_idx]); mm=float(rs_mom_map[t].iloc[end_idx])
-        out.append((rank_dict[t], t, META.get(t,{}).get("name",t), META.get(t,{}).get("industry","-"),
-                    _m, rr, mm, get_status(rr, mm)))
-    df=pd.DataFrame(out, columns=["ranking","symbol","name","industry","rank_metric","rs_ratio","rs_momentum","status"])
-    buf=io.StringIO(); df.to_csv(buf, index=False); return buf.getvalue().encode()
-
-def export_table_csv(rows_):
-    df=pd.DataFrame([{
+def export_csv(rows_):
+    df = pd.DataFrame([{
         "ranking": r["rank"],
         "name": r["name"],
         "industry": r["industry"],
         "status": r["status"],
         "rs_ratio": r["rs_ratio"],
         "rs_momentum": r["rs_mom"],
+        "momentum_score": r["score"],
         "price": r["price"],
-        "pct_change_tail": r["chg"],
+        "pct_change": r["chg"],
     } for r in rows_])
-    buf=io.StringIO(); df.to_csv(buf, index=False); return buf.getvalue().encode()
+    buf = io.StringIO()
+    df.to_csv(buf, index=False)
+    return buf.getvalue().encode()
 
-c1, c2 = st.columns(2)
-with c1:
-    st.download_button("📥 Download Ranks CSV", data=export_ranks_csv(perf),
-                       file_name=f"ranks_{date_str}.csv", mime="text/csv", use_container_width=True)
-with c2:
-    st.download_button("📥 Download Table CSV", data=export_table_csv(rows),
-                       file_name=f"table_{date_str}.csv", mime="text/csv", use_container_width=True)
+st.download_button("📥 Download CSV", data=export_csv(rows), file_name=f"rrg_{date_str}.csv", mime="text/csv", use_container_width=True)
 
-st.caption("Names open TradingView. Use Play/Pause to watch rotation; Speed controls frame interval; Loop wraps frames.")
+st.caption("Click index names to open TradingView. Use Play to animate rotation over time. Checkboxes control chart visibility only - table always shows all indices.")
