@@ -39,23 +39,6 @@ THEMES = {
         "table_row": "#0d1117",
         "table_row_alt": "#121823",
     },
-    "light": {
-        "name": "Light Classic",
-        "bg": "#f7fafc",
-        "bg_card": "#563A9C",
-        "bg_secondary": "#edf2f7",
-        "bg_control": "#e2e8f0",
-        "border": "#cbd5e0",
-        "text": "#1a202c",
-        "text_secondary": "#4a5568",
-        "text_muted": "#718096",
-        "accent": "#3182ce",
-        "accent_hover": "#2c5282",
-        "success": "#38a169",
-        "table_header": "#e2e8f0",
-        "table_row": "#ffffff",
-        "table_row_alt": "#f7fafc",
-    },
     "matrix": {
         "name": "Matrix Green",
         "bg": "#0a0f0a",
@@ -900,4 +883,5 @@ else:
     """, unsafe_allow_html=True)
 
 st.markdown(f"<div style='text-align:center;color:{theme['text_muted']};font-size:10px;margin-top:10px;'>RRG Dashboard | Theme: {theme['name']} | <a href='https://www.optuma.com/blog/scripting-for-rrgs' style='color:{theme['accent']}'>Optuma Reference</a></div>", unsafe_allow_html=True)
+
 
