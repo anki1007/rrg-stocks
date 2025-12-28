@@ -285,6 +285,7 @@ div[data-baseweb="select"] span {{
 # ============================================================================
 BENCHMARKS = {
     "NIFTY 50": "^NSEI",
+    "NIFTY 100": "^CNX100",
     "NIFTY 200": "^CNX200",
     "NIFTY 500": "^CRSLDX"
 }
@@ -515,47 +516,47 @@ default_csv = next((i for i, c in enumerate(csv_files) if 'NIFTY200' in c.upper(
 cols = st.columns([1.1, 1.1, 0.7, 0.55, 0.45, 0.55, 0.4, 0.4, 0.4, 0.45, 0.85])
 
 with cols[0]:
-    st.markdown(f"<p style='font-size:9px;color:{theme['text_muted']};margin:0 0 1px 0;font-weight:600;letter-spacing:0.5px;'>BENCHMARK</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='font-size:12px;color:{theme['text_muted']};margin:0 0 1px 0;font-weight:600;letter-spacing:0.5px;'>INDICES</p>", unsafe_allow_html=True)
     csv_selected = st.selectbox("b", csv_files, index=default_csv, key="csv", label_visibility="collapsed")
 
 with cols[1]:
-    st.markdown(f"<p style='font-size:9px;color:{theme['text_muted']};margin:0 0 1px 0;font-weight:600;letter-spacing:0.5px;'>VS INDEX</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='font-size:12px;color:{theme['text_muted']};margin:0 0 1px 0;font-weight:600;letter-spacing:0.5px;'>VS BENCHMARK</p>", unsafe_allow_html=True)
     bench_name = st.selectbox("v", list(BENCHMARKS.keys()), index=2, key="bench", label_visibility="collapsed")
 
 with cols[2]:
-    st.markdown(f"<p style='font-size:9px;color:{theme['text_muted']};margin:0 0 1px 0;font-weight:600;letter-spacing:0.5px;'>TIMEFRAME</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='font-size:12px;color:{theme['text_muted']};margin:0 0 1px 0;font-weight:600;letter-spacing:0.5px;'>TIMEFRAME</p>", unsafe_allow_html=True)
     tf_name = st.selectbox("t", list(TIMEFRAMES.keys()), index=5, key="tf", label_visibility="collapsed")
 
 with cols[3]:
-    st.markdown(f"<p style='font-size:9px;color:{theme['text_muted']};margin:0 0 1px 0;font-weight:600;letter-spacing:0.5px;'>RANGE</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='font-size:12px;color:{theme['text_muted']};margin:0 0 1px 0;font-weight:600;letter-spacing:0.5px;'>RANGE</p>", unsafe_allow_html=True)
     date_range = st.selectbox("d", list(DATE_RANGES.keys()), index=1, key="dr", label_visibility="collapsed")
 
 with cols[4]:
-    st.markdown(f"<p style='font-size:9px;color:{theme['text_muted']};margin:0 0 1px 0;font-weight:600;letter-spacing:0.5px;'>COUNTS</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='font-size:12px;color:{theme['text_muted']};margin:0 0 1px 0;font-weight:600;letter-spacing:0.5px;'>COUNTS</p>", unsafe_allow_html=True)
     trail_length = st.number_input("c", min_value=1, max_value=14, value=5, key="trail", label_visibility="collapsed")
 
 with cols[5]:
-    st.markdown(f"<p style='font-size:9px;color:{theme['text_muted']};margin:0 0 1px 0;'>&nbsp;</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='font-size:12px;color:{theme['text_muted']};margin:0 0 1px 0;'>&nbsp;</p>", unsafe_allow_html=True)
     st.markdown(f"<div style='background:{theme['accent']};color:white;padding:5px 6px;border-radius:4px;text-align:center;font-weight:700;font-size:11px;white-space:nowrap;'>{trail_length}D</div>", unsafe_allow_html=True)
 
 with cols[6]:
-    st.markdown(f"<p style='font-size:9px;color:{theme['text_muted']};margin:0 0 1px 0;'>&nbsp;</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='font-size:12px;color:{theme['text_muted']};margin:0 0 1px 0;'>&nbsp;</p>", unsafe_allow_html=True)
     load_btn = st.button("Load", key="load", use_container_width=True)
 
 with cols[7]:
-    st.markdown(f"<p style='font-size:9px;color:{theme['text_muted']};margin:0 0 1px 0;'>&nbsp;</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='font-size:12px;color:{theme['text_muted']};margin:0 0 1px 0;'>&nbsp;</p>", unsafe_allow_html=True)
     play_btn = st.button("▶", key="play", use_container_width=True)
 
 with cols[8]:
-    st.markdown(f"<p style='font-size:9px;color:{theme['text_muted']};margin:0 0 1px 0;'>&nbsp;</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='font-size:12px;color:{theme['text_muted']};margin:0 0 1px 0;'>&nbsp;</p>", unsafe_allow_html=True)
     stop_btn = st.button("⏹", key="stop", use_container_width=True)
 
 with cols[9]:
-    st.markdown(f"<p style='font-size:9px;color:{theme['text_muted']};margin:0 0 1px 0;'>&nbsp;</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='font-size:12px;color:{theme['text_muted']};margin:0 0 1px 0;'>&nbsp;</p>", unsafe_allow_html=True)
     label_on = st.checkbox("Label", value=True, key="lbl")
 
 with cols[10]:
-    st.markdown(f"<p style='font-size:9px;color:{theme['text_muted']};margin:0 0 1px 0;font-weight:600;letter-spacing:0.5px;'>THEME</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='font-size:12px;color:{theme['text_muted']};margin:0 0 1px 0;font-weight:600;letter-spacing:0.5px;'>THEME</p>", unsafe_allow_html=True)
     theme_choice = st.selectbox("th", list(THEMES.keys()), 
                                 index=list(THEMES.keys()).index(st.session_state.theme),
                                 format_func=lambda x: THEMES[x]['name'],
@@ -841,3 +842,4 @@ else:
     """, unsafe_allow_html=True)
 
 st.markdown(f"<div style='text-align:center;color:{theme['text_muted']};font-size:10px;margin-top:10px;'>RRG Dashboard | Theme: {theme['name']} | <a href='https://www.optuma.com/blog/scripting-for-rrgs' style='color:{theme['accent']}'>Optuma Reference</a></div>", unsafe_allow_html=True)
+
