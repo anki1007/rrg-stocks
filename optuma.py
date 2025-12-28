@@ -640,11 +640,17 @@ if st.session_state.df_cache is not None:
             
             df_graph = select_graph_stocks(df, min_stocks=40)
             
-            # Calculate label candidates (top N by distance)
+            # Calculate label candidates - TOP N FROM EACH QUADRANT (ensures all quadrants have labels)
             if show_labels:
-                label_candidates = set(
-                    df_graph.nlargest(label_top_n, 'Distance')['Symbol'].tolist()
-                )
+                label_candidates = set()
+                labels_per_quadrant = max(10, label_top_n // 15)  # Distribute across quadrants
+                
+                for status in ["Leading", "Improving", "Weakening", "Lagging"]:
+                    df_quad = df_graph[df_graph['Status'] == status]
+                    if not df_quad.empty:
+                        # Get top stocks by distance in this quadrant
+                        top_in_quad = df_quad.nlargest(labels_per_quadrant, 'Distance')['Symbol'].tolist()
+                        label_candidates.update(top_in_quad)
             else:
                 label_candidates = set()
             
