@@ -573,40 +573,67 @@ for key, default in [("load_clicked", False), ("df_cache", None), ("rs_history_c
         st.session_state[key] = default
 
 # ============================================================================
-# CONTROL BAR - Compact Inline Layout
+# CONTROL BAR - Optuma Style with Clear Labels
 # ============================================================================
 csv_files = list_csv_from_github() or ["NIFTY200"]
 default_csv = next((i for i, c in enumerate(csv_files) if 'NIFTY200' in c.upper()), 0)
 
-# Row 1: All controls inline
-c1, c2, c3, c4, c5, c6, c7, c8 = st.columns([1.2, 1.2, 1, 1, 0.8, 0.8, 1.8, 1.2])
+# Header row with labels
+st.markdown(f"""
+<div style="background:{theme['bg_control']};border:1px solid {theme['border']};border-radius:6px 6px 0 0;padding:8px 16px;border-bottom:none;">
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div style="display:flex;align-items:center;gap:40px;">
+            <div>
+                <span style="font-size:10px;font-weight:600;color:{theme['text_muted']};text-transform:uppercase;letter-spacing:1px;">Indices</span>
+            </div>
+            <div>
+                <span style="font-size:10px;font-weight:600;color:{theme['text_muted']};text-transform:uppercase;letter-spacing:1px;">vs Benchmark</span>
+            </div>
+            <div>
+                <span style="font-size:10px;font-weight:600;color:{theme['text_muted']};text-transform:uppercase;letter-spacing:1px;">Timeframe</span>
+            </div>
+            <div>
+                <span style="font-size:10px;font-weight:600;color:{theme['text_muted']};text-transform:uppercase;letter-spacing:1px;">Date Range</span>
+            </div>
+            <div>
+                <span style="font-size:10px;font-weight:600;color:{theme['text_muted']};text-transform:uppercase;letter-spacing:1px;">Counts</span>
+            </div>
+        </div>
+        <div>
+            <span style="font-size:10px;font-weight:600;color:{theme['text_muted']};text-transform:uppercase;letter-spacing:1px;">Theme</span>
+        </div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
-with c1:
-    st.markdown(f"<span style='font-size:10px;color:{theme['text_muted']};font-weight:600;'>BENCHMARK</span>", unsafe_allow_html=True)
-    csv_selected = st.selectbox("b", csv_files, index=default_csv, key="csv", label_visibility="collapsed")
+# Controls row inside styled container
+st.markdown(f"""<div style="background:{theme['bg_control']};border:1px solid {theme['border']};border-radius:0 0 6px 6px;padding:8px 16px;margin-bottom:10px;border-top:none;">""", unsafe_allow_html=True)
 
-with c2:
-    st.markdown(f"<span style='font-size:10px;color:{theme['text_muted']};font-weight:600;'>VS INDEX</span>", unsafe_allow_html=True)
-    bench_name = st.selectbox("v", list(BENCHMARKS.keys()), index=2, key="bench", label_visibility="collapsed")
+col1, col2, col3, col4, col5, col6, col7, col8 = st.columns([1.3, 1.3, 1.1, 1.0, 0.7, 0.9, 2.0, 1.3])
 
-with c3:
-    st.markdown(f"<span style='font-size:10px;color:{theme['text_muted']};font-weight:600;'>TIMEFRAME</span>", unsafe_allow_html=True)
-    tf_name = st.selectbox("t", list(TIMEFRAMES.keys()), index=5, key="tf", label_visibility="collapsed")
+with col1:
+    csv_selected = st.selectbox("benchmark_sel", csv_files, index=default_csv, key="csv", label_visibility="collapsed")
 
-with c4:
-    st.markdown(f"<span style='font-size:10px;color:{theme['text_muted']};font-weight:600;'>DATE RANGE</span>", unsafe_allow_html=True)
-    date_range = st.selectbox("d", list(DATE_RANGES.keys()), index=1, key="dr", label_visibility="collapsed")
+with col2:
+    bench_name = st.selectbox("vs_sel", list(BENCHMARKS.keys()), index=2, key="bench", label_visibility="collapsed")
 
-with c5:
-    st.markdown(f"<span style='font-size:10px;color:{theme['text_muted']};font-weight:600;'>COUNTS</span>", unsafe_allow_html=True)
-    trail_length = st.number_input("c", min_value=1, max_value=14, value=5, key="trail", label_visibility="collapsed")
+with col3:
+    tf_name = st.selectbox("tf_sel", list(TIMEFRAMES.keys()), index=5, key="tf", label_visibility="collapsed")
 
-with c6:
-    st.markdown(f"<span style='font-size:10px;color:{theme['text_muted']};'>&nbsp;</span>", unsafe_allow_html=True)
-    st.markdown(f"<div style='background:{theme['accent']};color:white;padding:6px 12px;border-radius:4px;text-align:center;font-weight:600;font-size:13px;margin-top:2px;'>{trail_length} Days</div>", unsafe_allow_html=True)
+with col4:
+    date_range = st.selectbox("dr_sel", list(DATE_RANGES.keys()), index=1, key="dr", label_visibility="collapsed")
 
-with c7:
-    st.markdown(f"<span style='font-size:10px;color:{theme['text_muted']};'>&nbsp;</span>", unsafe_allow_html=True)
+with col5:
+    trail_length = st.number_input("cnt_sel", min_value=1, max_value=14, value=5, key="trail", label_visibility="collapsed")
+
+with col6:
+    st.markdown(f"""
+    <div style="background:{theme['accent']};color:white;padding:7px 12px;border-radius:4px;text-align:center;font-weight:700;font-size:13px;margin-top:1px;">
+        {trail_length} <span style="font-size:11px;font-weight:400;">Days</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col7:
     bc1, bc2, bc3, bc4 = st.columns(4)
     with bc1:
         load_btn = st.button("📥 Load", key="load", use_container_width=True)
@@ -617,12 +644,13 @@ with c7:
     with bc4:
         label_on = st.checkbox("Label", value=True, key="lbl")
 
-with c8:
-    st.markdown(f"<span style='font-size:10px;color:{theme['text_muted']};font-weight:600;'>THEME</span>", unsafe_allow_html=True)
-    theme_choice = st.selectbox("th", list(THEMES.keys()), 
+with col8:
+    theme_choice = st.selectbox("theme_sel", list(THEMES.keys()), 
                                 index=list(THEMES.keys()).index(st.session_state.theme),
                                 format_func=lambda x: THEMES[x]['name'],
                                 key="theme_sel", label_visibility="collapsed")
+
+st.markdown("</div>", unsafe_allow_html=True)
 
 # Handle theme change
 if theme_choice != st.session_state.theme:
@@ -717,24 +745,45 @@ if st.session_state.df_cache is not None:
     df = st.session_state.df_cache
     rs_history = st.session_state.rs_history_cache
     
-    # Timeline
+    # Timeline controls with date range display
     if rs_history:
         max_hist = max(len(rs_history[s]['rs_ratio']) for s in rs_history)
         sample = list(rs_history.keys())[0]
         dates_avail = rs_history[sample].get('dates', [])
         
-        tc1, tc2, tc3 = st.columns([1, 7, 1.5])
+        # Timeline header
+        st.markdown(f"""
+        <div style="background:{theme['bg_secondary']};border:1px solid {theme['border']};border-radius:6px;padding:6px 16px;margin-bottom:6px;">
+            <span style="font-size:11px;font-weight:600;color:{theme['text_secondary']};text-transform:uppercase;letter-spacing:1px;">Timeline Control</span>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        tc1, tc2, tc3 = st.columns([1.2, 6.5, 2])
         with tc1:
-            mode = st.radio("", ["Static", "Animate"], horizontal=True, key="mode", label_visibility="collapsed")
+            mode = st.radio("view_mode", ["Static", "Animate"], horizontal=True, key="mode", label_visibility="collapsed")
+        
         with tc2:
-            frame_idx = st.slider("Timeline", trail_length-1, max_hist-1, 
+            frame_idx = st.slider("timeline_slider", trail_length-1, max_hist-1, 
                                  max_hist-1 if mode == "Static" else st.session_state.current_frame,
                                  key="timeline", label_visibility="collapsed")
             if mode == "Animate":
                 st.session_state.current_frame = frame_idx
+        
         with tc3:
-            if dates_avail and frame_idx < len(dates_avail):
-                st.markdown(f"<div style='background:{theme['accent']};color:white;padding:8px 12px;border-radius:4px;text-align:center;font-weight:600;font-size:12px;margin-top:18px;'>{dates_avail[frame_idx]}</div>", unsafe_allow_html=True)
+            # Date range display like Optuma
+            start_idx = max(0, frame_idx - trail_length + 1)
+            start_dt = dates_avail[start_idx] if dates_avail and start_idx < len(dates_avail) else ""
+            end_dt = dates_avail[frame_idx] if dates_avail and frame_idx < len(dates_avail) else ""
+            
+            if start_dt and end_dt:
+                st.markdown(f"""
+                <div style="background:{theme['accent']};color:white;padding:6px 12px;border-radius:4px;text-align:center;margin-top:4px;">
+                    <div style="font-size:9px;font-weight:500;opacity:0.85;margin-bottom:2px;">PERIOD</div>
+                    <div style="font-size:11px;font-weight:700;">{start_dt}</div>
+                    <div style="font-size:9px;opacity:0.7;">to</div>
+                    <div style="font-size:11px;font-weight:700;">{end_dt}</div>
+                </div>
+                """, unsafe_allow_html=True)
         
         # Auto-play
         if mode == "Animate" and st.session_state.is_playing:
@@ -839,7 +888,7 @@ if st.session_state.df_cache is not None:
                    gridcolor=CHART_COLORS['grid'], zeroline=False, tickfont=dict(color=CHART_COLORS['axis_text'])),
         yaxis=dict(title="<b>JdK RS-MOMENTUM</b>", range=[100-y_range-1, 100+y_range+1],
                    gridcolor=CHART_COLORS['grid'], zeroline=False, tickfont=dict(color=CHART_COLORS['axis_text'])),
-        legend=dict(orientation="h", y=-0.12, x=0.5, xanchor="center", bgcolor='rgba(255,255,255,0.8)'),
+        legend=dict(orientation="h", y=-0.12, x=0.5, xanchor="center", bgcolor='rgba(35,35,255,0.8)'),
         hovermode='closest',
         margin=dict(l=50, r=20, t=10, b=70),
     )
@@ -883,5 +932,3 @@ else:
     """, unsafe_allow_html=True)
 
 st.markdown(f"<div style='text-align:center;color:{theme['text_muted']};font-size:10px;margin-top:10px;'>RRG Dashboard | Theme: {theme['name']} | <a href='https://www.optuma.com/blog/scripting-for-rrgs' style='color:{theme['accent']}'>Optuma Reference</a></div>", unsafe_allow_html=True)
-
-
