@@ -42,7 +42,7 @@ THEMES = {
     "light": {
         "name": "Light Classic",
         "bg": "#f7fafc",
-        "bg_card": "#ffffff",
+        "bg_card": "#9D00FF ",
         "bg_secondary": "#9D00FF",
         "bg_control": "#87CEEB",
         "border": "#cbd5e0",
@@ -52,7 +52,7 @@ THEMES = {
         "accent": "#3182ce",
         "accent_hover": "#2c5282",
         "success": "#38a169",
-        "table_header": "#e2e8f0",
+        "table_header": "#9D00FF",
         "table_row": "#ffffff",
         "table_row_alt": "#f7fafc",
     },
@@ -900,6 +900,7 @@ else:
     """, unsafe_allow_html=True)
 
 st.markdown(f"<div style='text-align:center;color:{theme['text_muted']};font-size:10px;margin-top:10px;'>RRG Dashboard | Theme: {theme['name']} | <a href='https://www.optuma.com/blog/scripting-for-rrgs' style='color:{theme['accent']}'>Optuma Reference</a></div>", unsafe_allow_html=True)
+
 
 
 
