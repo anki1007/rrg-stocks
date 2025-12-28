@@ -42,9 +42,9 @@ THEMES = {
     "light": {
         "name": "Light Classic",
         "bg": "#f7fafc",
-        "bg_card": "#9D00FF ",
-        "bg_secondary": "#9D00FF",
-        "bg_control": "#87CEEB",
+        "bg_card": "#ffffff",
+        "bg_secondary": "#edf2f7",
+        "bg_control": "#e2e8f0",
         "border": "#cbd5e0",
         "text": "#1a202c",
         "text_secondary": "#4a5568",
@@ -52,7 +52,7 @@ THEMES = {
         "accent": "#3182ce",
         "accent_hover": "#2c5282",
         "success": "#38a169",
-        "table_header": "#9D00FF",
+        "table_header": "#e2e8f0",
         "table_row": "#ffffff",
         "table_row_alt": "#f7fafc",
     },
@@ -848,7 +848,7 @@ if st.session_state.df_cache is not None:
     
     # Layout - WHITE CHART ALWAYS
     fig.update_layout(
-        height=520,
+        height=680,
         plot_bgcolor=CHART_COLORS['plot_bg'],
         paper_bgcolor=CHART_COLORS['paper_bg'],
         font=dict(color=CHART_COLORS['axis_text'], size=11, family='Inter'),
@@ -873,10 +873,10 @@ if st.session_state.df_cache is not None:
                 for _, r in df_s.iterrows():
                     st.markdown(f"<div style='padding:3px 6px;background:{theme['bg_secondary']};border-left:3px solid {QUADRANT_COLORS[s]};border-radius:3px;margin:2px 0;font-size:11px;'><a href='{r['TV Link']}' target='_blank' style='color:{QUADRANT_COLORS[s]};font-weight:600;'>{r['Symbol']}</a> <span style='color:{theme['text_muted']}'>RS:{r['RS-Ratio']:.1f} Mom:{r['RS-Momentum']:.1f}</span></div>", unsafe_allow_html=True)
     
-    # Table
+    # Table - Collapsible
     st.markdown("---")
-    st.markdown(f"<h4 style='color:{theme['text']};margin:10px 0;'>📊 Analysis Table ({len(df)} stocks)</h4>", unsafe_allow_html=True)
-    st.components.v1.html(generate_table_html(df, theme), height=480, scrolling=False)
+    with st.expander(f"📊 **Analysis Table** ({len(df)} stocks)", expanded=False):
+        st.components.v1.html(generate_table_html(df, theme), height=500, scrolling=False)
     
     # Export
     col1, col2 = st.columns([1, 5])
@@ -900,7 +900,3 @@ else:
     """, unsafe_allow_html=True)
 
 st.markdown(f"<div style='text-align:center;color:{theme['text_muted']};font-size:10px;margin-top:10px;'>RRG Dashboard | Theme: {theme['name']} | <a href='https://www.optuma.com/blog/scripting-for-rrgs' style='color:{theme['accent']}'>Optuma Reference</a></div>", unsafe_allow_html=True)
-
-
-
-
