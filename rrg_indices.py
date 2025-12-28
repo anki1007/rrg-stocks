@@ -455,12 +455,12 @@ def get_status(x, y):
     if x>=100 and y<=100: return "Weakening"
     return "Unknown"
 
-# Quadrant colors
+# Quadrant colors - DARKER for better visibility
 QUADRANT_COLORS = {
-    "Leading": "#22c55e",
-    "Improving": "#a855f7",
-    "Weakening": "#eab308",
-    "Lagging": "#ef4444",
+    "Leading": "#15803d",      # Darker green
+    "Improving": "#7c3aed",    # Darker purple
+    "Weakening": "#a16207",    # Darker yellow/amber
+    "Lagging": "#dc2626",      # Darker red
 }
 
 QUADRANT_BG_COLORS = {
@@ -633,18 +633,26 @@ def symbol_color_map(symbols):
     return {s: to_hex(tab[i % len(tab)], keep_alpha=False) for i, s in enumerate(symbols)}
 
 # -------------------- Smooth Spline for Curved Trails (NumPy only) --------------------
-def smooth_spline_curve(x_points, y_points, num_smooth=50):
-    """Create smooth curved trail using Catmull-Rom spline interpolation (numpy only)"""
+def smooth_spline_curve(x_points, y_points, points_per_segment=8):
+    """Create smooth curved trail using Catmull-Rom spline interpolation (numpy only)
+    
+    Args:
+        x_points: array of x coordinates
+        y_points: array of y coordinates  
+        points_per_segment: number of interpolated points between each original point
+    
+    Returns:
+        Smoothed x and y arrays
+    """
     if len(x_points) < 3:
         return np.array(x_points), np.array(y_points)
     
     x_points = np.array(x_points, dtype=float)
     y_points = np.array(y_points, dtype=float)
     
-    # Catmull-Rom spline interpolation
-    def catmull_rom_segment(p0, p1, p2, p3, num_points=10):
+    def catmull_rom_segment(p0, p1, p2, p3, num_points):
         """Generate points for one Catmull-Rom spline segment"""
-        t = np.linspace(0, 1, num_points)
+        t = np.linspace(0, 1, num_points, endpoint=False)
         t2 = t * t
         t3 = t2 * t
         
@@ -669,10 +677,7 @@ def smooth_spline_curve(x_points, y_points, num_smooth=50):
         2 * points[-1] - points[-2]  # Reflect last point
     ])
     
-    # Calculate points per segment
     n_segments = len(points) - 1
-    pts_per_seg = max(2, num_smooth // n_segments)
-    
     x_smooth, y_smooth = [], []
     
     for i in range(n_segments):
@@ -681,15 +686,13 @@ def smooth_spline_curve(x_points, y_points, num_smooth=50):
         p2 = padded[i + 2]
         p3 = padded[i + 3]
         
-        seg_x, seg_y = catmull_rom_segment(p0, p1, p2, p3, pts_per_seg)
-        
-        # Avoid duplicates at segment boundaries
-        if i > 0:
-            seg_x = seg_x[1:]
-            seg_y = seg_y[1:]
-        
+        seg_x, seg_y = catmull_rom_segment(p0, p1, p2, p3, points_per_segment)
         x_smooth.extend(seg_x)
         y_smooth.extend(seg_y)
+    
+    # Add the final point
+    x_smooth.append(x_points[-1])
+    y_smooth.append(y_points[-1])
     
     return np.array(x_smooth), np.array(y_smooth)
 
@@ -811,7 +814,7 @@ with left_col:
     search_term = st.text_input("🔍 Search", placeholder="Filter indices...", label_visibility="collapsed")
     
     # Filter type
-    filter_type = st.selectbox("Filter", ["All", "Only Indices", "Only Stocks"], label_visibility="collapsed")
+    filter_type = st.selectbox("Filter", ["All", "Indices"], label_visibility="collapsed")
     
     # Select All / Clear All buttons
     btn_cols = st.columns(2)
@@ -1035,18 +1038,27 @@ with main_col:
             f"<b>Change %:</b> {chg:+.2f}%"
         )
         
-        # Create smooth curved trail using spline interpolation
+        # Original data points for trail
         x_pts = rr.values.astype(float)
         y_pts = mm.values.astype(float)
+        n_original = len(x_pts)
         
-        if len(x_pts) >= 3:
-            x_smooth, y_smooth = smooth_spline_curve(x_pts, y_pts, num_smooth=50)
-            
-            # Draw gradient trail with increasing width and opacity
-            n_segments = len(x_smooth) - 1
-            for i in range(n_segments):
-                seg_width = 1.0 + (i / n_segments) * 2.5
-                seg_opacity = 0.3 + (i / n_segments) * 0.7
+        # Create smooth curved trail using spline interpolation
+        if n_original >= 3:
+            # Use 8 interpolated points per segment for smooth curves
+            x_smooth, y_smooth = smooth_spline_curve(x_pts, y_pts, points_per_segment=8)
+        else:
+            x_smooth, y_smooth = x_pts, y_pts
+        
+        # Draw the smooth trail as a single line with gradient effect
+        # Split into segments for gradient opacity/width
+        n_smooth = len(x_smooth)
+        if n_smooth >= 2:
+            # Draw smooth curve segments with gradient - THICKER for visibility
+            for i in range(n_smooth - 1):
+                progress = i / max(1, n_smooth - 2)
+                seg_width = 2.5 + progress * 3.0  # 2.5 to 5.5 (thicker)
+                seg_opacity = 0.5 + progress * 0.5  # 0.5 to 1.0
                 
                 fig.add_trace(go.Scatter(
                     x=[x_smooth[i], x_smooth[i+1]], 
@@ -1057,42 +1069,54 @@ with main_col:
                     hoverinfo='skip',
                     showlegend=False
                 ))
-        else:
-            # Fallback for short trails
-            for i in range(len(x_pts) - 1):
-                seg_width = 1.5 + (i / max(1, len(x_pts) - 2)) * 2.0
-                seg_opacity = 0.4 + (i / max(1, len(x_pts) - 2)) * 0.6
-                
-                fig.add_trace(go.Scatter(
-                    x=[x_pts[i], x_pts[i+1]], 
-                    y=[y_pts[i], y_pts[i+1]],
-                    mode='lines',
-                    line=dict(color=color, width=seg_width),
-                    opacity=seg_opacity,
-                    hoverinfo='skip',
-                    showlegend=False
-                ))
         
-        # Head marker (current position)
+        # Add trail dots at ORIGINAL data points (not interpolated)
+        # These show the actual day/week positions like StockCharts
+        trail_sizes = []
+        trail_opacities = []
+        for i in range(n_original):
+            progress = i / max(1, n_original - 1)
+            # Size: larger dots for better visibility
+            size = 5 + progress * 5  # 5 to 10
+            trail_sizes.append(size)
+            trail_opacities.append(0.6 + progress * 0.4)  # 0.6 to 1.0
+        
+        # Draw all trail dots except the last one (head will be drawn separately)
+        if n_original > 1:
+            fig.add_trace(go.Scatter(
+                x=x_pts[:-1], 
+                y=y_pts[:-1],
+                mode='markers',
+                marker=dict(
+                    size=trail_sizes[:-1],
+                    color=color,
+                    opacity=0.8,
+                    line=dict(color='white', width=1)
+                ),
+                hoverinfo='skip',
+                showlegend=False
+            ))
+        
+        # Head marker (current position) - larger and more prominent
         fig.add_trace(go.Scatter(
             x=[rr_last], y=[mm_last],
             mode='markers',
-            marker=dict(size=12, color=color, line=dict(color='white', width=2)),
+            marker=dict(size=14, color=color, line=dict(color='white', width=2.5)),
             text=[hover_text],
             hoverinfo='text',
             hoverlabel=dict(bgcolor='#1a1f2e', bordercolor=color, font=dict(family='Plus Jakarta Sans', size=12, color='white')),
             showlegend=False
         ))
         
-        # Arrow showing direction
-        if len(x_pts) >= 2:
+        # Arrow showing direction - thicker for visibility
+        if n_original >= 2:
             x0, y0 = float(x_pts[-2]), float(y_pts[-2])
             x1, y1 = float(x_pts[-1]), float(y_pts[-1])
             dx, dy = x1 - x0, y1 - y0
             length = np.sqrt(dx**2 + dy**2)
             
             if length > 0.01:
-                arrow_scale = 0.3
+                arrow_scale = 0.35
                 ax_offset = (dx / length) * arrow_scale
                 ay_offset = (dy / length) * arrow_scale
                 
@@ -1100,19 +1124,20 @@ with main_col:
                     x=x1, y=y1,
                     ax=x1 - ax_offset, ay=y1 - ay_offset,
                     xref='x', yref='y', axref='x', ayref='y',
-                    showarrow=True, arrowhead=2, arrowsize=1.5, arrowwidth=2.5, arrowcolor=color
+                    showarrow=True, arrowhead=2, arrowsize=1.8, arrowwidth=3, arrowcolor=color
                 )
         
-        # Label
+        # Label - no background, bold dark color matching quadrant
         if show_labels:
             fig.add_annotation(
                 x=rr_last, y=mm_last,
                 text=f"<b>{name}</b>",
-                showarrow=True, arrowhead=0, arrowsize=1, arrowwidth=1, arrowcolor=color,
-                ax=25, ay=-20,
-                font=dict(size=10, color='#1a1f2e', family="Plus Jakarta Sans"),
-                bgcolor='rgba(255,255,255,0.9)',
-                bordercolor=color, borderwidth=1, borderpad=2
+                showarrow=True, arrowhead=0, arrowsize=1, arrowwidth=1.5, arrowcolor=color,
+                ax=30, ay=-25,
+                font=dict(size=11, color=color, family="Plus Jakarta Sans"),
+                bgcolor='rgba(0,0,0,0)',  # Transparent background
+                bordercolor='rgba(0,0,0,0)',  # No border
+                borderwidth=0
             )
     
     fig.update_layout(
