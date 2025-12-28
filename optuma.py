@@ -868,7 +868,7 @@ if st.session_state.df_cache is not None:
                     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
                     
                     html, body {
-                        width: 100%;
+                        width: 50%;
                         margin: 0;
                         padding: 0;
                         background: #0b0e13;
@@ -1468,3 +1468,4 @@ if st.session_state.df_cache is not None:
 
 else:
     st.info("⬅️ Select indices and click **Load Data** to start analysis")
+
