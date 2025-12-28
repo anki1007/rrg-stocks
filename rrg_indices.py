@@ -814,7 +814,7 @@ with left_col:
     search_term = st.text_input("🔍 Search", placeholder="Filter indices...", label_visibility="collapsed")
     
     # Filter type
-    filter_type = st.selectbox("Filter", ["All", "Indices"], label_visibility="collapsed")
+    filter_type = st.selectbox("Filter", ["Indices"], label_visibility="collapsed")
     
     # Select All / Clear All buttons
     btn_cols = st.columns(2)
