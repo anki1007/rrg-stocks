@@ -601,7 +601,8 @@ if st.session_state.df_cache is not None:
             st.markdown(f"{status_colors_map[status]} {status}: {count}")
         
         st.markdown("---")
-                st.markdown("### 📊 Stats")
+
+        st.markdown("### 📊 Stats")
         col_stat1, col_stat2 = st.columns(2)
 
         # Short labels so text doesn't truncate in narrow panel
@@ -614,7 +615,6 @@ if st.session_state.df_cache is not None:
             st.metric("Weak", len(df[df['Status'] == 'Weakening']))
 
         st.metric("Lag", len(df[df['Status'] == 'Lagging']))
-
     
     # ========================================================================
     # MAIN CONTENT - RRG GRAPH
@@ -1343,55 +1343,61 @@ if st.session_state.df_cache is not None:
                 fig_anim.frames = plotly_frames
 
 
-                    # Animation controls
-                    fig_anim.update_layout(
-                        updatemenus=[{
-                            'type': 'buttons',
-                            'showactive': False,
-                            'buttons': [
-                                {'label': '▶ Play', 'method': 'animate',
-                                 'args': [None, {'frame': {'duration': 800, 'redraw': True},
-                                                'fromcurrent': True, 'mode': 'immediate',
-                                                'transition': {'duration': 300, 'easing': 'cubic-in-out'}}]},
-                                {'label': '⏸ Pause', 'method': 'animate',
-                                 'args': [[None], {'frame': {'duration': 0, 'redraw': False},
-                                                  'mode': 'immediate', 'transition': {'duration': 0}}]}
-                            ],
-                            'x': 0.1, 'y': 1.15, 'xanchor': 'left', 'yanchor': 'top'
-                        }],
-                        sliders=[{
-                            'active': 0,
-                            'steps': [{'args': [[f.name], {'frame': {'duration': 0, 'redraw': True},
-                                                           'mode': 'immediate', 'transition': {'duration': 0}}],
-                                      'label': f"Period {i+1}/{len(plotly_frames)}", 'method': 'animate'}
-                                     for i, f in enumerate(plotly_frames)],
-                            'x': 0.1, 'len': 0.85, 'xanchor': 'left', 'y': 0,
-                            'yanchor': 'top', 'pad': {'b': 10, 't': 50},
-                            'currentvalue': {'visible': True, 'prefix': 'Period: ', 'xanchor': 'right'},
-                            'transition': {'duration': 300, 'easing': 'cubic-in-out'}
-                        }]
-                    )
+                # Animation controls
+                fig_anim.update_layout(
+                updatemenus=[{
+                    'type': 'buttons',
+                    'direction': 'right',
+                    'showactive': False,
+                    'bgcolor': '#131922',
+                    'bordercolor': '#1f2732',
+                    'borderwidth': 1,
+                    'font': {'color': '#e6eaee', 'size': 13},
+                    'pad': {'r': 8, 't': 0, 'b': 0, 'l': 0},
+                    'buttons': [
+                        {'label': '▶ Play', 'method': 'animate',
+                         'args': [None, {'frame': {'duration': 800, 'redraw': True},
+                                        'fromcurrent': True, 'mode': 'immediate',
+                                        'transition': {'duration': 300, 'easing': 'cubic-in-out'}}]},
+                        {'label': '⏸ Pause', 'method': 'animate',
+                         'args': [[None], {'frame': {'duration': 0, 'redraw': False},
+                                          'mode': 'immediate', 'transition': {'duration': 0}}]}
+                    ],
+                    'x': 0.02, 'y': 1.14, 'xanchor': 'left', 'yanchor': 'top'
+                }],
+                sliders=[{
+                    'active': 0,
+                    'steps': [{'args': [[f.name], {'frame': {'duration': 0, 'redraw': True},
+                                                   'mode': 'immediate', 'transition': {'duration': 0}}],
+                              'label': f"Period {i+1}/{len(plotly_frames)}", 'method': 'animate'}
+                             for i, f in enumerate(plotly_frames)],
+                    'x': 0.1, 'len': 0.85, 'xanchor': 'left', 'y': 0,
+                    'yanchor': 'top', 'pad': {'b': 10, 't': 50},
+                    'currentvalue': {'visible': True, 'prefix': 'Period: ', 'xanchor': 'right'},
+                    'transition': {'duration': 300, 'easing': 'cubic-in-out'}
+                }]
+                )
 
-                    fig_anim.update_layout(
-                        height=700,
-                        plot_bgcolor='#fafafa',
-                        paper_bgcolor='#0b0e13',
-                        font=dict(color='#e6eaee', size=12, family='Plus Jakarta Sans, sans-serif'),
-                        xaxis=dict(title=dict(text="<b>JdK RS-Ratio</b>", font=dict(color="#e6eaee")), gridcolor='rgba(150,150,150,0.2)',
-                                  range=[100-x_range-1, 100+x_range+1], zeroline=False,
-                                  tickfont=dict(color='#b3bdc7')),
-                        yaxis=dict(title=dict(text="<b>JdK RS-Momentum</b>", font=dict(color="#e6eaee")), gridcolor='rgba(150,150,150,0.2)',
-                                  range=[100-y_range-1, 100+y_range+1], zeroline=False,
-                                  tickfont=dict(color='#b3bdc7')),
-                        legend=dict(x=1.02, y=1, bgcolor='rgba(30, 30, 30, 0.8)',
-                                   bordercolor='rgba(100, 100, 100, 0.3)', borderwidth=1),
-                        hovermode='closest',
-                        title=dict(text=f"<b>Animated RRG</b> | {csv_selected} | {tf_name} | {bench_name}",
-                                  font=dict(size=16, color='#e6eaee'), x=0.5, xanchor='center')
-                    )
+                fig_anim.update_layout(
+                    height=700,
+                    plot_bgcolor='#fafafa',
+                    paper_bgcolor='#0b0e13',
+                    font=dict(color='#e6eaee', size=12, family='Plus Jakarta Sans, sans-serif'),
+                    xaxis=dict(title=dict(text="<b>JdK RS-Ratio</b>", font=dict(color="#e6eaee")), gridcolor='rgba(150,150,150,0.2)',
+                              range=[100-x_range-1, 100+x_range+1], zeroline=False,
+                              tickfont=dict(color='#b3bdc7')),
+                    yaxis=dict(title=dict(text="<b>JdK RS-Momentum</b>", font=dict(color="#e6eaee")), gridcolor='rgba(150,150,150,0.2)',
+                              range=[100-y_range-1, 100+y_range+1], zeroline=False,
+                              tickfont=dict(color='#b3bdc7')),
+                    legend=dict(x=1.02, y=1, bgcolor='rgba(30, 30, 30, 0.8)',
+                               bordercolor='rgba(100, 100, 100, 0.3)', borderwidth=1),
+                    hovermode='closest',
+                    title=dict(text=f"<b>Animated RRG</b> | {csv_selected} | {tf_name} | {bench_name}",
+                              font=dict(size=16, color='#e6eaee'), x=0.5, xanchor='center')
+                )
 
-                    st.plotly_chart(fig_anim, width="stretch", config={'displayModeBar': True})
-                    st.success(f"✅ Animation: {len(anim_frames)} periods | Trail: {trail_length}")
+                st.plotly_chart(fig_anim, width="stretch", config={'displayModeBar': True})
+                st.success(f"✅ Animation: {len(anim_frames)} periods | Trail: {trail_length}")
             else:
                 st.warning("No animation data available. Load data first.")
 
@@ -1462,4 +1468,3 @@ if st.session_state.df_cache is not None:
 
 else:
     st.info("⬅️ Select indices and click **Load Data** to start analysis")
-
