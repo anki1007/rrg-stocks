@@ -873,8 +873,7 @@ if st.session_state.df_cache is not None:
                     table_rows += f"""
                     <tr>
                         <td style="text-align: center;">{int(row['Sl No.'])}</td>
-                        <td class="symbol-cell"><a href="{row['TV Link']}" target="_blank">{row['Symbol']}</a></td>
-                        <td class="name-cell">{row['Name']}</td>
+                        <td class="symbol-cell"><a href="{row['TV Link']}" target="_blank">{row['Name']}</a></td>
                         <td class="industry-cell">{row['Industry']}</td>
                         <td style="text-align: right;">₹{row['Price']:,.2f}</td>
                         <td style="text-align: right; color: {chg_color}; font-weight: 600;">{row['Change %']:+.2f}%</td>
@@ -1439,3 +1438,4 @@ if st.session_state.df_cache is not None:
 
 else:
     st.info("⬅️ Select indices and click **Load Data** to start analysis")
+
