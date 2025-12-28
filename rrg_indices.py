@@ -9,7 +9,6 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 import streamlit as st
-from scipy.interpolate import make_interp_spline, CubicSpline
 
 try:
     from streamlit_autorefresh import st_autorefresh
@@ -633,27 +632,66 @@ def symbol_color_map(symbols):
     tab = plt.get_cmap("tab20").colors
     return {s: to_hex(tab[i % len(tab)], keep_alpha=False) for i, s in enumerate(symbols)}
 
-# -------------------- Smooth Spline for Curved Trails --------------------
+# -------------------- Smooth Spline for Curved Trails (NumPy only) --------------------
 def smooth_spline_curve(x_points, y_points, num_smooth=50):
-    """Create smooth curved trail using cubic spline interpolation"""
+    """Create smooth curved trail using Catmull-Rom spline interpolation (numpy only)"""
     if len(x_points) < 3:
-        return x_points, y_points
+        return np.array(x_points), np.array(y_points)
     
-    # Parameter t from 0 to 1
-    t = np.linspace(0, 1, len(x_points))
-    t_smooth = np.linspace(0, 1, num_smooth)
+    x_points = np.array(x_points, dtype=float)
+    y_points = np.array(y_points, dtype=float)
     
-    try:
-        # Use cubic spline for smooth interpolation
-        cs_x = CubicSpline(t, x_points)
-        cs_y = CubicSpline(t, y_points)
+    # Catmull-Rom spline interpolation
+    def catmull_rom_segment(p0, p1, p2, p3, num_points=10):
+        """Generate points for one Catmull-Rom spline segment"""
+        t = np.linspace(0, 1, num_points)
+        t2 = t * t
+        t3 = t2 * t
         
-        x_smooth = cs_x(t_smooth)
-        y_smooth = cs_y(t_smooth)
+        # Catmull-Rom basis matrix (tension = 0.5)
+        x = 0.5 * ((2 * p1[0]) +
+                   (-p0[0] + p2[0]) * t +
+                   (2*p0[0] - 5*p1[0] + 4*p2[0] - p3[0]) * t2 +
+                   (-p0[0] + 3*p1[0] - 3*p2[0] + p3[0]) * t3)
         
-        return x_smooth, y_smooth
-    except Exception:
-        return x_points, y_points
+        y = 0.5 * ((2 * p1[1]) +
+                   (-p0[1] + p2[1]) * t +
+                   (2*p0[1] - 5*p1[1] + 4*p2[1] - p3[1]) * t2 +
+                   (-p0[1] + 3*p1[1] - 3*p2[1] + p3[1]) * t3)
+        
+        return x, y
+    
+    # Pad start and end points for boundary conditions
+    points = np.column_stack([x_points, y_points])
+    padded = np.vstack([
+        2 * points[0] - points[1],  # Reflect first point
+        points,
+        2 * points[-1] - points[-2]  # Reflect last point
+    ])
+    
+    # Calculate points per segment
+    n_segments = len(points) - 1
+    pts_per_seg = max(2, num_smooth // n_segments)
+    
+    x_smooth, y_smooth = [], []
+    
+    for i in range(n_segments):
+        p0 = padded[i]
+        p1 = padded[i + 1]
+        p2 = padded[i + 2]
+        p3 = padded[i + 3]
+        
+        seg_x, seg_y = catmull_rom_segment(p0, p1, p2, p3, pts_per_seg)
+        
+        # Avoid duplicates at segment boundaries
+        if i > 0:
+            seg_x = seg_x[1:]
+            seg_y = seg_y[1:]
+        
+        x_smooth.extend(seg_x)
+        y_smooth.extend(seg_y)
+    
+    return np.array(x_smooth), np.array(y_smooth)
 
 # -------------------- Hero Title --------------------
 st.markdown('<div class="hero-title">Relative Rotation Graphs – Indices</div>', unsafe_allow_html=True)
