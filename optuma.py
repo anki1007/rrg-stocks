@@ -601,19 +601,20 @@ if st.session_state.df_cache is not None:
             st.markdown(f"{status_colors_map[status]} {status}: {count}")
         
         st.markdown("---")
-        st.markdown("### 📊 Stats")
+                st.markdown("### 📊 Stats")
         col_stat1, col_stat2 = st.columns(2)
-        
+
         # Short labels so text doesn't truncate in narrow panel
         with col_stat1:
-        st.metric("Total", len(df))
-        st.metric("Lead", len(df[df['Status'] == 'Leading']))
-        
+            st.metric("Total", len(df))
+            st.metric("Lead", len(df[df['Status'] == 'Leading']))
+
         with col_stat2:
-        st.metric("Impr", len(df[df['Status'] == 'Improving']))
-        st.metric("Weak", len(df[df['Status'] == 'Weakening']))
-        
+            st.metric("Impr", len(df[df['Status'] == 'Improving']))
+            st.metric("Weak", len(df[df['Status'] == 'Weakening']))
+
         st.metric("Lag", len(df[df['Status'] == 'Lagging']))
+
     
     # ========================================================================
     # MAIN CONTENT - RRG GRAPH
@@ -1461,3 +1462,4 @@ if st.session_state.df_cache is not None:
 
 else:
     st.info("⬅️ Select indices and click **Load Data** to start analysis")
+
