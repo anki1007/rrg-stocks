@@ -798,9 +798,9 @@ with plot_col:
         # Calculate Momentum Score (distance from center, higher = stronger)
         rrg_power = float(np.hypot(rr_last - 100.0, mm_last - 100.0))
 
-        # Hover text for head marker
+        # Hover text for head marker - include both symbol and name
         hover_head = (
-            f"<b>{name}</b><br>"
+            f"<b>{display_symbol(t)}</b> - {name}<br>"
             + f"<b>Status:</b> {status}<br>"
             + f"<b>RS-Ratio:</b> {rr_last:.2f}<br>"
             + f"<b>RS-Momentum:</b> {mm_last:.2f}<br>"
@@ -900,12 +900,12 @@ with plot_col:
                     arrowcolor=color,
                 )
 
-        # Add label for top N by distance
+        # Add label for top N by distance (using SYMBOL instead of name for cleaner display)
         if show_labels and t in allow_labels:
             fig.add_annotation(
                 x=rr_last,
                 y=mm_last,
-                text=f"<b>{name}</b>",
+                text=f"<b>{display_symbol(t)}</b>",
                 showarrow=True,
                 arrowhead=0,
                 arrowwidth=1.5,
@@ -1048,13 +1048,12 @@ with rank_col:
         """
         
         for sym, mom_score, rr, mm in stocks:
-            name = META.get(sym, {}).get("name", sym)
-            # Truncate long names
-            display_name = name[:30] + "..." if len(name) > 30 else name
+            # Use symbol instead of name in ranking panel
+            display_sym = display_symbol(sym)
             ranking_html += f"""
                 <div class="stock-row">
                     <span class="stock-rank">{rank_dict.get(sym, '-')}</span>
-                    <span class="stock-name" style="color:{cfg['color']}" title="{name}">{display_name}</span>
+                    <span class="stock-name" style="color:{cfg['color']}" title="{META.get(sym, {}).get('name', sym)}">{display_sym}</span>
                     <span class="mom-score" style="color:{cfg['color']}">{mom_score:.1f}</span>
                 </div>
             """
@@ -1074,8 +1073,8 @@ def make_interactive_table(rows):
     """Generate a fully self-contained interactive HTML table with sorting and filtering"""
     table_id = "rrg_table_" + str(abs(hash(str(len(rows)))) % 10000)
 
-    headers = ["Ranking", "Name", "Status", "Industry", "RS-Ratio", "RS-Momentum", "Momentum Score", "Price", "Change %"]
-    header_keys = ["rank", "name", "status", "industry", "rs_ratio", "rs_mom", "rrg_power", "price", "chg"]
+    headers = ["Ranking", "Symbol", "Name", "Status", "Industry", "RS-Ratio", "RS-Momentum", "Momentum Score", "Price", "Change %"]
+    header_keys = ["rank", "symbol", "name", "status", "industry", "rs_ratio", "rs_mom", "rrg_power", "price", "chg"]
 
     # Build header with sort icons
     th_cells = []
@@ -1111,14 +1110,16 @@ def make_interactive_table(rows):
         # Escape single quotes in name for data attribute
         safe_name = r["name"].replace("'", "&#39;").lower()
         safe_industry = r["industry"].replace("'", "&#39;").lower()
+        safe_symbol = r["symbol"].replace("'", "&#39;").lower()
 
         tr_list.append(
             f"<tr class='rrg-row' "
-            + f"data-rank='{r['rank']}' data-name='{safe_name}' data-status='{r['status'].lower()}' "
+            + f"data-rank='{r['rank']}' data-symbol='{safe_symbol}' data-name='{safe_name}' data-status='{r['status'].lower()}' "
             + f"data-industry='{safe_industry}' data-rs_ratio='{rr_val}' data-rs_mom='{mm_val}' "
             + f"data-rrg_power='{rrg_power_val}' data-price='{price_val}' data-chg='{chg_val}'>"
             + f"<td class='rank-cell'>{r['rank']}</td>"
-            + f"<td class='rrg-name'><a href='{r['tv']}' target='_blank'>{r['name']}</a></td>"
+            + f"<td class='symbol-cell'><a href='{r['tv']}' target='_blank'>{r['symbol']}</a></td>"
+            + f"<td class='rrg-name'>{r['name']}</td>"
             + f"<td><span class='status-badge' style='background:{status_bg}; color:{status_fg}'>{r['status']}</span></td>"
             + f"<td class='industry-cell'>{r['industry']}</td>"
             + f"<td>{rr_txt}</td>"
@@ -1259,16 +1260,22 @@ def make_interactive_table(rows):
                 background: #161b22;
             }}
             
-            /* Name column link */
-            .rrg-name a {{
+            /* Symbol column link */
+            .symbol-cell a {{
                 color: #58a6ff;
                 text-decoration: none;
-                font-weight: 600;
+                font-weight: 700;
             }}
             
-            .rrg-name a:hover {{
+            .symbol-cell a:hover {{
                 text-decoration: underline;
                 color: #79b8ff;
+            }}
+            
+            /* Name column */
+            .rrg-name {{
+                color: #b3bdc7;
+                font-size: 12px;
             }}
             
             /* Rank column */
@@ -1328,7 +1335,7 @@ def make_interactive_table(rows):
     </head>
     <body>
         <div class="filter-row">
-            <input type="text" id="{table_id}_search" placeholder="🔍 Search by name..." style="min-width: 180px;">
+            <input type="text" id="{table_id}_search" placeholder="🔍 Search by symbol or name..." style="min-width: 200px;">
             <select id="{table_id}_status">{status_options}</select>
             <select id="{table_id}_industry">{industry_options}</select>
             <span class="filter-badge" id="{table_id}_count">{len(rows)} / {len(rows)}</span>
@@ -1392,11 +1399,12 @@ def make_interactive_table(rows):
                 const industryTerm = industryFilter.value;
                 
                 rows.forEach(row => {{
+                    const symbol = row.dataset.symbol || '';
                     const name = row.dataset.name || '';
                     const status = row.dataset.status || '';
                     const industry = row.dataset.industry || '';
                     
-                    const matchesSearch = !searchTerm || name.includes(searchTerm);
+                    const matchesSearch = !searchTerm || symbol.includes(searchTerm) || name.includes(searchTerm);
                     const matchesStatus = !statusTerm || status === statusTerm;
                     const matchesIndustry = !industryTerm || industry === industryTerm;
                     
@@ -1455,6 +1463,7 @@ for t in all_ranked_syms:
     chg = ((px.iloc[end_idx] / px.iloc[start_idx] - 1) * 100.0) if (end_idx < len(px) and start_idx < len(px)) else np.nan
     rows.append({
         "rank": all_rank_dict.get(t, ""),
+        "symbol": display_symbol(t),
         "name": META.get(t, {}).get("name", t),
         "status": status,
         "industry": META.get(t, {}).get("industry", "-"),
@@ -1479,7 +1488,7 @@ def export_ranks_csv(all_stocks_sorted):
         mm = float(rs_mom_map[t].iloc[end_idx])
         out.append((
             all_rank_dict[t],
-            t,
+            display_symbol(t),
             META.get(t, {}).get("name", t),
             META.get(t, {}).get("industry", "-"),
             mom_score,
@@ -1496,6 +1505,7 @@ def export_ranks_csv(all_stocks_sorted):
 def export_table_csv(rows_):
     df = pd.DataFrame([{
         "ranking": r["rank"],
+        "symbol": r["symbol"],
         "name": r["name"],
         "industry": r["industry"],
         "status": r["status"],
@@ -1527,6 +1537,4 @@ with c2:
         use_container_width=True,
     )
 
-st.caption("Names open TradingView. Use Play/Pause to watch rotation; Speed controls frame interval; Loop wraps frames.")
-
-
+st.caption("Symbols open TradingView. Use Play/Pause to watch rotation; Speed controls frame interval; Loop wraps frames.")
