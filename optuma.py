@@ -152,103 +152,20 @@ html, body, .stApp {{
 }}
 
 .block-container {{
-    padding: 0.5rem 1rem !important;
+    padding: 0.5rem 0.8rem !important;
     max-width: 100% !important;
 }}
 
-/* Control Bar Container */
-.control-bar {{
-    background: {theme['bg_control']};
-    border: 1px solid {theme['border']};
-    border-radius: 8px;
-    padding: 8px 16px;
-    margin-bottom: 8px;
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-}}
-
-.control-group {{
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: fit-content;
-}}
-
-.control-label {{
-    font-size: 10px;
-    font-weight: 600;
-    color: {theme['text_muted']};
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}}
-
-.control-select {{
-    background: {theme['bg_card']};
-    border: 1px solid {theme['border']};
-    border-radius: 4px;
-    padding: 6px 10px;
-    color: {theme['text']};
-    font-size: 12px;
-    font-weight: 500;
-    min-width: 100px;
-}}
-
-.counts-display {{
-    background: {theme['accent']};
-    color: white;
-    padding: 6px 16px;
-    border-radius: 4px;
-    font-weight: 600;
-    font-size: 13px;
-    white-space: nowrap;
-}}
-
-.date-badge {{
-    background: {theme['accent']};
-    color: white;
-    padding: 8px 16px;
-    border-radius: 4px;
-    font-weight: 600;
-    font-size: 12px;
-    white-space: nowrap;
-}}
-
-.btn-group {{
-    display: flex;
-    gap: 4px;
-}}
-
-.ctrl-btn {{
-    background: {theme['bg_card']};
-    border: 1px solid {theme['border']};
-    color: {theme['text']};
-    padding: 6px 12px;
-    border-radius: 4px;
-    font-size: 12px;
-    font-weight: 500;
-    cursor: pointer;
-    white-space: nowrap;
-}}
-
-.ctrl-btn:hover {{
-    border-color: {theme['accent']};
-    color: {theme['accent']};
-}}
-
-.ctrl-btn.active {{
-    background: {theme['accent']};
-    color: white;
-    border-color: {theme['accent']};
-}}
-
-/* Streamlit overrides */
+/* Compact selectboxes */
 div[data-baseweb="select"] > div {{
     background: {theme['bg_card']} !important;
     border-color: {theme['border']} !important;
-    min-height: 32px !important;
+    min-height: 34px !important;
+    padding: 0 8px !important;
+}}
+
+div[data-baseweb="select"] > div > div {{
+    padding: 4px 0 !important;
 }}
 
 div[data-baseweb="select"] span {{
@@ -256,22 +173,15 @@ div[data-baseweb="select"] span {{
     font-size: 12px !important;
 }}
 
-.stSelectbox, .stNumberInput {{
-    min-width: 80px;
-}}
-
-.stSelectbox > div > div {{
-    padding-top: 0 !important;
-    padding-bottom: 0 !important;
-}}
-
+/* Compact buttons */
 .stButton > button {{
     background: {theme['bg_card']} !important;
     border: 1px solid {theme['border']} !important;
     color: {theme['text']} !important;
-    padding: 4px 12px !important;
-    font-size: 12px !important;
-    min-height: 32px !important;
+    padding: 4px 8px !important;
+    font-size: 11px !important;
+    min-height: 34px !important;
+    white-space: nowrap !important;
 }}
 
 .stButton > button:hover {{
@@ -279,9 +189,24 @@ div[data-baseweb="select"] span {{
     color: {theme['accent']} !important;
 }}
 
+/* Compact number input */
+.stNumberInput > div > div > input {{
+    background: {theme['bg_card']} !important;
+    color: {theme['text']} !important;
+    border-color: {theme['border']} !important;
+    min-height: 34px !important;
+    padding: 4px 8px !important;
+    font-size: 12px !important;
+}}
+
+/* Compact checkbox */
+.stCheckbox {{
+    padding-top: 8px !important;
+}}
+
 .stCheckbox label span {{
     color: {theme['text']} !important;
-    font-size: 12px !important;
+    font-size: 11px !important;
 }}
 
 /* Success/info messages */
@@ -289,6 +214,8 @@ div[data-baseweb="select"] span {{
     background: {theme['bg_secondary']} !important;
     border: 1px solid {theme['border']} !important;
     color: {theme['text']} !important;
+    padding: 8px 12px !important;
+    font-size: 12px !important;
 }}
 
 /* Slider */
@@ -305,44 +232,50 @@ div[data-baseweb="select"] span {{
     background: {theme['bg_secondary']} !important;
     color: {theme['text']} !important;
     border-radius: 6px !important;
+    padding: 8px 12px !important;
+    font-size: 13px !important;
 }}
 
 /* Metrics */
 [data-testid="stMetric"] {{
     background: {theme['bg_card']};
-    padding: 10px;
+    padding: 8px;
     border-radius: 6px;
     border: 1px solid {theme['border']};
 }}
 
 [data-testid="stMetricValue"] {{
     color: {theme['text']} !important;
-    font-size: 18px !important;
+    font-size: 16px !important;
 }}
 
 [data-testid="stMetricLabel"] {{
     color: {theme['text_secondary']} !important;
+    font-size: 11px !important;
 }}
 
 /* Hide defaults */
 #MainMenu, footer, header {{visibility: hidden;}}
 
-/* Radio buttons inline */
+/* Radio buttons inline and compact */
 .stRadio > div {{
     flex-direction: row !important;
-    gap: 8px !important;
+    gap: 6px !important;
 }}
 
 .stRadio label {{
     color: {theme['text']} !important;
-    font-size: 12px !important;
+    font-size: 11px !important;
 }}
 
-/* Number input compact */
-.stNumberInput > div > div > input {{
-    background: {theme['bg_card']} !important;
-    color: {theme['text']} !important;
-    border-color: {theme['border']} !important;
+/* Remove extra padding */
+.element-container {{
+    margin: 0 !important;
+}}
+
+/* Compact columns gap */
+[data-testid="column"] {{
+    padding: 0 4px !important;
 }}
 </style>
 """, unsafe_allow_html=True)
@@ -573,84 +506,60 @@ for key, default in [("load_clicked", False), ("df_cache", None), ("rs_history_c
         st.session_state[key] = default
 
 # ============================================================================
-# CONTROL BAR - Optuma Style with Clear Labels
+# CONTROL BAR - Ultra Compact Inline Layout
 # ============================================================================
 csv_files = list_csv_from_github() or ["NIFTY200"]
 default_csv = next((i for i, c in enumerate(csv_files) if 'NIFTY200' in c.upper()), 0)
 
-# Header row with labels
-st.markdown(f"""
-<div style="background:{theme['bg_control']};border:1px solid {theme['border']};border-radius:6px 6px 0 0;padding:8px 16px;border-bottom:none;">
-    <div style="display:flex;align-items:center;justify-content:space-between;">
-        <div style="display:flex;align-items:center;gap:40px;">
-            <div>
-                <span style="font-size:10px;font-weight:600;color:{theme['text_muted']};text-transform:uppercase;letter-spacing:1px;">Indices</span>
-            </div>
-            <div>
-                <span style="font-size:10px;font-weight:600;color:{theme['text_muted']};text-transform:uppercase;letter-spacing:1px;">vs Benchmark</span>
-            </div>
-            <div>
-                <span style="font-size:10px;font-weight:600;color:{theme['text_muted']};text-transform:uppercase;letter-spacing:1px;">Timeframe</span>
-            </div>
-            <div>
-                <span style="font-size:10px;font-weight:600;color:{theme['text_muted']};text-transform:uppercase;letter-spacing:1px;">Date Range</span>
-            </div>
-            <div>
-                <span style="font-size:10px;font-weight:600;color:{theme['text_muted']};text-transform:uppercase;letter-spacing:1px;">Counts</span>
-            </div>
-        </div>
-        <div>
-            <span style="font-size:10px;font-weight:600;color:{theme['text_muted']};text-transform:uppercase;letter-spacing:1px;">Theme</span>
-        </div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
+# All controls in single row - tighter spacing
+cols = st.columns([1.1, 1.1, 0.7, 0.55, 0.45, 0.55, 0.4, 0.4, 0.4, 0.45, 0.85])
 
-# Controls row inside styled container
-st.markdown(f"""<div style="background:{theme['bg_control']};border:1px solid {theme['border']};border-radius:0 0 6px 6px;padding:8px 16px;margin-bottom:10px;border-top:none;">""", unsafe_allow_html=True)
+with cols[0]:
+    st.markdown(f"<p style='font-size:9px;color:{theme['text_muted']};margin:0 0 1px 0;font-weight:600;letter-spacing:0.5px;'>BENCHMARK</p>", unsafe_allow_html=True)
+    csv_selected = st.selectbox("b", csv_files, index=default_csv, key="csv", label_visibility="collapsed")
 
-col1, col2, col3, col4, col5, col6, col7, col8 = st.columns([1.3, 1.3, 1.1, 1.0, 0.7, 0.9, 2.0, 1.3])
+with cols[1]:
+    st.markdown(f"<p style='font-size:9px;color:{theme['text_muted']};margin:0 0 1px 0;font-weight:600;letter-spacing:0.5px;'>VS INDEX</p>", unsafe_allow_html=True)
+    bench_name = st.selectbox("v", list(BENCHMARKS.keys()), index=2, key="bench", label_visibility="collapsed")
 
-with col1:
-    csv_selected = st.selectbox("benchmark_sel", csv_files, index=default_csv, key="csv", label_visibility="collapsed")
+with cols[2]:
+    st.markdown(f"<p style='font-size:9px;color:{theme['text_muted']};margin:0 0 1px 0;font-weight:600;letter-spacing:0.5px;'>TIMEFRAME</p>", unsafe_allow_html=True)
+    tf_name = st.selectbox("t", list(TIMEFRAMES.keys()), index=5, key="tf", label_visibility="collapsed")
 
-with col2:
-    bench_name = st.selectbox("vs_sel", list(BENCHMARKS.keys()), index=2, key="bench", label_visibility="collapsed")
+with cols[3]:
+    st.markdown(f"<p style='font-size:9px;color:{theme['text_muted']};margin:0 0 1px 0;font-weight:600;letter-spacing:0.5px;'>RANGE</p>", unsafe_allow_html=True)
+    date_range = st.selectbox("d", list(DATE_RANGES.keys()), index=1, key="dr", label_visibility="collapsed")
 
-with col3:
-    tf_name = st.selectbox("tf_sel", list(TIMEFRAMES.keys()), index=5, key="tf", label_visibility="collapsed")
+with cols[4]:
+    st.markdown(f"<p style='font-size:9px;color:{theme['text_muted']};margin:0 0 1px 0;font-weight:600;letter-spacing:0.5px;'>COUNTS</p>", unsafe_allow_html=True)
+    trail_length = st.number_input("c", min_value=1, max_value=14, value=5, key="trail", label_visibility="collapsed")
 
-with col4:
-    date_range = st.selectbox("dr_sel", list(DATE_RANGES.keys()), index=1, key="dr", label_visibility="collapsed")
+with cols[5]:
+    st.markdown(f"<p style='font-size:9px;color:{theme['text_muted']};margin:0 0 1px 0;'>&nbsp;</p>", unsafe_allow_html=True)
+    st.markdown(f"<div style='background:{theme['accent']};color:white;padding:5px 6px;border-radius:4px;text-align:center;font-weight:700;font-size:11px;white-space:nowrap;'>{trail_length}D</div>", unsafe_allow_html=True)
 
-with col5:
-    trail_length = st.number_input("cnt_sel", min_value=1, max_value=14, value=5, key="trail", label_visibility="collapsed")
+with cols[6]:
+    st.markdown(f"<p style='font-size:9px;color:{theme['text_muted']};margin:0 0 1px 0;'>&nbsp;</p>", unsafe_allow_html=True)
+    load_btn = st.button("Load", key="load", use_container_width=True)
 
-with col6:
-    st.markdown(f"""
-    <div style="background:{theme['accent']};color:white;padding:7px 12px;border-radius:4px;text-align:center;font-weight:700;font-size:13px;margin-top:1px;">
-        {trail_length} <span style="font-size:11px;font-weight:400;">Days</span>
-    </div>
-    """, unsafe_allow_html=True)
+with cols[7]:
+    st.markdown(f"<p style='font-size:9px;color:{theme['text_muted']};margin:0 0 1px 0;'>&nbsp;</p>", unsafe_allow_html=True)
+    play_btn = st.button("▶", key="play", use_container_width=True)
 
-with col7:
-    bc1, bc2, bc3, bc4 = st.columns(4)
-    with bc1:
-        load_btn = st.button("📥 Load", key="load", use_container_width=True)
-    with bc2:
-        play_btn = st.button("▶ Play", key="play", use_container_width=True)
-    with bc3:
-        stop_btn = st.button("⏹ Stop", key="stop", use_container_width=True)
-    with bc4:
-        label_on = st.checkbox("Label", value=True, key="lbl")
+with cols[8]:
+    st.markdown(f"<p style='font-size:9px;color:{theme['text_muted']};margin:0 0 1px 0;'>&nbsp;</p>", unsafe_allow_html=True)
+    stop_btn = st.button("⏹", key="stop", use_container_width=True)
 
-with col8:
-    theme_choice = st.selectbox("theme_sel", list(THEMES.keys()), 
+with cols[9]:
+    st.markdown(f"<p style='font-size:9px;color:{theme['text_muted']};margin:0 0 1px 0;'>&nbsp;</p>", unsafe_allow_html=True)
+    label_on = st.checkbox("Label", value=True, key="lbl")
+
+with cols[10]:
+    st.markdown(f"<p style='font-size:9px;color:{theme['text_muted']};margin:0 0 1px 0;font-weight:600;letter-spacing:0.5px;'>THEME</p>", unsafe_allow_html=True)
+    theme_choice = st.selectbox("th", list(THEMES.keys()), 
                                 index=list(THEMES.keys()).index(st.session_state.theme),
                                 format_func=lambda x: THEMES[x]['name'],
                                 key="theme_sel", label_visibility="collapsed")
-
-st.markdown("</div>", unsafe_allow_html=True)
 
 # Handle theme change
 if theme_choice != st.session_state.theme:
