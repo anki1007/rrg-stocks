@@ -14,278 +14,135 @@ warnings.filterwarnings('ignore')
 # ============================================================================
 st.set_page_config(
     layout="wide",
-    page_title="RRG Dashboard - Multi Theme",
-    initial_sidebar_state="collapsed"
+    page_title="RRG Dashboard - Multi-Index Analysis",
+    initial_sidebar_state="expanded"
 )
 
-# ============================================================================
-# THEME CONFIGURATION - Multiple Themes
-# ============================================================================
-THEMES = {
-    "dark": {
-        "name": "Dark Pro",
-        "bg": "#0b0e13",
-        "bg_card": "#10141b",
-        "bg_secondary": "#1a1f2e",
-        "bg_control": "#151a24",
-        "border": "#2d3748",
-        "text": "#e6eaee",
-        "text_secondary": "#a0aec0",
-        "text_muted": "#718096",
-        "accent": "#4299e1",
-        "accent_hover": "#3182ce",
-        "success": "#48bb78",
-        "table_header": "#1a2230",
-        "table_row": "#0d1117",
-        "table_row_alt": "#121823",
-    },
-    "matrix": {
-        "name": "Matrix Green",
-        "bg": "#0a0f0a",
-        "bg_card": "#0d140d",
-        "bg_secondary": "#142014",
-        "bg_control": "#0f1a0f",
-        "border": "#1a3d1a",
-        "text": "#00ff41",
-        "text_secondary": "#00cc33",
-        "text_muted": "#008f26",
-        "accent": "#00ff41",
-        "accent_hover": "#00cc33",
-        "success": "#00ff41",
-        "table_header": "#142014",
-        "table_row": "#0a0f0a",
-        "table_row_alt": "#0d140d",
-    },
-    "arctic": {
-        "name": "Arctic Blue",
-        "bg": "#0a1628",
-        "bg_card": "#0f1f3d",
-        "bg_secondary": "#142952",
-        "bg_control": "#0d1a33",
-        "border": "#1e3a5f",
-        "text": "#e0f2fe",
-        "text_secondary": "#7dd3fc",
-        "text_muted": "#38bdf8",
-        "accent": "#0ea5e9",
-        "accent_hover": "#0284c7",
-        "success": "#22d3ee",
-        "table_header": "#142952",
-        "table_row": "#0a1628",
-        "table_row_alt": "#0f1f3d",
-    },
-    "sunset": {
-        "name": "Sunset Trading",
-        "bg": "#1a1018",
-        "bg_card": "#261620",
-        "bg_secondary": "#331c28",
-        "bg_control": "#1f1218",
-        "border": "#4a2838",
-        "text": "#fce7f3",
-        "text_secondary": "#f9a8d4",
-        "text_muted": "#ec4899",
-        "accent": "#f97316",
-        "accent_hover": "#ea580c",
-        "success": "#fb923c",
-        "table_header": "#331c28",
-        "table_row": "#1a1018",
-        "table_row_alt": "#261620",
-    },
-    "cyberpunk": {
-        "name": "Cyberpunk Neon",
-        "bg": "#0d0221",
-        "bg_card": "#150530",
-        "bg_secondary": "#1a0a3e",
-        "bg_control": "#120428",
-        "border": "#6b21a8",
-        "text": "#f0abfc",
-        "text_secondary": "#e879f9",
-        "text_muted": "#c026d3",
-        "accent": "#f0f",
-        "accent_hover": "#d946ef",
-        "success": "#22d3ee",
-        "table_header": "#1a0a3e",
-        "table_row": "#0d0221",
-        "table_row_alt": "#150530",
-    },
-}
-
-# Chart colors - ALWAYS CONSISTENT (white bg with pastel quadrants)
-CHART_COLORS = {
-    "plot_bg": "#fafafa",
-    "paper_bg": "#ffffff",
-    "grid": "rgba(150,150,150,0.2)",
-    "axis_text": "#4a5568",
-    "axis_title": "#2d3748",
-}
-
-# Quadrant colors - same as Optuma reference
-QUADRANT_COLORS = {
-    "Leading": "#228B22",
-    "Improving": "#7c3aed",
-    "Weakening": "#d97706",
-    "Lagging": "#dc2626"
-}
-
-QUADRANT_BG_COLORS = {
-    "Leading": "rgba(187, 247, 208, 0.6)",
-    "Improving": "rgba(233, 213, 255, 0.6)",
-    "Weakening": "rgba(254, 243, 199, 0.6)",
-    "Lagging": "rgba(254, 202, 202, 0.6)"
-}
-
-# Initialize theme
-if "theme" not in st.session_state:
-    st.session_state.theme = "dark"
-
-theme = THEMES[st.session_state.theme]
-
-# ============================================================================
-# DYNAMIC CSS
-# ============================================================================
-st.markdown(f"""
+# Advanced Plus Jakarta Sans dark theme (matching aesthetic)
+st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;700;800&display=swap');
 
-html, body, .stApp {{
-    background: {theme['bg']} !important;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
-}}
+/* Design tokens */
+:root {
+  --app-font: 'Plus Jakarta Sans', system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  --bg: #0b0e13;
+  --bg-2: #10141b;
+  --border: #1f2732;
+  --border-soft: #1a2230;
+  --text: #e6eaee;
+  --text-dim: #b3bdc7;
+  --accent: #7a5cff;
+  --accent-2: #2bb0ff;
+}
 
-.block-container {{
-    padding: 0.5rem 0.8rem !important;
-    max-width: 100% !important;
-}}
+/* Global app */
+html, body, .stApp {
+  background: var(--bg) !important;
+  color: var(--text) !important;
+  font-family: var(--app-font) !important;
+}
 
-/* Compact selectboxes */
-div[data-baseweb="select"] > div {{
-    background: {theme['bg_card']} !important;
-    border-color: {theme['border']} !important;
-    min-height: 34px !important;
-    padding: 0 8px !important;
-}}
+/* Main container spacing - FULL WIDTH */
+.block-container {
+  padding-top: 2.5rem;
+  max-width: 100% !important;
+  padding-left: 1rem !important;
+  padding-right: 1rem !important;
+}
 
-div[data-baseweb="select"] > div > div {{
-    padding: 4px 0 !important;
-}}
+/* Hero title style */
+.hero-title {
+  font-weight: 800;
+  font-size: clamp(26px, 4.5vw, 40px);
+  line-height: 1.05;
+  margin: 4px 0 14px 0;
+  background: linear-gradient(90deg, var(--accent-2), var(--accent) 60%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  letter-spacing: .2px;
+}
 
-div[data-baseweb="select"] span {{
-    color: {theme['text']} !important;
-    font-size: 12px !important;
-}}
+/* Sidebar – pro skin */
+section[data-testid="stSidebar"] {
+  background: var(--bg-2) !important;
+  border-right: 1px solid var(--border);
+}
+section[data-testid="stSidebar"] * {
+  color: var(--text) !important;
+}
+section[data-testid="stSidebar"] label {
+  font-weight: 700;
+  color: var(--text-dim) !important;
+}
 
-/* Compact buttons */
-.stButton > button {{
-    background: {theme['bg_card']} !important;
-    border: 1px solid {theme['border']} !important;
-    color: {theme['text']} !important;
-    padding: 4px 8px !important;
-    font-size: 11px !important;
-    min-height: 34px !important;
-    white-space: nowrap !important;
-}}
+/* Buttons */
+.stButton button {
+  background: linear-gradient(180deg, #1b2432, #131922);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.stButton button:hover {
+  filter: brightness(1.06);
+}
 
-.stButton > button:hover {{
-    border-color: {theme['accent']} !important;
-    color: {theme['accent']} !important;
-}}
+/* General links */
+a { text-decoration: none; color: #9ecbff; }
+a:hover { text-decoration: underline; }
 
-/* Compact number input */
-.stNumberInput > div > div > input {{
-    background: {theme['bg_card']} !important;
-    color: {theme['text']} !important;
-    border-color: {theme['border']} !important;
-    min-height: 34px !important;
-    padding: 4px 8px !important;
-    font-size: 12px !important;
-}}
+/* Headings in main area */
+h1, h2, h3, h4, h5, h6,
+.stMarkdown h1, .stMarkdown h2, .stMarkdown h3,
+.stMarkdown h4, .stMarkdown h5, .stMarkdown h6 {
+  color: var(--text) !important;
+}
 
-/* Compact checkbox */
-.stCheckbox {{
-    padding-top: 8px !important;
-}}
+/* Plotly chart container */
+.plotly-chart-container {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
 
-.stCheckbox label span {{
-    color: {theme['text']} !important;
-    font-size: 11px !important;
-}}
-
-/* Success/info messages */
-.stSuccess, .stInfo {{
-    background: {theme['bg_secondary']} !important;
-    border: 1px solid {theme['border']} !important;
-    color: {theme['text']} !important;
-    padding: 8px 12px !important;
-    font-size: 12px !important;
-}}
-
-/* Slider */
-.stSlider > div > div > div {{
-    background: {theme['accent']} !important;
-}}
-
-.stSlider label {{
-    color: {theme['text']} !important;
-}}
-
-/* Expander */
-.streamlit-expanderHeader {{
-    background: {theme['bg_secondary']} !important;
-    color: {theme['text']} !important;
-    border-radius: 6px !important;
-    padding: 8px 12px !important;
-    font-size: 13px !important;
-}}
+/* Expander styling */
+.streamlit-expanderHeader {
+  background: var(--bg-2) !important;
+  border-radius: 8px !important;
+}
 
 /* Metrics */
-[data-testid="stMetric"] {{
-    background: {theme['bg_card']};
-    padding: 8px;
-    border-radius: 6px;
-    border: 1px solid {theme['border']};
-}}
+[data-testid="stMetric"] {
+  background: var(--bg-2);
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
 
-[data-testid="stMetricValue"] {{
-    color: {theme['text']} !important;
-    font-size: 16px !important;
-}}
+/* Make expander content full width */
+[data-testid="stExpander"] {
+  width: 100% !important;
+}
 
-[data-testid="stMetricLabel"] {{
-    color: {theme['text_secondary']} !important;
-    font-size: 11px !important;
-}}
-
-/* Hide defaults */
-#MainMenu, footer, header {{visibility: hidden;}}
-
-/* Radio buttons inline and compact */
-.stRadio > div {{
-    flex-direction: row !important;
-    gap: 6px !important;
-}}
-
-.stRadio label {{
-    color: {theme['text']} !important;
-    font-size: 11px !important;
-}}
-
-/* Remove extra padding */
-.element-container {{
-    margin: 0 !important;
-}}
-
-/* Compact columns gap */
-[data-testid="column"] {{
-    padding: 0 4px !important;
-}}
+/* Full width for columns */
+[data-testid="column"] {
+  width: 100% !important;
+}
 </style>
 """, unsafe_allow_html=True)
+
+# Hero title
+st.markdown(
+    '<div class="hero-title">Relative Rotation Graphs – Dashboard</div>',
+    unsafe_allow_html=True,
+)
 
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
 BENCHMARKS = {
     "NIFTY 50": "^NSEI",
-    "NIFTY 100": "^CNX100",
     "NIFTY 200": "^CNX200",
     "NIFTY 500": "^CRSLDX"
 }
@@ -301,22 +158,52 @@ TIMEFRAMES = {
     "Monthly": ("1mo", "20y")
 }
 
-DATE_RANGES = {
-    "1M": 21,
+# Default period for each timeframe
+TIMEFRAME_DEFAULT_PERIOD = {
+    "5 min": "3M",
+    "15 min": "3M",
+    "30 min": "3M",
+    "1 hr": "3M",
+    "4 hr": "3M",
+    "Daily": "6M",
+    "Weekly": "1Y",
+    "Monthly": "3Y"
+}
+
+PERIOD_MAP = {
     "3M": 63,
     "6M": 126,
     "1Y": 252,
     "2Y": 504,
     "3Y": 756,
+    "5Y": 1260,
+    "10Y": 2520
+}
+
+# Matching quadrant colors from the reference design
+QUADRANT_COLORS = {
+    "Leading": "#15803d",    # Dark green
+    "Improving": "#7c3aed",  # Purple
+    "Weakening": "#a16207",  # Brown/amber
+    "Lagging": "#dc2626"     # Red
+}
+
+QUADRANT_BG_COLORS = {
+    "Leading": "rgba(187, 247, 208, 0.6)",
+    "Improving": "rgba(233, 213, 255, 0.6)",
+    "Weakening": "rgba(254, 249, 195, 0.6)",
+    "Lagging": "rgba(254, 202, 202, 0.6)"
 }
 
 WINDOW = 14
+TAIL_LENGTH = 8
 
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
 @st.cache_data(ttl=600)
 def list_csv_from_github():
+    """Fetch CSV filenames from GitHub repository"""
     url = "https://api.github.com/repos/anki1007/rrg-stocks/contents/ticker"
     try:
         response = requests.get(url, timeout=10)
@@ -326,19 +213,40 @@ def list_csv_from_github():
             files = [f['name'].replace('.csv', '').upper() for f in data
                     if isinstance(f, dict) and f.get('name', '').endswith('.csv')]
             return sorted(files) if files else []
+        else:
+            return []
     except Exception:
         return []
-    return []
 
 @st.cache_data(ttl=600)
 def load_universe(csv_name):
+    """Load stock universe from GitHub CSV"""
     url = f"https://raw.githubusercontent.com/anki1007/rrg-stocks/main/ticker/{csv_name.lower()}.csv"
     try:
-        return pd.read_csv(url)
+        df = pd.read_csv(url)
+        return df
     except Exception:
         return pd.DataFrame()
 
+def get_adjusted_close_date(timeframe):
+    """Get the appropriate date for adjusted close based on timeframe."""
+    today = datetime.now()
+    if timeframe == "Weekly":
+        days_since_friday = (today.weekday() - 4) % 7
+        if days_since_friday == 0 and today.weekday() == 4:
+            last_friday = today
+        else:
+            last_friday = today - timedelta(days=(days_since_friday or 7))
+        return last_friday.strftime('%Y-%m-%d')
+    elif timeframe == "Monthly":
+        first_day_this_month = today.replace(day=1)
+        last_day_prev_month = first_day_this_month - timedelta(days=1)
+        return last_day_prev_month.strftime('%Y-%m-%d')
+    else:
+        return today.strftime('%Y-%m-%d')
+
 def calculate_jdk_rrg(ticker_series, benchmark_series, window=WINDOW):
+    """Calculate complete JdK RRG metrics using proper z-score method"""
     aligned_data = pd.DataFrame({
         'ticker': ticker_series,
         'benchmark': benchmark_series
@@ -370,6 +278,7 @@ def calculate_jdk_rrg(ticker_series, benchmark_series, window=WINDOW):
             velocity.iloc[-min_len:].reset_index(drop=True))
 
 def quadrant(x, y):
+    """Determine RRG quadrant based on position"""
     if x > 100 and y > 100:
         return "Leading"
     elif x < 100 and y > 100:
@@ -380,10 +289,75 @@ def quadrant(x, y):
         return "Weakening"
 
 def get_quadrant_color(x, y):
+    """Get color based on actual position - ENSURES VISUAL CONSISTENCY"""
     status = quadrant(x, y)
     return QUADRANT_COLORS[status], status
 
+def get_heading_direction(heading):
+    """Convert heading degrees to compass direction"""
+    if 22.5 <= heading < 67.5:
+        return "↗ NE"
+    elif 67.5 <= heading < 112.5:
+        return "↑ N"
+    elif 112.5 <= heading < 157.5:
+        return "↖ NW"
+    elif 157.5 <= heading < 202.5:
+        return "← W"
+    elif 202.5 <= heading < 247.5:
+        return "↙ SW"
+    elif 247.5 <= heading < 292.5:
+        return "↓ S"
+    elif 292.5 <= heading < 337.5:
+        return "↘ SE"
+    else:
+        return "→ E"
+
+def get_tv_link(sym):
+    """Generate TradingView link"""
+    clean_sym = sym.replace('.NS', '')
+    return f"https://www.tradingview.com/chart/?symbol=NSE:{clean_sym}"
+
+def format_symbol(sym):
+    """Remove .NS suffix"""
+    return sym.replace('.NS', '')
+
+def calculate_price_change(current_price, historical_price):
+    """Calculate percentage change"""
+    if historical_price == 0:
+        return 0
+    return ((current_price - historical_price) / historical_price) * 100
+
+def select_graph_stocks(df, min_stocks=60):
+    """Select stocks for graph display with quadrant balancing"""
+    graph_stocks = []
+    
+    for status in ["Leading", "Improving", "Weakening", "Lagging"]:
+        df_quad = df[df['Status'] == status].copy()
+        
+        if len(df_quad) == 0:
+            continue
+        elif len(df_quad) < 10:
+            graph_stocks.extend(df_quad.index.tolist())
+        else:
+            if status in ["Leading", "Improving"]:
+                top_10 = df_quad.nlargest(10, 'RRG Power')
+            else:
+                top_10 = df_quad.nsmallest(10, 'RRG Power')
+            graph_stocks.extend(top_10.index.tolist())
+    
+    if len(graph_stocks) < min_stocks:
+        remaining_indices = df.index.difference(graph_stocks)
+        additional_needed = min_stocks - len(graph_stocks)
+        additional_stocks = df.loc[remaining_indices].nlargest(additional_needed, 'RRG Power')
+        graph_stocks.extend(additional_stocks.index.tolist())
+    
+    return df.loc[graph_stocks]
+
+# ============================================================================
+# SMOOTH SPLINE FUNCTION (Catmull-Rom)
+# ============================================================================
 def smooth_spline_curve(x_points, y_points, points_per_segment=8):
+    """Create smooth curve using Catmull-Rom spline interpolation"""
     if len(x_points) < 3:
         return np.array(x_points), np.array(y_points)
     
@@ -409,173 +383,93 @@ def smooth_spline_curve(x_points, y_points, points_per_segment=8):
     y_smooth.append(y_points[-1])
     return np.array(x_smooth), np.array(y_smooth)
 
-def get_tv_link(sym):
-    return f"https://www.tradingview.com/chart/?symbol=NSE:{sym.replace('.NS', '')}"
-
-def format_symbol(sym):
-    return sym.replace('.NS', '')
-
-def get_heading_direction(heading):
-    dirs = [("→ E", 0), ("↗ NE", 45), ("↑ N", 90), ("↖ NW", 135), 
-            ("← W", 180), ("↙ SW", 225), ("↓ S", 270), ("↘ SE", 315)]
-    for d, angle in dirs:
-        if abs(heading - angle) < 22.5 or abs(heading - angle - 360) < 22.5:
-            return d
-    return "→ E"
-
-def select_graph_stocks(df, min_stocks=50):
-    graph_stocks = []
-    for status in ["Leading", "Improving", "Weakening", "Lagging"]:
-        df_quad = df[df['Status'] == status].copy()
-        if len(df_quad) == 0:
-            continue
-        elif len(df_quad) < 15:
-            graph_stocks.extend(df_quad.index.tolist())
-        else:
-            top = df_quad.nlargest(15, 'RRG Power') if status in ["Leading", "Improving"] else df_quad.nsmallest(15, 'RRG Power')
-            graph_stocks.extend(top.index.tolist())
-    
-    if len(graph_stocks) < min_stocks:
-        remaining = df.index.difference(graph_stocks)
-        additional = df.loc[remaining].nlargest(min_stocks - len(graph_stocks), 'RRG Power')
-        graph_stocks.extend(additional.index.tolist())
-    
-    return df.loc[graph_stocks]
-
-def generate_table_html(df, theme):
-    industries = sorted(df['Industry'].unique().tolist())
-    ind_opts = ''.join([f'<option value="{i}">{i}</option>' for i in industries])
-    
-    rows = ""
-    for _, r in df.iterrows():
-        c, s = get_quadrant_color(r['RS-Ratio'], r['RS-Momentum'])
-        rows += f"""<tr>
-            <td>{int(r['Sl No.'])}</td>
-            <td><a href="{r['TV Link']}" target="_blank" style="color:{theme['accent']};font-weight:600;">{r['Symbol']}</a></td>
-            <td>{r['Name'][:22]}</td>
-            <td>{r['Industry'][:18]}</td>
-            <td style="text-align:right;">₹{r['Price']:,.2f}</td>
-            <td><span style="background:{c};color:#fff;padding:2px 6px;border-radius:3px;font-size:10px;">{s}</span></td>
-            <td style="text-align:right;">{r['RS-Ratio']:.2f}</td>
-            <td style="text-align:right;">{r['RS-Momentum']:.2f}</td>
-            <td style="text-align:right;font-weight:600;">{r['RRG Power']:.2f}</td>
-            <td style="text-align:center;">{r['Direction']}</td>
-        </tr>"""
-    
-    return f"""<!DOCTYPE html><html><head><style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
-        *{{box-sizing:border-box;margin:0;padding:0;}}
-        body{{font-family:'Inter',sans-serif;background:{theme['bg_card']};color:{theme['text']};}}
-        .controls{{padding:10px;background:{theme['bg_secondary']};border-bottom:1px solid {theme['border']};display:flex;gap:10px;flex-wrap:wrap;}}
-        input,select{{padding:6px 10px;background:{theme['bg_card']};border:1px solid {theme['border']};border-radius:4px;color:{theme['text']};font-size:12px;}}
-        input:focus,select:focus{{outline:none;border-color:{theme['accent']};}}
-        .badge{{background:{theme['accent']};color:#fff;padding:5px 12px;border-radius:12px;font-size:12px;font-weight:600;}}
-        .wrap{{max-height:400px;overflow:auto;}}
-        table{{width:100%;border-collapse:collapse;font-size:12px;}}
-        th{{position:sticky;top:0;background:{theme['table_header']};color:{theme['text_secondary']};padding:10px 8px;text-align:left;font-weight:600;border-bottom:2px solid {theme['border']};cursor:pointer;}}
-        th:hover{{background:{theme['bg_secondary']};}}
-        td{{padding:8px;border-bottom:1px solid {theme['border']};}}
-        tr:nth-child(odd){{background:{theme['table_row']};}}
-        tr:nth-child(even){{background:{theme['table_row_alt']};}}
-        tr:hover{{background:{theme['bg_secondary']};}}
-        a{{text-decoration:none;}}
-        .hidden{{display:none;}}
-    </style></head><body>
-    <div class="controls">
-        <input type="text" id="search" placeholder="🔍 Search..." onkeyup="filter()" style="min-width:180px;">
-        <select id="statusF" onchange="filter()"><option value="">All Status</option><option>Leading</option><option>Improving</option><option>Weakening</option><option>Lagging</option></select>
-        <select id="indF" onchange="filter()"><option value="">All Industries</option>{ind_opts}</select>
-        <span class="badge" id="cnt">{len(df)}/{len(df)}</span>
-    </div>
-    <div class="wrap"><table><thead><tr>
-        <th onclick="sort(0)">#</th><th onclick="sort(1)">Symbol</th><th onclick="sort(2)">Name</th><th onclick="sort(3)">Industry</th>
-        <th onclick="sort(4)">Price</th><th onclick="sort(5)">Status</th><th onclick="sort(6)">RS-Ratio</th>
-        <th onclick="sort(7)">RS-Mom</th><th onclick="sort(8)">Power</th><th onclick="sort(9)">Dir</th>
-    </tr></thead><tbody id="tb">{rows}</tbody></table></div>
-    <script>
-        const total={len(df)},dir={{}};
-        function sort(c){{const tb=document.getElementById('tb'),rs=Array.from(tb.rows);dir[c]=!dir[c];rs.sort((a,b)=>{{let av=a.cells[c].textContent.replace(/[₹,%]/g,''),bv=b.cells[c].textContent.replace(/[₹,%]/g,'');const an=parseFloat(av),bn=parseFloat(bv);if(!isNaN(an)&&!isNaN(bn))return dir[c]?an-bn:bn-an;return dir[c]?av.localeCompare(bv):bv.localeCompare(av);}});tb.innerHTML='';rs.forEach(r=>tb.appendChild(r));}}
-        function filter(){{const s=document.getElementById('search').value.toLowerCase(),st=document.getElementById('statusF').value,ind=document.getElementById('indF').value,tb=document.getElementById('tb'),rs=tb.rows;let v=0;for(let r of rs){{const sym=r.cells[1].textContent.toLowerCase(),nm=r.cells[2].textContent.toLowerCase(),i=r.cells[3].textContent,stat=r.cells[5].textContent.trim();const m=(sym.includes(s)||nm.includes(s))&&(!st||stat===st)&&(!ind||i===ind);r.classList.toggle('hidden',!m);if(m)v++;}}document.getElementById('cnt').textContent=v+'/'+total;}}
-    </script></body></html>"""
-
 # ============================================================================
 # SESSION STATE
 # ============================================================================
-for key, default in [("load_clicked", False), ("df_cache", None), ("rs_history_cache", {}), 
-                     ("dates_cache", []), ("current_frame", 0), ("is_playing", False)]:
-    if key not in st.session_state:
-        st.session_state[key] = default
+if "load_clicked" not in st.session_state:
+    st.session_state.load_clicked = False
+if "df_cache" not in st.session_state:
+    st.session_state.df_cache = None
+if "rs_history_cache" not in st.session_state:
+    st.session_state.rs_history_cache = {}
+if "anim_playing" not in st.session_state:
+    st.session_state.anim_playing = False
+if "anim_frame" not in st.session_state:
+    st.session_state.anim_frame = 0
 
 # ============================================================================
-# CONTROL BAR - Ultra Compact Inline Layout
+# SIDEBAR
 # ============================================================================
-csv_files = list_csv_from_github() or ["NIFTY200"]
-default_csv = next((i for i, c in enumerate(csv_files) if 'NIFTY200' in c.upper()), 0)
+st.sidebar.markdown("### ⚙️ Controls")
 
-# All controls in single row - tighter spacing
-cols = st.columns([1.1, 1.1, 0.7, 0.55, 0.45, 0.55, 0.4, 0.4, 0.4, 0.45, 0.85])
+csv_files = list_csv_from_github()
+if not csv_files:
+    st.sidebar.warning("⚠️ Unable to fetch indices from GitHub. Check connection.")
+    csv_files = ["NIFTY200"]
 
-with cols[0]:
-    st.markdown(f"<p style='font-size:12px;color:{theme['text_muted']};margin:0 0 1px 0;font-weight:600;letter-spacing:0.5px;'>INDICES</p>", unsafe_allow_html=True)
-    csv_selected = st.selectbox("b", csv_files, index=default_csv, key="csv", label_visibility="collapsed")
+default_csv_index = 0
+if csv_files:
+    for i, csv in enumerate(csv_files):
+        if 'NIFTY200' in csv.upper() or 'NIFTY 200' in csv.upper():
+            default_csv_index = i
+            break
 
-with cols[1]:
-    st.markdown(f"<p style='font-size:12px;color:{theme['text_muted']};margin:0 0 1px 0;font-weight:600;letter-spacing:0.5px;'>VS BENCHMARK</p>", unsafe_allow_html=True)
-    bench_name = st.selectbox("v", list(BENCHMARKS.keys()), index=2, key="bench", label_visibility="collapsed")
+csv_selected = st.sidebar.selectbox("Indices", csv_files, index=default_csv_index, key="csv_select")
 
-with cols[2]:
-    st.markdown(f"<p style='font-size:12px;color:{theme['text_muted']};margin:0 0 1px 0;font-weight:600;letter-spacing:0.5px;'>TIMEFRAME</p>", unsafe_allow_html=True)
-    tf_name = st.selectbox("t", list(TIMEFRAMES.keys()), index=5, key="tf", label_visibility="collapsed")
+bench_list = list(BENCHMARKS.keys())
+default_bench_index = 2
+bench_name = st.sidebar.selectbox("Benchmark", bench_list, index=default_bench_index, key="bench_select")
 
-with cols[3]:
-    st.markdown(f"<p style='font-size:12px;color:{theme['text_muted']};margin:0 0 1px 0;font-weight:600;letter-spacing:0.5px;'>RANGE</p>", unsafe_allow_html=True)
-    date_range = st.selectbox("d", list(DATE_RANGES.keys()), index=1, key="dr", label_visibility="collapsed")
+# Timeframe selection with callback to update period
+tf_name = st.sidebar.selectbox("Strength vs Timeframe", list(TIMEFRAMES.keys()), key="tf_select")
 
-with cols[4]:
-    st.markdown(f"<p style='font-size:12px;color:{theme['text_muted']};margin:0 0 1px 0;font-weight:600;letter-spacing:0.5px;'>COUNTS</p>", unsafe_allow_html=True)
-    trail_length = st.number_input("c", min_value=1, max_value=14, value=5, key="trail", label_visibility="collapsed")
+# Get default period for selected timeframe
+default_period = TIMEFRAME_DEFAULT_PERIOD.get(tf_name, "6M")
+period_list = list(PERIOD_MAP.keys())
+default_period_index = period_list.index(default_period) if default_period in period_list else 1
 
-with cols[5]:
-    st.markdown(f"<p style='font-size:12px;color:{theme['text_muted']};margin:0 0 1px 0;'>&nbsp;</p>", unsafe_allow_html=True)
-    st.markdown(f"<div style='background:{theme['accent']};color:white;padding:5px 6px;border-radius:4px;text-align:center;font-weight:700;font-size:11px;white-space:nowrap;'>{trail_length}D</div>", unsafe_allow_html=True)
+period_name = st.sidebar.selectbox("Period", period_list, index=default_period_index, key="period_select")
 
-with cols[6]:
-    st.markdown(f"<p style='font-size:12px;color:{theme['text_muted']};margin:0 0 1px 0;'>&nbsp;</p>", unsafe_allow_html=True)
-    load_btn = st.button("Load", key="load", use_container_width=True)
+rank_by = st.sidebar.selectbox(
+    "Rank by",
+    ["RRG Power", "RS-Ratio", "RS-Momentum", "Distance", "Price % Change"],
+    index=0,
+    key="rank_select"
+)
 
-with cols[7]:
-    st.markdown(f"<p style='font-size:12px;color:{theme['text_muted']};margin:0 0 1px 0;'>&nbsp;</p>", unsafe_allow_html=True)
-    play_btn = st.button("▶", key="play", use_container_width=True)
+st.sidebar.markdown("---")
+top_n = st.sidebar.slider("Show Top N", min_value=5, max_value=100, value=50)
+st.sidebar.markdown("---")
+# Trail Controls
+trail_length = st.sidebar.slider("Trail Length", min_value=1, max_value=14, value=5)
+show_labels = st.sidebar.checkbox("Show Labels on Chart", value=True)
+label_top_n = st.sidebar.slider("Label Top N (by distance)", min_value=3, max_value=50, value=15, disabled=not show_labels)
+st.sidebar.markdown("---")
+export_csv = st.sidebar.checkbox("Export CSV", value=True)
 
-with cols[8]:
-    st.markdown(f"<p style='font-size:12px;color:{theme['text_muted']};margin:0 0 1px 0;'>&nbsp;</p>", unsafe_allow_html=True)
-    stop_btn = st.button("⏹", key="stop", use_container_width=True)
+st.sidebar.markdown("---")
 
-with cols[9]:
-    st.markdown(f"<p style='font-size:12px;color:{theme['text_muted']};margin:0 0 1px 0;'>&nbsp;</p>", unsafe_allow_html=True)
-    label_on = st.checkbox("Label", value=True, key="lbl")
+if st.sidebar.button("📥 Load Data", use_container_width=True, key="load_btn", type="primary"):
+    st.session_state.load_clicked = True
 
-with cols[10]:
-    st.markdown(f"<p style='font-size:12px;color:{theme['text_muted']};margin:0 0 1px 0;font-weight:600;letter-spacing:0.5px;'>THEME</p>", unsafe_allow_html=True)
-    theme_choice = st.selectbox("th", list(THEMES.keys()), 
-                                index=list(THEMES.keys()).index(st.session_state.theme),
-                                format_func=lambda x: THEMES[x]['name'],
-                                key="theme_sel", label_visibility="collapsed")
-
-# Handle theme change
-if theme_choice != st.session_state.theme:
-    st.session_state.theme = theme_choice
+if st.sidebar.button("🔄 Clear", use_container_width=True, key="clear_btn"):
+    st.session_state.load_clicked = False
+    st.session_state.df_cache = None
+    st.session_state.rs_history_cache = {}
     st.rerun()
 
-if load_btn:
-    st.session_state.load_clicked = True
-    st.session_state.current_frame = trail_length - 1
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 📍 Legend")
+st.sidebar.markdown("🟢 **Leading**: Strong RS, ↑ Momentum")
+st.sidebar.markdown("🟣 **Improving**: Weak RS, ↑ Momentum")
+st.sidebar.markdown("🟡 **Weakening**: Strong RS, ↓ Momentum")
+st.sidebar.markdown("🔴 **Lagging**: Weak RS, ↓ Momentum")
+st.sidebar.markdown(f"**Benchmark: {bench_name}**")
+st.sidebar.markdown(f"**Window: {WINDOW} periods**")
 
-if play_btn:
-    st.session_state.is_playing = True
-
-if stop_btn:
-    st.session_state.is_playing = False
+if tf_name in ["Weekly", "Monthly"]:
+    adj_date = get_adjusted_close_date(tf_name)
+    st.sidebar.markdown(f"**Adj Close Date: {adj_date}**")
 
 # ============================================================================
 # DATA LOADING
@@ -586,260 +480,962 @@ if st.session_state.load_clicked:
         universe = load_universe(csv_selected)
         
         if universe.empty:
-            st.error("❌ Failed to load data")
+            st.error("❌ Failed to load universe data. Check CSV name.")
             st.stop()
         
         symbols = universe['Symbol'].tolist()
         names_dict = dict(zip(universe['Symbol'], universe['Company Name']))
         industries_dict = dict(zip(universe['Symbol'], universe['Industry']))
         
-        with st.spinner(f"Loading {len(symbols)} symbols..."):
-            raw = yf.download(symbols + [BENCHMARKS[bench_name]], interval=interval, 
-                            period=yf_period, auto_adjust=True, progress=False, threads=True)
+        with st.spinner(f"📥 Downloading {len(symbols)} symbols from {tf_name}..."):
+            raw = yf.download(
+                symbols + [BENCHMARKS[bench_name]],
+                interval=interval,
+                period=yf_period,
+                auto_adjust=True,
+                progress=False,
+                threads=True
+            )
         
         if BENCHMARKS[bench_name] not in raw['Close'].columns:
-            st.error("❌ Benchmark unavailable")
+            st.error(f"❌ Benchmark {bench_name} data unavailable.")
             st.stop()
         
         bench = raw['Close'][BENCHMARKS[bench_name]]
-        rows, rs_history = [], {}
-        dates_list = raw.index.tolist()[-DATE_RANGES[date_range]:]
+        rows = []
+        rs_history = {}
+        success_count = 0
+        failed_count = 0
         
         for s in symbols:
             if s not in raw['Close'].columns:
+                failed_count += 1
                 continue
+            
             try:
-                rs_ratio, rs_momentum, distance, heading, velocity = calculate_jdk_rrg(raw['Close'][s], bench)
+                rs_ratio, rs_momentum, distance, heading, velocity = calculate_jdk_rrg(
+                    raw['Close'][s], bench, window=WINDOW
+                )
+                
                 if rs_ratio is None or len(rs_ratio) < 3:
+                    failed_count += 1
                     continue
                 
-                max_hist = min(DATE_RANGES[date_range], len(rs_ratio))
+                tail_len = min(14, len(rs_ratio))  # Store up to 14 periods
                 rs_history[format_symbol(s)] = {
-                    'rs_ratio': rs_ratio.iloc[-max_hist:].tolist(),
-                    'rs_momentum': rs_momentum.iloc[-max_hist:].tolist(),
-                    'dates': [d.strftime('%Y-%m-%d') if hasattr(d, 'strftime') else str(d)[:10] for d in dates_list[-max_hist:]]
+                    'rs_ratio': rs_ratio.iloc[-tail_len:].tolist(),
+                    'rs_momentum': rs_momentum.iloc[-tail_len:].tolist()
                 }
                 
-                rsr, rsm = rs_ratio.iloc[-1], rs_momentum.iloc[-1]
+                rsr_current = rs_ratio.iloc[-1]
+                rsm_current = rs_momentum.iloc[-1]
+                dist_current = distance.iloc[-1]
+                head_current = heading.iloc[-1]
+                vel_current = velocity.iloc[-1] if not pd.isna(velocity.iloc[-1]) else 0
+                
+                power = np.sqrt((rsr_current - 100) ** 2 + (rsm_current - 100) ** 2)
+                current_price = raw['Close'][s].iloc[-1]
+                historical_price = raw['Close'][s].iloc[max(0, len(raw['Close'][s]) - PERIOD_MAP[period_name])]
+                price_change = calculate_price_change(current_price, historical_price)
+                status = quadrant(rsr_current, rsm_current)
+                direction = get_heading_direction(head_current)
+                
                 rows.append({
-                    'Symbol': format_symbol(s), 'Name': names_dict.get(s, s),
-                    'Industry': industries_dict.get(s, 'N/A'), 'Price': round(raw['Close'][s].iloc[-1], 2),
-                    'RS-Ratio': round(rsr, 2), 'RS-Momentum': round(rsm, 2),
-                    'RRG Power': round(np.sqrt((rsr-100)**2 + (rsm-100)**2), 2),
-                    'Distance': round(distance.iloc[-1], 2), 'Direction': get_heading_direction(heading.iloc[-1]),
-                    'Status': quadrant(rsr, rsm), 'TV Link': get_tv_link(s)
+                    'Symbol': format_symbol(s),
+                    'Name': names_dict.get(s, s),
+                    'Industry': industries_dict.get(s, 'N/A'),
+                    'Price': round(current_price, 2),
+                    'Change %': round(price_change, 2),
+                    'RS-Ratio': round(rsr_current, 2),
+                    'RS-Momentum': round(rsm_current, 2),
+                    'RRG Power': round(power, 2),
+                    'Distance': round(dist_current, 2),
+                    'Heading': round(head_current, 1),
+                    'Direction': direction,
+                    'Velocity': round(vel_current, 3),
+                    'Status': status,
+                    'TV Link': get_tv_link(s)
                 })
-            except:
+                success_count += 1
+            except Exception:
+                failed_count += 1
                 continue
         
-        if rows:
-            df = pd.DataFrame(rows)
-            df['Rank'] = df['RRG Power'].rank(ascending=False, method='min').astype(int)
-            df = df.sort_values('Rank')
-            df['Sl No.'] = range(1, len(df)+1)
-            st.session_state.df_cache = df
-            st.session_state.rs_history_cache = rs_history
-            st.session_state.current_frame = trail_length - 1
-            st.success(f"✅ Loaded {len(df)} symbols")
+        if success_count > 0:
+            st.success(f"✅ Loaded {success_count} symbols | ⚠️ Skipped {failed_count}")
         else:
-            st.error("No data")
+            st.error("No data available.")
             st.stop()
+        
+        df = pd.DataFrame(rows)
+        if df.empty:
+            st.error("No data after processing.")
+            st.stop()
+        
+        rank_col_map = {
+            "RRG Power": "RRG Power",
+            "RS-Ratio": "RS-Ratio",
+            "RS-Momentum": "RS-Momentum",
+            "Distance": "Distance",
+            "Price % Change": "Change %"
+        }
+        
+        rank_column = rank_col_map[rank_by]
+        df['Rank'] = df[rank_column].rank(ascending=False, method='min').astype(int)
+        df = df.sort_values('Rank')
+        df['Sl No.'] = range(1, len(df) + 1)
+        
+        st.session_state.df_cache = df
+        st.session_state.rs_history_cache = rs_history
+        
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"❌ Error: {str(e)}")
         st.stop()
 
 # ============================================================================
-# DISPLAY
+# DISPLAY RESULTS
 # ============================================================================
 if st.session_state.df_cache is not None:
     df = st.session_state.df_cache
     rs_history = st.session_state.rs_history_cache
     
-    # Timeline controls with date range display
-    if rs_history:
-        max_hist = max(len(rs_history[s]['rs_ratio']) for s in rs_history)
-        sample = list(rs_history.keys())[0]
-        dates_avail = rs_history[sample].get('dates', [])
+    col_left, col_main, col_right = st.columns([1, 3, 1], gap="medium")
+    
+    # ========================================================================
+    # LEFT SIDEBAR
+    # ========================================================================
+    with col_left:
+        st.markdown("### 📍 Legend")
+        status_counts = df['Status'].value_counts()
+        status_colors_map = {"Leading": "🟢", "Improving": "🟣", "Weakening": "🟡", "Lagging": "🔴"}
         
-        # Timeline header
-        st.markdown(f"""
-        <div style="background:{theme['bg_secondary']};border:1px solid {theme['border']};border-radius:6px;padding:6px 16px;margin-bottom:6px;">
-            <span style="font-size:11px;font-weight:600;color:{theme['text_secondary']};text-transform:uppercase;letter-spacing:1px;">Timeline Control</span>
-        </div>
-        """, unsafe_allow_html=True)
+        for status in ["Leading", "Improving", "Weakening", "Lagging"]:
+            count = status_counts.get(status, 0)
+            st.markdown(f"{status_colors_map[status]} {status}: {count}")
         
-        tc1, tc2, tc3 = st.columns([1.2, 6.5, 2])
-        with tc1:
-            mode = st.radio("view_mode", ["Static", "Animate"], horizontal=True, key="mode", label_visibility="collapsed")
+        st.markdown("---")
+        st.markdown("### 📊 Stats")
+        col_stat1, col_stat2 = st.columns(2)
         
-        with tc2:
-            frame_idx = st.slider("timeline_slider", trail_length-1, max_hist-1, 
-                                 max_hist-1 if mode == "Static" else st.session_state.current_frame,
-                                 key="timeline", label_visibility="collapsed")
-            if mode == "Animate":
-                st.session_state.current_frame = frame_idx
+        with col_stat1:
+            st.metric("Total", len(df))
+            st.metric("Leading", len(df[df['Status'] == 'Leading']))
         
-        with tc3:
-            # Date range display like Optuma
-            start_idx = max(0, frame_idx - trail_length + 1)
-            start_dt = dates_avail[start_idx] if dates_avail and start_idx < len(dates_avail) else ""
-            end_dt = dates_avail[frame_idx] if dates_avail and frame_idx < len(dates_avail) else ""
-            
-            if start_dt and end_dt:
-                st.markdown(f"""
-                <div style="background:{theme['accent']};color:white;padding:6px 12px;border-radius:4px;text-align:center;margin-top:4px;">
-                    <div style="font-size:9px;font-weight:500;opacity:0.85;margin-bottom:2px;">PERIOD</div>
-                    <div style="font-size:11px;font-weight:700;">{start_dt}</div>
-                    <div style="font-size:9px;opacity:0.7;">to</div>
-                    <div style="font-size:11px;font-weight:700;">{end_dt}</div>
-                </div>
-                """, unsafe_allow_html=True)
+        with col_stat2:
+            st.metric("Improving", len(df[df['Status'] == 'Improving']))
+            st.metric("Weakening", len(df[df['Status'] == 'Weakening']))
         
-        # Auto-play
-        if mode == "Animate" and st.session_state.is_playing:
-            import time
-            if frame_idx < max_hist - 1:
-                time.sleep(0.25)
-                st.session_state.current_frame = frame_idx + 1
-                st.rerun()
-            else:
-                st.session_state.is_playing = False
-    else:
-        frame_idx = trail_length - 1
-        max_hist = trail_length
+        st.metric("Lagging", len(df[df['Status'] == 'Lagging']))
     
-    # Graph
-    df_graph = select_graph_stocks(df, 50)
-    
-    x_min, x_max = df['RS-Ratio'].min() - 2, df['RS-Ratio'].max() + 2
-    y_min, y_max = df['RS-Momentum'].min() - 2, df['RS-Momentum'].max() + 2
-    x_range = max(abs(100 - x_min), abs(x_max - 100))
-    y_range = max(abs(100 - y_min), abs(y_max - 100))
-    
-    fig = go.Figure()
-    
-    # Quadrants (always same colors)
-    fig.add_shape(type="rect", x0=100, y0=100, x1=100+x_range+2, y1=100+y_range+2,
-                  fillcolor=QUADRANT_BG_COLORS["Leading"], line_width=0, layer="below")
-    fig.add_shape(type="rect", x0=100-x_range-2, y0=100, x1=100, y1=100+y_range+2,
-                  fillcolor=QUADRANT_BG_COLORS["Improving"], line_width=0, layer="below")
-    fig.add_shape(type="rect", x0=100-x_range-2, y0=100-y_range-2, x1=100, y1=100,
-                  fillcolor=QUADRANT_BG_COLORS["Lagging"], line_width=0, layer="below")
-    fig.add_shape(type="rect", x0=100, y0=100-y_range-2, x1=100+x_range+2, y1=100,
-                  fillcolor=QUADRANT_BG_COLORS["Weakening"], line_width=0, layer="below")
-    
-    # Center lines
-    fig.add_hline(y=100, line_color="rgba(100,100,100,0.5)", line_width=1.5)
-    fig.add_vline(x=100, line_color="rgba(100,100,100,0.5)", line_width=1.5)
-    
-    # Labels
-    ox, oy = x_range * 0.65, y_range * 0.75
-    for txt, x, y, c in [("LEADING", 100+ox, 100+oy, "Leading"), ("IMPROVING", 100-ox, 100+oy, "Improving"),
-                         ("LAGGING", 100-ox, 100-oy, "Lagging"), ("WEAKENING", 100+ox, 100-oy, "Weakening")]:
-        fig.add_annotation(x=x, y=y, text=f"<b>{txt}</b>", showarrow=False, 
-                          font=dict(size=13, color=QUADRANT_COLORS[c]))
-    
-    # Stocks
-    for _, row in df_graph.iterrows():
-        sym = row['Symbol']
-        if sym not in rs_history:
-            continue
-        
-        h = rs_history[sym]
-        end = min(frame_idx + 1, len(h['rs_ratio']))
-        start = max(0, end - trail_length)
-        
-        xp = np.array(h['rs_ratio'][start:end], dtype=float)
-        yp = np.array(h['rs_momentum'][start:end], dtype=float)
-        
-        if len(xp) == 0:
-            continue
-        
-        hx, hy = xp[-1], yp[-1]
-        color, status = get_quadrant_color(hx, hy)
-        
-        # Trail
-        if len(xp) >= 2:
-            xs, ys = (smooth_spline_curve(xp, yp, 6) if len(xp) >= 3 else (xp, yp))
-            for i in range(len(xs)-1):
-                p = i / max(1, len(xs)-2)
-                fig.add_trace(go.Scatter(x=[xs[i], xs[i+1]], y=[ys[i], ys[i+1]], mode='lines',
-                    line=dict(color=color, width=2+p*3), opacity=0.3+p*0.7, hoverinfo='skip', showlegend=False))
-            
-            # Arrow
-            dx, dy = xp[-1]-xp[-2], yp[-1]-yp[-2]
-            l = np.sqrt(dx**2+dy**2)
-            if l > 0.01:
-                fig.add_annotation(x=xp[-1], y=yp[-1], ax=xp[-1]-dx/l*0.3, ay=yp[-1]-dy/l*0.3,
-                    xref='x', yref='y', axref='x', ayref='y', showarrow=True, arrowhead=2, 
-                    arrowsize=1.5, arrowwidth=2.5, arrowcolor=color)
-        
-        # Head
-        fig.add_trace(go.Scatter(x=[hx], y=[hy], mode='markers',
-            marker=dict(size=11, color=color, line=dict(color='white', width=2)),
-            hovertemplate=f"<b>{sym}</b><br>RS:{hx:.2f}<br>Mom:{hy:.2f}<extra></extra>", showlegend=False))
-        
-        if label_on:
-            fig.add_annotation(x=hx, y=hy, text=f"<b>{sym}</b>", showarrow=False,
-                              font=dict(size=9, color=color), yshift=12)
-    
-    # Legend
-    for s in ["Leading", "Improving", "Weakening", "Lagging"]:
-        fig.add_trace(go.Scatter(x=[None], y=[None], mode='markers',
-            marker=dict(size=10, color=QUADRANT_COLORS[s]), name=s, showlegend=True))
-    
-    # Layout - WHITE CHART ALWAYS
-    fig.update_layout(
-        height=680,
-        plot_bgcolor=CHART_COLORS['plot_bg'],
-        paper_bgcolor=CHART_COLORS['paper_bg'],
-        font=dict(color=CHART_COLORS['axis_text'], size=11, family='Inter'),
-        xaxis=dict(title="<b>JdK RS-RATIO</b>", range=[100-x_range-1, 100+x_range+1],
-                   gridcolor=CHART_COLORS['grid'], zeroline=False, tickfont=dict(color=CHART_COLORS['axis_text'])),
-        yaxis=dict(title="<b>JdK RS-MOMENTUM</b>", range=[100-y_range-1, 100+y_range+1],
-                   gridcolor=CHART_COLORS['grid'], zeroline=False, tickfont=dict(color=CHART_COLORS['axis_text'])),
-        legend=dict(orientation="h", y=-0.12, x=0.5, xanchor="center", bgcolor='rgba(35,35,255,0.8)'),
-        hovermode='closest',
-        margin=dict(l=50, r=20, t=10, b=70),
-    )
-    
-    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': True, 'displaylogo': False})
-    
-    # Quadrant summary
-    qc = st.columns(4)
-    counts = df['Status'].value_counts()
-    for i, (s, icon) in enumerate([("Leading","🟢"), ("Improving","🟣"), ("Weakening","🟡"), ("Lagging","🔴")]):
-        with qc[i]:
-            df_s = df[df['Status']==s].head(8)
-            with st.expander(f"{icon} {s} ({counts.get(s,0)})", expanded=(s=="Leading")):
-                for _, r in df_s.iterrows():
-                    st.markdown(f"<div style='padding:3px 6px;background:{theme['bg_secondary']};border-left:3px solid {QUADRANT_COLORS[s]};border-radius:3px;margin:2px 0;font-size:11px;'><a href='{r['TV Link']}' target='_blank' style='color:{QUADRANT_COLORS[s]};font-weight:600;'>{r['Symbol']}</a> <span style='color:{theme['text_muted']}'>RS:{r['RS-Ratio']:.1f} Mom:{r['RS-Momentum']:.1f}</span></div>", unsafe_allow_html=True)
-    
-    # Table - Collapsible
-    st.markdown("---")
-    with st.expander(f"📊 **Analysis Table** ({len(df)} stocks)", expanded=False):
-        st.components.v1.html(generate_table_html(df, theme), height=500, scrolling=False)
-    
-    # Export
-    col1, col2 = st.columns([1, 5])
-    with col1:
-        buf = io.StringIO()
-        df.to_csv(buf, index=False)
-        st.download_button("📥 CSV", buf.getvalue(), f"RRG_{csv_selected}_{datetime.now():%Y%m%d}.csv", "text/csv")
+    # ========================================================================
+    # MAIN CONTENT - RRG GRAPH
+    # ========================================================================
+    with col_main:
+        # Create tabs for Static and Animation
+        tab1, tab2 = st.tabs(["📊 Static RRG", "🎬 Rotation Animation"])
 
-else:
+        with tab1:
+            st.markdown("## Relative Rotation Graph")
+            st.markdown(f"**{csv_selected} | {tf_name} | {period_name} | Benchmark: {bench_name}**")
+            
+            df_graph = select_graph_stocks(df, min_stocks=40)
+            
+            # Calculate label candidates - TOP N FROM EACH QUADRANT (ensures all quadrants have labels)
+            if show_labels:
+                label_candidates = set()
+                labels_per_quadrant = max(10, label_top_n // 15)  # Distribute across quadrants
+                
+                for status in ["Leading", "Improving", "Weakening", "Lagging"]:
+                    df_quad = df_graph[df_graph['Status'] == status]
+                    if not df_quad.empty:
+                        # Get top stocks by distance in this quadrant
+                        top_in_quad = df_quad.nlargest(labels_per_quadrant, 'Distance')['Symbol'].tolist()
+                        label_candidates.update(top_in_quad)
+            else:
+                label_candidates = set()
+            
+            fig_rrg = go.Figure()
+            
+            # Calculate dynamic range
+            x_min = df['RS-Ratio'].min() - 2
+            x_max = df['RS-Ratio'].max() + 2
+            y_min = df['RS-Momentum'].min() - 2
+            y_max = df['RS-Momentum'].max() + 2
+            
+            # Ensure symmetric around 100
+            x_range = max(abs(100 - x_min), abs(x_max - 100))
+            y_range = max(abs(100 - y_min), abs(y_max - 100))
+            
+            # Quadrant backgrounds with matching colors
+            fig_rrg.add_shape(type="rect", x0=100, y0=100, x1=100+x_range+2, y1=100+y_range+2,
+                             fillcolor=QUADRANT_BG_COLORS["Leading"], line_width=0, layer="below")
+            fig_rrg.add_shape(type="rect", x0=100-x_range-2, y0=100, x1=100, y1=100+y_range+2,
+                             fillcolor=QUADRANT_BG_COLORS["Improving"], line_width=0, layer="below")
+            fig_rrg.add_shape(type="rect", x0=100-x_range-2, y0=100-y_range-2, x1=100, y1=100,
+                             fillcolor=QUADRANT_BG_COLORS["Lagging"], line_width=0, layer="below")
+            fig_rrg.add_shape(type="rect", x0=100, y0=100-y_range-2, x1=100+x_range+2, y1=100,
+                             fillcolor=QUADRANT_BG_COLORS["Weakening"], line_width=0, layer="below")
+            
+            # Center lines (solid, not dashed - matching reference)
+            fig_rrg.add_hline(y=100, line_color="rgba(80,80,80,0.8)", line_width=1.5)
+            fig_rrg.add_vline(x=100, line_color="rgba(80,80,80,0.8)", line_width=1.5)
+            
+            # Quadrant labels with matching colors
+            label_offset_x = x_range * 0.6
+            label_offset_y = y_range * 0.7
+            fig_rrg.add_annotation(x=100+label_offset_x, y=100+label_offset_y, text="<b>LEADING</b>",
+                                  showarrow=False, font=dict(size=14, color=QUADRANT_COLORS["Leading"]))
+            fig_rrg.add_annotation(x=100-label_offset_x, y=100+label_offset_y, text="<b>IMPROVING</b>",
+                                  showarrow=False, font=dict(size=14, color=QUADRANT_COLORS["Improving"]))
+            fig_rrg.add_annotation(x=100-label_offset_x, y=100-label_offset_y, text="<b>LAGGING</b>",
+                                  showarrow=False, font=dict(size=14, color=QUADRANT_COLORS["Lagging"]))
+            fig_rrg.add_annotation(x=100+label_offset_x, y=100-label_offset_y, text="<b>WEAKENING</b>",
+                                  showarrow=False, font=dict(size=14, color=QUADRANT_COLORS["Weakening"]))
+            
+            # Add data points with smooth tails
+            for _, row in df_graph.iterrows():
+                sym = row['Symbol']
+                
+                if sym in rs_history:
+                    tail_data = rs_history[sym]
+                    rs_ratio_tail = tail_data['rs_ratio'][-trail_length:]
+                    rs_momentum_tail = tail_data['rs_momentum'][-trail_length:]
+                    
+                    x_pts = np.array(rs_ratio_tail, dtype=float)
+                    y_pts = np.array(rs_momentum_tail, dtype=float)
+                    n_original = len(x_pts)
+                    
+                    # DYNAMIC COLOR based on ACTUAL HEAD POSITION
+                    head_x = x_pts[-1] if len(x_pts) > 0 else row['RS-Ratio']
+                    head_y = y_pts[-1] if len(y_pts) > 0 else row['RS-Momentum']
+                    color, status = get_quadrant_color(head_x, head_y)
+                    
+                    if n_original >= 2:
+                        # Apply Catmull-Rom spline smoothing
+                        if n_original >= 3:
+                            x_smooth, y_smooth = smooth_spline_curve(x_pts, y_pts, points_per_segment=8)
+                        else:
+                            x_smooth, y_smooth = x_pts, y_pts
+                        
+                        n_smooth = len(x_smooth)
+                        
+                        # Draw smooth trail with gradient width and opacity
+                        if n_smooth >= 2:
+                            for i in range(n_smooth - 1):
+                                prog = i / max(1, n_smooth - 2)  # Progress from 0 (tail) to 1 (head)
+                                line_width = 2.5 + prog * 3  # Width: 2.5 -> 5.5
+                                opacity = 0.4 + prog * 0.6   # Opacity: 0.4 -> 1.0
+                                fig_rrg.add_trace(
+                                    go.Scatter(
+                                        x=[x_smooth[i], x_smooth[i+1]],
+                                        y=[y_smooth[i], y_smooth[i+1]],
+                                        mode='lines',
+                                        line=dict(color=color, width=line_width),
+                                        opacity=opacity,
+                                        hoverinfo='skip',
+                                        showlegend=False,
+                                    )
+                                )
+                        
+                        # Trail marker points (on original data points) - gradient size
+                        trail_sizes = [5 + (i / max(1, n_original - 1)) * 5 for i in range(n_original)]
+                        if n_original > 1:
+                            fig_rrg.add_trace(
+                                go.Scatter(
+                                    x=x_pts[:-1],
+                                    y=y_pts[:-1],
+                                    mode='markers',
+                                    marker=dict(
+                                        size=trail_sizes[:-1],
+                                        color=color,
+                                        opacity=0.7,
+                                        line=dict(color='white', width=1)
+                                    ),
+                                    hoverinfo='skip',
+                                    showlegend=False,
+                                )
+                            )
+                        
+                        # Arrow head showing direction
+                        dx = x_pts[-1] - x_pts[-2]
+                        dy = y_pts[-1] - y_pts[-2]
+                        length = np.sqrt(dx**2 + dy**2)
+                        if length > 0.01:
+                            fig_rrg.add_annotation(
+                                x=x_pts[-1],
+                                y=y_pts[-1],
+                                ax=x_pts[-1] - dx/length * 0.4,
+                                ay=y_pts[-1] - dy/length * 0.4,
+                                xref='x',
+                                yref='y',
+                                axref='x',
+                                ayref='y',
+                                showarrow=True,
+                                arrowhead=2,
+                                arrowsize=1.8,
+                                arrowwidth=3,
+                                arrowcolor=color,
+                            )
+                    else:
+                        # Single point - use dynamic color
+                        color, status = get_quadrant_color(row['RS-Ratio'], row['RS-Momentum'])
+                
+                    # Hover text
+                    hover_info = (
+                        f"<b>{row['Symbol']}</b> - {row['Name']}<br>"
+                        f"<b>Status:</b> {status}<br>"
+                        f"<b>RS-Ratio:</b> {head_x:.2f}<br>"
+                        f"<b>RS-Momentum:</b> {head_y:.2f}<br>"
+                        f"<b>Momentum Score:</b> {row['RRG Power']:.2f}<br>"
+                        f"<b>Price:</b> ₹{row['Price']:,.2f}<br>"
+                        f"<b>Change %:</b> {row['Change %']:+.2f}%<br>"
+                        f"<b>Industry:</b> {row['Industry']}<br>"
+                        f"<b>Direction:</b> {row['Direction']}"
+                    )
+                    
+                    # Head marker (larger, with white border)
+                    fig_rrg.add_trace(go.Scatter(
+                        x=[head_x],
+                        y=[head_y],
+                        mode='markers',
+                        marker=dict(
+                            size=14,
+                            color=color,
+                            line=dict(color='white', width=2.5)
+                        ),
+                        text=[hover_info],
+                        hoverinfo='text',
+                        hoverlabel=dict(bgcolor="#1a1f2e", bordercolor=color, 
+                                       font=dict(family="Plus Jakarta Sans, sans-serif", size=12, color="white")),
+                        showlegend=False,
+                    ))
+                    
+                    # Add label for selected stocks
+                    if show_labels and sym in label_candidates:
+                        fig_rrg.add_annotation(
+                            x=head_x,
+                            y=head_y,
+                            text=f"<b>{sym}</b>",
+                            showarrow=True,
+                            arrowhead=0,
+                            arrowwidth=1.5,
+                            arrowcolor=color,
+                            ax=25,
+                            ay=-20,
+                            font=dict(size=10, color=color),
+                            bgcolor='rgba(0,0,0,0)',
+                            borderwidth=0,
+                        )
+            
+            # Enhanced dark theme layout
+            fig_rrg.update_layout(
+                height=620,
+                title=dict(
+                    text=f"<b>Relative Rotation Graph</b> | {datetime.now().strftime('%Y-%m-%d')}",
+                    font=dict(size=18, color='#e6eaee'),
+                    x=0.5
+                ),
+                xaxis=dict(
+                    title=dict(text="<b>JdK RS-Ratio</b>", font=dict(color='#e6eaee')),
+                    range=[100-x_range-1, 100+x_range+1],
+                    showgrid=True,
+                    gridcolor='rgba(150,150,150,0.2)',
+                    tickfont=dict(color='#b3bdc7')
+                ),
+                yaxis=dict(
+                    title=dict(text="<b>JdK RS-Momentum</b>", font=dict(color='#e6eaee')),
+                    range=[100-y_range-1, 100+y_range+1],
+                    showgrid=True,
+                    gridcolor='rgba(150,150,150,0.2)',
+                    tickfont=dict(color='#b3bdc7')
+                ),
+                plot_bgcolor='#fafafa',
+                paper_bgcolor='#0b0e13',
+                font=dict(color='#e6eaee', size=12, family='Plus Jakarta Sans, sans-serif'),
+                hovermode='closest',
+                showlegend=False,
+                margin=dict(l=60, r=30, t=80, b=60),
+            )
+            
+            st.plotly_chart(fig_rrg, use_container_width=True, config={'displayModeBar': True, 'displaylogo': False})
+            
+            st.markdown("---")
+            
+            # INTERACTIVE TABLE - FULL WIDTH
+            with st.expander("📊 **Detailed Analysis** (Click to expand/collapse)", expanded=True):
+                # Generate full-width table HTML
+                table_rows = ""
+                for _, row in df.iterrows():
+                    # Use dynamic color based on actual position
+                    color, status = get_quadrant_color(row['RS-Ratio'], row['RS-Momentum'])
+                    chg_color = "#4ade80" if row['Change %'] > 0 else "#f87171" if row['Change %'] < 0 else "#9ca3af"
+                    
+                    table_rows += f"""
+                    <tr>
+                        <td style="text-align: center;">{int(row['Sl No.'])}</td>
+                        <td class="symbol-cell"><a href="{row['TV Link']}" target="_blank">{row['Symbol']}</a></td>
+                        <td class="name-cell">{row['Name']}</td>
+                        <td class="industry-cell">{row['Industry']}</td>
+                        <td style="text-align: right;">₹{row['Price']:,.2f}</td>
+                        <td style="text-align: right; color: {chg_color}; font-weight: 600;">{row['Change %']:+.2f}%</td>
+                        <td style="text-align: center;"><span class="status-badge" style="background:{color};">{status}</span></td>
+                        <td style="text-align: right;">{row['RS-Ratio']:.2f}</td>
+                        <td style="text-align: right;">{row['RS-Momentum']:.2f}</td>
+                        <td class="power-cell" style="text-align: right;">{row['RRG Power']:.2f}</td>
+                        <td style="text-align: right;">{row['Distance']:.2f}</td>
+                        <td style="text-align: center; color: #fbbf24;">{row['Direction']}</td>
+                    </tr>
+                    """
+                
+                html_table = f"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                <style>
+                    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
+                    
+                    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+                    
+                    body {{
+                        font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+                        background: #10141b;
+                        color: #e6eaee;
+                        width: 100%;
+                    }}
+                    
+                    .table-container {{
+                        background: #10141b;
+                        border-radius: 10px;
+                        overflow: hidden;
+                        border: 1px solid #1f2732;
+                        width: 100%;
+                    }}
+                    
+                    .search-container {{
+                        padding: 16px 20px;
+                        background: #0b0e13;
+                        border-bottom: 1px solid #1f2732;
+                        display: flex;
+                        gap: 16px;
+                        align-items: center;
+                        flex-wrap: wrap;
+                    }}
+                    
+                    .search-box {{
+                        padding: 12px 16px;
+                        background: #1a2230;
+                        border: 1px solid #2e3745;
+                        border-radius: 8px;
+                        color: #e6eaee;
+                        font-size: 14px;
+                        outline: none;
+                        min-width: 280px;
+                        font-family: inherit;
+                    }}
+                    
+                    .search-box:focus {{ border-color: #7a5cff; }}
+                    
+                    .filter-select {{
+                        padding: 12px 16px;
+                        background: #1a2230;
+                        border: 1px solid #2e3745;
+                        border-radius: 8px;
+                        color: #e6eaee;
+                        font-size: 14px;
+                        outline: none;
+                        font-family: inherit;
+                        min-width: 160px;
+                    }}
+                    
+                    .filter-badge {{
+                        background: #7a5cff;
+                        color: white;
+                        padding: 10px 20px;
+                        border-radius: 20px;
+                        font-size: 14px;
+                        font-weight: 700;
+                    }}
+                    
+                    .table-wrapper {{
+                        max-height: 600px;
+                        overflow: auto;
+                        width: 100%;
+                    }}
+                    
+                    .rrg-table {{
+                        width: 100%;
+                        border-collapse: collapse;
+                        font-size: 14px;
+                        table-layout: fixed;
+                    }}
+                    
+                    .rrg-table th {{
+                        position: sticky;
+                        top: 0;
+                        z-index: 10;
+                        background: #121823;
+                        color: #b3bdc7;
+                        padding: 16px 14px;
+                        text-align: left;
+                        font-weight: 800;
+                        border-bottom: 2px solid #1f2732;
+                        cursor: pointer;
+                        user-select: none;
+                        white-space: nowrap;
+                    }}
+                    
+                    .rrg-table th:hover {{ background: #1a2233; }}
+                    
+                    .sort-icon {{ margin-left: 6px; opacity: 0.5; font-size: 11px; }}
+                    
+                    .rrg-table td {{
+                        padding: 14px;
+                        border-bottom: 1px solid #1a2230;
+                        color: #e6eaee;
+                        font-size: 14px;
+                    }}
+                    
+                    .rrg-table tbody tr {{
+                        background: #0d1117;
+                        transition: background 0.15s;
+                    }}
+                    
+                    .rrg-table tbody tr:nth-child(even) {{ background: #0f1419; }}
+                    .rrg-table tbody tr:hover {{ background: #161b22; }}
+                    
+                    .symbol-cell a {{
+                        color: #58a6ff;
+                        text-decoration: none;
+                        font-weight: 700;
+                        font-size: 14px;
+                    }}
+                    .symbol-cell a:hover {{ text-decoration: underline; }}
+                    
+                    .name-cell {{ color: #d1d5db; font-size: 13px; }}
+                    .industry-cell {{ color: #9ca3af; font-size: 13px; }}
+                    
+                    .status-badge {{
+                        display: inline-block;
+                        padding: 6px 14px;
+                        border-radius: 6px;
+                        font-size: 12px;
+                        font-weight: 700;
+                        color: white;
+                        text-transform: uppercase;
+                    }}
+                    
+                    .power-cell {{ font-weight: 600; color: #a78bfa; }}
+                    
+                    tr.hidden {{ display: none; }}
+                    
+                    .table-wrapper::-webkit-scrollbar {{ height: 12px; width: 12px; }}
+                    .table-wrapper::-webkit-scrollbar-thumb {{ background: #2e3745; border-radius: 8px; }}
+                    .table-wrapper::-webkit-scrollbar-track {{ background: #10141b; }}
+                    
+                    /* Column widths */
+                    .rrg-table th:nth-child(1), .rrg-table td:nth-child(1) {{ width: 60px; }}
+                    .rrg-table th:nth-child(2), .rrg-table td:nth-child(2) {{ width: 100px; }}
+                    .rrg-table th:nth-child(3), .rrg-table td:nth-child(3) {{ width: 180px; }}
+                    .rrg-table th:nth-child(4), .rrg-table td:nth-child(4) {{ width: 160px; }}
+                    .rrg-table th:nth-child(5), .rrg-table td:nth-child(5) {{ width: 100px; }}
+                    .rrg-table th:nth-child(6), .rrg-table td:nth-child(6) {{ width: 90px; }}
+                    .rrg-table th:nth-child(7), .rrg-table td:nth-child(7) {{ width: 110px; }}
+                    .rrg-table th:nth-child(8), .rrg-table td:nth-child(8) {{ width: 90px; }}
+                    .rrg-table th:nth-child(9), .rrg-table td:nth-child(9) {{ width: 90px; }}
+                    .rrg-table th:nth-child(10), .rrg-table td:nth-child(10) {{ width: 80px; }}
+                    .rrg-table th:nth-child(11), .rrg-table td:nth-child(11) {{ width: 80px; }}
+                    .rrg-table th:nth-child(12), .rrg-table td:nth-child(12) {{ width: 90px; }}
+                </style>
+                </head>
+                <body>
+                <div class="table-container">
+                    <div class="search-container">
+                        <input type="text" id="searchBox" class="search-box" placeholder="🔍 Search by Symbol or Name..." onkeyup="filterTable()">
+                        <select id="statusFilter" class="filter-select" onchange="filterTable()">
+                            <option value="">All Status</option>
+                            <option value="Leading">🟢 Leading</option>
+                            <option value="Improving">🟣 Improving</option>
+                            <option value="Weakening">🟡 Weakening</option>
+                            <option value="Lagging">🔴 Lagging</option>
+                        </select>
+                        <select id="industryFilter" class="filter-select" onchange="filterTable()">
+                            <option value="">All Industries</option>
+                            {' '.join([f'<option value="{ind}">{ind}</option>' for ind in sorted(df['Industry'].unique())])}
+                        </select>
+                        <span class="filter-badge" id="countBadge">{len(df)} / {len(df)}</span>
+                    </div>
+                    
+                    <div class="table-wrapper">
+                        <table class="rrg-table" id="dataTable">
+                            <thead>
+                                <tr>
+                                    <th onclick="sortTable(0)">#<span class="sort-icon">⇅</span></th>
+                                    <th onclick="sortTable(1)">Symbol<span class="sort-icon">⇅</span></th>
+                                    <th onclick="sortTable(2)">Name<span class="sort-icon">⇅</span></th>
+                                    <th onclick="sortTable(3)">Industry<span class="sort-icon">⇅</span></th>
+                                    <th onclick="sortTable(4)">Price<span class="sort-icon">⇅</span></th>
+                                    <th onclick="sortTable(5)">Change %<span class="sort-icon">⇅</span></th>
+                                    <th onclick="sortTable(6)">Status<span class="sort-icon">⇅</span></th>
+                                    <th onclick="sortTable(7)">RS-Ratio<span class="sort-icon">⇅</span></th>
+                                    <th onclick="sortTable(8)">RS-Mom<span class="sort-icon">⇅</span></th>
+                                    <th onclick="sortTable(9)">Strength<span class="sort-icon">⇅</span></th>
+                                    <th onclick="sortTable(10)">Distance<span class="sort-icon">⇅</span></th>
+                                    <th onclick="sortTable(11)">Direction<span class="sort-icon">⇅</span></th>
+                                </tr>
+                            </thead>
+                            <tbody id="tableBody">
+                                {table_rows}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <script>
+                    let sortDirection = {{}};
+                    const totalRows = {len(df)};
+                    
+                    function sortTable(columnIndex) {{
+                        const tbody = document.getElementById("tableBody");
+                        const rows = Array.from(tbody.querySelectorAll("tr"));
+                        
+                        sortDirection[columnIndex] = !sortDirection[columnIndex];
+                        const ascending = sortDirection[columnIndex];
+                        
+                        rows.sort((a, b) => {{
+                            let aValue = a.cells[columnIndex].textContent.trim();
+                            let bValue = b.cells[columnIndex].textContent.trim();
+                            
+                            aValue = aValue.replace(/[₹,%]/g, '');
+                            bValue = bValue.replace(/[₹,%]/g, '');
+                            
+                            const aNum = parseFloat(aValue);
+                            const bNum = parseFloat(bValue);
+                            
+                            if (!isNaN(aNum) && !isNaN(bNum)) {{
+                                return ascending ? aNum - bNum : bNum - aNum;
+                            }}
+                            
+                            return ascending ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
+                        }});
+                        
+                        tbody.innerHTML = '';
+                        rows.forEach(row => tbody.appendChild(row));
+                    }}
+                    
+                    function filterTable() {{
+                        const searchBox = document.getElementById("searchBox").value.toLowerCase();
+                        const statusFilter = document.getElementById("statusFilter").value;
+                        const industryFilter = document.getElementById("industryFilter").value;
+                        const tbody = document.getElementById("tableBody");
+                        const rows = tbody.getElementsByTagName("tr");
+                        let visibleCount = 0;
+                        
+                        for (let i = 0; i < rows.length; i++) {{
+                            const row = rows[i];
+                            const symbol = row.cells[1].textContent.toLowerCase();
+                            const name = row.cells[2].textContent.toLowerCase();
+                            const industry = row.cells[3].textContent;
+                            const status = row.cells[6].textContent.trim();
+                            
+                            const matchesSearch = symbol.includes(searchBox) || name.includes(searchBox);
+                            const matchesStatus = !statusFilter || status === statusFilter;
+                            const matchesIndustry = !industryFilter || industry === industryFilter;
+                            
+                            if (matchesSearch && matchesStatus && matchesIndustry) {{
+                                row.classList.remove('hidden');
+                                visibleCount++;
+                            }} else {{
+                                row.classList.add('hidden');
+                            }}
+                        }}
+                        
+                        document.getElementById('countBadge').textContent = visibleCount + ' / ' + totalRows;
+                    }}
+                </script>
+                </body>
+                </html>
+                """
+                
+                st.components.v1.html(html_table, height=750, scrolling=False)
+
+        # ====================================================================
+        # ANIMATION TAB - WITH SAME AESTHETICS AS STATIC
+        # ====================================================================
+        with tab2:
+            st.markdown("### 🎬 Stock Rotation Animation")
+            
+            # Play/Pause buttons inline above the graph (styled like Load/Clear)
+            btn_col1, btn_col2, btn_col3 = st.columns([1, 1, 4])
+            with btn_col1:
+                if st.button("▶ Play", use_container_width=True, key="play_btn"):
+                    st.session_state.anim_playing = True
+            with btn_col2:
+                if st.button("⏸ Pause", use_container_width=True, key="pause_btn"):
+                    st.session_state.anim_playing = False
+            
+            st.info(f"Analyze rotation patterns over {trail_length} periods | Trail always visible")
+
+            # Prepare animation data - using raw rs_history values
+            animation_history = {}
+            for sym in df_graph['Symbol']:
+                if sym in rs_history:
+                    tail_data = rs_history[sym]
+                    max_len = min(trail_length, len(tail_data['rs_ratio']))
+                    animation_history[sym] = {
+                        'rs_ratio': tail_data['rs_ratio'][-max_len:],
+                        'rs_momentum': tail_data['rs_momentum'][-max_len:]
+                    }
+
+            if animation_history:
+                max_frames = max([len(animation_history[sym]['rs_ratio']) 
+                                for sym in animation_history if animation_history[sym]['rs_ratio']], default=1)
+
+                # Calculate range
+                x_range = max(abs(100 - x_min), abs(x_max - 100))
+                y_range = max(abs(100 - y_min), abs(y_max - 100))
+
+                # Create animated figure with SAME aesthetic as static RRG
+                fig_anim = go.Figure()
+
+                # Quadrant backgrounds with matching colors (SAME AS STATIC)
+                fig_anim.add_shape(type="rect", x0=100, y0=100, x1=100+x_range+2, y1=100+y_range+2,
+                    fillcolor=QUADRANT_BG_COLORS["Leading"], line_width=0, layer="below")
+                fig_anim.add_shape(type="rect", x0=100-x_range-2, y0=100, x1=100, y1=100+y_range+2,
+                    fillcolor=QUADRANT_BG_COLORS["Improving"], line_width=0, layer="below")
+                fig_anim.add_shape(type="rect", x0=100-x_range-2, y0=100-y_range-2, x1=100, y1=100,
+                    fillcolor=QUADRANT_BG_COLORS["Lagging"], line_width=0, layer="below")
+                fig_anim.add_shape(type="rect", x0=100, y0=100-y_range-2, x1=100+x_range+2, y1=100,
+                    fillcolor=QUADRANT_BG_COLORS["Weakening"], line_width=0, layer="below")
+
+                # Quadrant labels with matching colors (SAME AS STATIC)
+                label_offset_x = x_range * 0.6
+                label_offset_y = y_range * 0.7
+                fig_anim.add_annotation(x=100+label_offset_x, y=100+label_offset_y, text="<b>LEADING</b>",
+                    showarrow=False, font=dict(size=16, color=QUADRANT_COLORS["Leading"], family="Plus Jakarta Sans"))
+                fig_anim.add_annotation(x=100-label_offset_x, y=100+label_offset_y, text="<b>IMPROVING</b>",
+                    showarrow=False, font=dict(size=16, color=QUADRANT_COLORS["Improving"], family="Plus Jakarta Sans"))
+                fig_anim.add_annotation(x=100-label_offset_x, y=100-label_offset_y, text="<b>LAGGING</b>",
+                    showarrow=False, font=dict(size=16, color=QUADRANT_COLORS["Lagging"], family="Plus Jakarta Sans"))
+                fig_anim.add_annotation(x=100+label_offset_x, y=100-label_offset_y, text="<b>WEAKENING</b>",
+                    showarrow=False, font=dict(size=16, color=QUADRANT_COLORS["Weakening"], family="Plus Jakarta Sans"))
+
+                # Center lines (solid - SAME AS STATIC)
+                fig_anim.add_hline(y=100, line_color="rgba(80,80,80,0.8)", line_width=1.5)
+                fig_anim.add_vline(x=100, line_color="rgba(80,80,80,0.8)", line_width=1.5)
+
+                # Add smooth trails for each symbol - SAME AESTHETIC AS STATIC
+                for sym, hist in animation_history.items():
+                    x_pts = np.array(hist['rs_ratio'], dtype=float)
+                    y_pts = np.array(hist['rs_momentum'], dtype=float)
+                    n_original = len(x_pts)
+                    
+                    if n_original >= 1:
+                        # DYNAMIC COLOR based on ACTUAL HEAD POSITION (fixes mismatch!)
+                        head_x = x_pts[-1]
+                        head_y = y_pts[-1]
+                        color, status = get_quadrant_color(head_x, head_y)
+                        
+                        if n_original >= 2:
+                            # Apply Catmull-Rom spline smoothing (SAME AS STATIC)
+                            if n_original >= 3:
+                                x_smooth, y_smooth = smooth_spline_curve(x_pts, y_pts, points_per_segment=8)
+                            else:
+                                x_smooth, y_smooth = x_pts, y_pts
+                            
+                            n_smooth = len(x_smooth)
+                            
+                            # Draw smooth trail with gradient width and opacity (SAME AS STATIC)
+                            if n_smooth >= 2:
+                                for i in range(n_smooth - 1):
+                                    prog = i / max(1, n_smooth - 2)
+                                    line_width = 2.5 + prog * 3  # Width: 2.5 -> 5.5
+                                    opacity = 0.4 + prog * 0.6   # Opacity: 0.4 -> 1.0
+                                    fig_anim.add_trace(
+                                        go.Scatter(
+                                            x=[x_smooth[i], x_smooth[i+1]],
+                                            y=[y_smooth[i], y_smooth[i+1]],
+                                            mode='lines',
+                                            line=dict(color=color, width=line_width),
+                                            opacity=opacity,
+                                            hoverinfo='skip',
+                                            showlegend=False,
+                                        )
+                                    )
+                            
+                            # Trail marker points - gradient size (SAME AS STATIC)
+                            trail_sizes = [5 + (i / max(1, n_original - 1)) * 5 for i in range(n_original)]
+                            if n_original > 1:
+                                fig_anim.add_trace(
+                                    go.Scatter(
+                                        x=x_pts[:-1],
+                                        y=y_pts[:-1],
+                                        mode='markers',
+                                        marker=dict(
+                                            size=trail_sizes[:-1],
+                                            color=color,
+                                            opacity=0.7,
+                                            line=dict(color='white', width=1)
+                                        ),
+                                        hoverinfo='skip',
+                                        showlegend=False,
+                                    )
+                                )
+                            
+                            # Arrow head showing direction (SAME AS STATIC)
+                            dx = x_pts[-1] - x_pts[-2]
+                            dy = y_pts[-1] - y_pts[-2]
+                            length = np.sqrt(dx**2 + dy**2)
+                            if length > 0.01:
+                                fig_anim.add_annotation(
+                                    x=x_pts[-1],
+                                    y=y_pts[-1],
+                                    ax=x_pts[-1] - dx/length * 0.4,
+                                    ay=y_pts[-1] - dy/length * 0.4,
+                                    xref='x',
+                                    yref='y',
+                                    axref='x',
+                                    ayref='y',
+                                    showarrow=True,
+                                    arrowhead=2,
+                                    arrowsize=1.8,
+                                    arrowwidth=3,
+                                    arrowcolor=color,
+                                )
+                        
+                        # Head marker with symbol label - QUADRANT COLORED DARK BOLD TEXT
+                        fig_anim.add_trace(go.Scatter(
+                            x=[head_x],
+                            y=[head_y],
+                            mode='markers+text',
+                            marker=dict(
+                                size=14,
+                                color=color,
+                                line=dict(color='white', width=2.5)
+                            ),
+                            text=[f"<b>{sym}</b>"],
+                            textposition='top center',
+                            textfont=dict(size=11, color=color, family='Plus Jakarta Sans'),
+                            hovertemplate=f'<b>{sym}</b><br>Status: {status}<br>RS-Ratio: %{{x:.2f}}<br>RS-Momentum: %{{y:.2f}}<extra></extra>',
+                            showlegend=False,
+                        ))
+
+                # Add legend traces (SAME AS STATIC)
+                for status in ["Leading", "Improving", "Weakening", "Lagging"]:
+                    fig_anim.add_trace(go.Scatter(
+                        x=[None],
+                        y=[None],
+                        mode='markers',
+                        marker=dict(size=12, color=QUADRANT_COLORS[status], line=dict(color='white', width=2)),
+                        name=status,
+                        showlegend=True
+                    ))
+
+                # Layout matching static RRG
+                fig_anim.update_layout(
+                    height=700,
+                    plot_bgcolor='#fafafa',
+                    paper_bgcolor='#0b0e13',
+                    font=dict(color='#e6eaee', size=12, family='Plus Jakarta Sans, sans-serif'),
+                    xaxis=dict(
+                        title=dict(text="<b>JdK RS-Ratio</b>", font=dict(color='#e6eaee')),
+                        gridcolor='rgba(150,150,150,0.2)',
+                        range=[100-x_range-1, 100+x_range+1],
+                        zeroline=False,
+                        tickfont=dict(color='#b3bdc7')
+                    ),
+                    yaxis=dict(
+                        title=dict(text="<b>JdK RS-Momentum</b>", font=dict(color='#e6eaee')),
+                        gridcolor='rgba(150,150,150,0.2)',
+                        range=[100-y_range-1, 100+y_range+1],
+                        zeroline=False,
+                        tickfont=dict(color='#b3bdc7')
+                    ),
+                    legend=dict(
+                        x=1.02, y=1,
+                        bgcolor='rgba(16, 20, 27, 0.9)',
+                        bordercolor='#1f2732',
+                        borderwidth=1,
+                        font=dict(color='#e6eaee', size=12)
+                    ),
+                    hovermode='closest',
+                    title=dict(
+                        text=f"<b>RRG Animation</b> | {csv_selected} | {tf_name} | {bench_name}",
+                        font=dict(size=18, color='#e6eaee'),
+                        x=0.5,
+                        xanchor='center'
+                    ),
+                    margin=dict(l=60, r=120, t=80, b=60),
+                )
+
+                st.plotly_chart(fig_anim, use_container_width=True, config={'displayModeBar': True, 'displaylogo': False})
+                st.success(f"✅ Showing {len(animation_history)} stocks | Trail Length: {trail_length} periods")
+            else:
+                st.warning("No animation data available. Load data first.")
+
+    # ========================================================================
+    # RIGHT SIDEBAR - TOP 30 PER QUADRANT
+    # ========================================================================
+    with col_right:
+        st.markdown("### 🚀 Top 30 Per Quadrant")
+        
+        # Quadrant icons matching new colors
+        status_icons = {"Leading": "🟢", "Improving": "🟣", "Weakening": "🟡", "Lagging": "🔴"}
+        
+        for status in ["Leading", "Improving", "Weakening", "Lagging"]:
+            df_status_all = df[df['Status'] == status].sort_values('RRG Power', ascending=False)
+            df_status_top30 = df_status_all.head(30)
+            
+            if not df_status_top30.empty:
+                status_color = QUADRANT_COLORS.get(status, "#808080")
+                status_icon = status_icons[status]
+                
+                total_in_quadrant = len(df_status_all)
+                showing = len(df_status_top30)
+                
+                with st.expander(f"{status_icon} **{status}** (Top {showing} of {total_in_quadrant})", expanded=(status == "Leading")):
+                    for idx, (_, row) in enumerate(df_status_top30.iterrows(), 1):
+                        tv_link = row['TV Link']
+                        
+                        st.markdown(f"""
+                        <div style="padding: 6px; margin-bottom: 4px; background: rgba(200,200,200,0.05); 
+                                    border-left: 3px solid {status_color}; border-radius: 4px;">
+                            <small><b><a href="{tv_link}" target="_blank" 
+                                style="color: #58a6ff; text-decoration: none;">#{int(row['Sl No.'])}</a></b></small>
+                            <br><b style="color: {status_color}; font-size: 12px;">{row['Symbol']}</b>
+                            <br><small style="font-size: 10px; color: #9ca3af;">{row['Industry'][:18]}</small>
+                            <br><small style="color: {status_color}; font-size: 10px;">⚡ {row['RRG Power']:.2f}</small>
+                            <small style="color: #6b7280; font-size: 10px;"> | 📏 {row['Distance']:.2f}</small>
+                        </div>
+                        """, unsafe_allow_html=True)
+        
+        st.markdown("---")
+    
+    # ========================================================================
+    # FOOTER
+    # ========================================================================
+    st.markdown("---")
     st.markdown(f"""
-    <div style="text-align:center;padding:50px;background:{theme['bg_card']};border-radius:10px;border:1px solid {theme['border']};margin-top:30px;">
-        <h2 style="color:{theme['text']};">📈 RRG Dashboard</h2>
-        <p style="color:{theme['text_secondary']};">Select parameters and click <b>Load</b> to start</p>
-        <div style="display:flex;justify-content:center;gap:30px;margin-top:25px;">
-            <div><div style="width:40px;height:40px;background:#bbf7d0;border-radius:6px;margin:auto;"></div><p style="color:#228B22;font-weight:600;margin-top:5px;">Leading</p></div>
-            <div><div style="width:40px;height:40px;background:#e9d5ff;border-radius:6px;margin:auto;"></div><p style="color:#7c3aed;font-weight:600;margin-top:5px;">Improving</p></div>
-            <div><div style="width:40px;height:40px;background:#fef3c7;border-radius:6px;margin:auto;"></div><p style="color:#d97706;font-weight:600;margin-top:5px;">Weakening</p></div>
-            <div><div style="width:40px;height:40px;background:#fecaca;border-radius:6px;margin:auto;"></div><p style="color:#dc2626;font-weight:600;margin-top:5px;">Lagging</p></div>
-        </div>
+    <div style="text-align: center; color: #6b7280; font-size: 10px;">
+        <b>RRG Analysis Dashboard</b><br>
+        Data: Yahoo Finance | Charts: TradingView<br>
+        Displaying {len(df_graph)} stocks on graph | Total {len(df)} stocks analyzed<br>
+        Reference: <a href="https://www.optuma.com/blog/scripting-for-rrgs" target="_blank" 
+                      style="color: #7a5cff;">Optuma RRG Scripting Guide</a><br>
+        <i>Disclaimer: For educational purposes only. Not financial advice.</i>
     </div>
     """, unsafe_allow_html=True)
+    
+    if export_csv:
+        csv_buffer = io.StringIO()
+        df.to_csv(csv_buffer, index=False)
+        csv_data = csv_buffer.getvalue()
+        
+        st.download_button(
+            label="📥 Download Complete Data",
+            data=csv_data,
+            file_name=f"RRG_Complete_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            mime="text/csv"
+        )
 
-st.markdown(f"<div style='text-align:center;color:{theme['text_muted']};font-size:10px;margin-top:10px;'>RRG Dashboard | Theme: {theme['name']} | <a href='https://www.optuma.com/blog/scripting-for-rrgs' style='color:{theme['accent']}'>Optuma Reference</a></div>", unsafe_allow_html=True)
-
+else:
+    st.info("⬅️ Select indices and click **Load Data** to start analysis")
