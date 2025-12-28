@@ -789,20 +789,21 @@ if st.session_state.df_cache is not None:
                     x=0.5
                 ),
                 xaxis=dict(
-                    title="<b>JdK RS-Ratio</b>",
-                    range=[100-x_range-1, 100+x_range+1],
-                    showgrid=True,
-                    gridcolor='rgba(150,150,150,0.2)',
-                    tickfont=dict(color='#b3bdc7'),
-                    titlefont=dict(color='#e6eaee')
-                ),
-                yaxis=dict(
-                    title="<b>JdK RS-Momentum</b>",
-                    range=[100-y_range-1, 100+y_range+1],
-                    showgrid=True,
-                    gridcolor='rgba(150,150,150,0.2)',
-                    tickfont=dict(color='#b3bdc7'),
-                    titlefont=dict(color='#e6eaee')
+    title=dict(
+        text="<b>JdK RS-Ratio</b>",
+        font=dict(color="#e6eaee")
+    ),
+    ...,
+    tickfont=dict(color="#b3bdc7")
+),
+yaxis=dict(
+    title=dict(
+        text="<b>JdK RS-Momentum</b>",
+        font=dict(color="#e6eaee")
+    ),
+    ...,
+    tickfont=dict(color="#b3bdc7")
+),
                 ),
                 plot_bgcolor='#fafafa',
                 paper_bgcolor='#0b0e13',
@@ -1353,3 +1354,4 @@ if st.session_state.df_cache is not None:
 
 else:
     st.info("⬅️ Select indices and click **Load Data** to start analysis")
+
