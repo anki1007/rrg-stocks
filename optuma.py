@@ -46,6 +46,9 @@ html, body, .stApp {
 /* Main container spacing */
 .block-container {
   padding-top: 2.5rem;
+  max-width: 100%;
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
 }
 
 /* Hero title style */
@@ -583,7 +586,7 @@ if st.session_state.df_cache is not None:
     df = st.session_state.df_cache
     rs_history = st.session_state.rs_history_cache
     
-    col_left, col_main, col_right = st.columns([0.7, 5.8, 1.0], gap="medium")
+    col_left, col_main, col_right = st.columns([1.25, 5.4, 1.35], gap="medium")
     
     # ========================================================================
     # LEFT SIDEBAR
@@ -601,15 +604,16 @@ if st.session_state.df_cache is not None:
         st.markdown("### 📊 Stats")
         col_stat1, col_stat2 = st.columns(2)
         
+        # Short labels so text doesn't truncate in narrow panel
         with col_stat1:
-            st.metric("Total", len(df))
-            st.metric("Leading", len(df[df['Status'] == 'Leading']))
+        st.metric("Total", len(df))
+        st.metric("Lead", len(df[df['Status'] == 'Leading']))
         
         with col_stat2:
-            st.metric("Improving", len(df[df['Status'] == 'Improving']))
-            st.metric("Weakening", len(df[df['Status'] == 'Weakening']))
+        st.metric("Impr", len(df[df['Status'] == 'Improving']))
+        st.metric("Weak", len(df[df['Status'] == 'Weakening']))
         
-        st.metric("Lagging", len(df[df['Status'] == 'Lagging']))
+        st.metric("Lag", len(df[df['Status'] == 'Lagging']))
     
     # ========================================================================
     # MAIN CONTENT - RRG GRAPH
@@ -862,6 +866,14 @@ if st.session_state.df_cache is not None:
                 <style>
                     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
                     
+                    html, body {
+                        width: 100%;
+                        margin: 0;
+                        padding: 0;
+                        background: #0b0e13;
+                    }
+
+                    
                     * {{
                         box-sizing: border-box;
                     }}
@@ -872,6 +884,8 @@ if st.session_state.df_cache is not None:
                         border-radius: 10px;
                         overflow: hidden;
                         border: 1px solid #1f2732;
+                        width: 100%;
+                        display: block;
                     }}
                     
                     .search-container {{
@@ -882,6 +896,7 @@ if st.session_state.df_cache is not None:
                         gap: 10px;
                         align-items: center;
                         flex-wrap: wrap;
+                        width: 100%;
                     }}
                     
                     .search-box {{
@@ -1028,7 +1043,7 @@ if st.session_state.df_cache is not None:
                     }}
                 </style>
                 
-                <div class="table-container">
+                <div class="table-container" style="width:100%;">
                     <div class="search-container">
                         <input type="text" id="searchBox" class="search-box" placeholder="🔍 Search symbol or name..." onkeyup="filterTable()">
                         <select id="statusFilter" class="filter-select" onchange="filterTable()">
@@ -1209,47 +1224,123 @@ if st.session_state.df_cache is not None:
                 fig_anim.add_hline(y=100, line_color="rgba(80,80,80,0.8)", line_width=1.5)
                 fig_anim.add_vline(x=100, line_color="rgba(80,80,80,0.8)", line_width=1.5)
 
-                # Initial frame
-                if anim_frames:
-                    initial = anim_frames[0]
-                    for status in ["Leading", "Improving", "Weakening", "Lagging"]:
-                        status_pts = [p for p in initial if p['status'] == status]
-                        if status_pts:
-                            fig_anim.add_trace(go.Scatter(
-                                x=[p['x'] for p in status_pts],
-                                y=[p['y'] for p in status_pts],
-                                mode='markers+text',
+                # Initial frame + smooth tails (fixed trace order per status)
+                STATUSES = ["Leading", "Improving", "Weakening", "Lagging"]
+
+                def build_tail_xy_for_status(status, frame_idx):
+                    tail_x, tail_y = [], []
+                    syms = df_graph[df_graph["Status"] == status]["Symbol"].tolist()
+
+                    for sym in syms:
+                        if sym not in animation_history:
+                            continue
+
+                        xs_full = animation_history[sym]["rs_ratio"][:frame_idx]
+                        ys_full = animation_history[sym]["rs_momentum"][:frame_idx]
+
+                        xs = xs_full[-trail_length:]
+                        ys = ys_full[-trail_length:]
+
+                        if len(xs) < 2:
+                            continue
+
+                        if len(xs) >= 3:
+                            sx, sy = smooth_spline_curve(xs, ys, points_per_segment=8)
+                        else:
+                            sx, sy = np.array(xs, dtype=float), np.array(ys, dtype=float)
+
+                        tail_x.extend(list(sx) + [None])
+                        tail_y.extend(list(sy) + [None])
+
+                    return tail_x, tail_y
+
+
+                def build_heads_for_status(status, frame_idx):
+                    pts = []
+                    syms = df_graph[df_graph["Status"] == status]["Symbol"].tolist()
+
+                    for sym in syms:
+                        if sym not in animation_history:
+                            continue
+                        hist = animation_history[sym]
+                        if frame_idx <= len(hist["rs_ratio"]):
+                            pts.append({
+                                "symbol": sym,
+                                "x": hist["rs_ratio"][frame_idx - 1],
+                                "y": hist["rs_momentum"][frame_idx - 1],
+                            })
+                    return pts
+
+
+                # --- set initial data (frame 1) ---
+                initial_traces = []
+                for status in STATUSES:
+                    tx, ty = build_tail_xy_for_status(status, frame_idx=1)
+                    initial_traces.append(
+                        go.Scatter(
+                            x=tx, y=ty,
+                            mode="lines",
+                            line=dict(color=QUADRANT_COLORS[status], width=3),
+                            opacity=0.85,
+                            hoverinfo="skip",
+                            showlegend=False,
+                        )
+                    )
+
+                    heads = build_heads_for_status(status, frame_idx=1)
+                    initial_traces.append(
+                        go.Scatter(
+                            x=[p["x"] for p in heads],
+                            y=[p["y"] for p in heads],
+                            mode="markers+text",
+                            name=status,
+                            text=[f"<b>{p['symbol']}</b>" for p in heads],
+                            textfont=dict(color=QUADRANT_LABEL_COLORS[status], size=12, family='Plus Jakarta Sans, sans-serif'),
+                            textposition="top center",
+                            marker=dict(size=14, color=QUADRANT_COLORS[status], line=dict(color='white', width=2.5), opacity=0.95),
+                            hovertemplate='<b>%{text}</b><br>RS-Ratio: %{x:.2f}<br>RS-Momentum: %{y:.2f}<extra></extra>'
+                        )
+                    )
+
+                fig_anim.data = initial_traces
+
+
+                # --- frames (each frame must have SAME number/order of traces) ---
+                plotly_frames = []
+                for frame_i in range(1, max_frames + 1):
+                    frame_traces = []
+                    for status in STATUSES:
+                        tx, ty = build_tail_xy_for_status(status, frame_idx=frame_i)
+                        frame_traces.append(
+                            go.Scatter(
+                                x=tx, y=ty,
+                                mode="lines",
+                                line=dict(color=QUADRANT_COLORS[status], width=3),
+                                opacity=0.85,
+                                hoverinfo="skip",
+                                showlegend=False,
+                            )
+                        )
+
+                        heads = build_heads_for_status(status, frame_idx=frame_i)
+                        frame_traces.append(
+                            go.Scatter(
+                                x=[p["x"] for p in heads],
+                                y=[p["y"] for p in heads],
+                                mode="markers+text",
                                 name=status,
-                                text=[f"<b>{p['symbol']}</b>" for p in status_pts],
+                                text=[f"<b>{p['symbol']}</b>" for p in heads],
                                 textfont=dict(color=QUADRANT_LABEL_COLORS[status], size=12, family='Plus Jakarta Sans, sans-serif'),
                                 textposition="top center",
-                                marker=dict(size=14, color=QUADRANT_COLORS[status],
-                                           line=dict(color='white', width=2.5), opacity=0.95),
+                                marker=dict(size=14, color=QUADRANT_COLORS[status], line=dict(color='white', width=2.5), opacity=0.95),
                                 hovertemplate='<b>%{text}</b><br>RS-Ratio: %{x:.2f}<br>RS-Momentum: %{y:.2f}<extra></extra>'
-                            ))
+                            )
+                        )
 
-                    # Create plotly frames
-                    plotly_frames = []
-                    for idx, frame_data in enumerate(anim_frames):
-                        traces = []
-                        for status in ["Leading", "Improving", "Weakening", "Lagging"]:
-                            status_pts = [p for p in frame_data if p['status'] == status]
-                            if status_pts:
-                                traces.append(go.Scatter(
-                                    x=[p['x'] for p in status_pts],
-                                    y=[p['y'] for p in status_pts],
-                                    mode='markers+text',
-                                    name=status,
-                                    text=[f"<b>{p['symbol']}</b>" for p in status_pts],
-                                textfont=dict(color=QUADRANT_LABEL_COLORS[status], size=12, family='Plus Jakarta Sans, sans-serif'),
-                                    textposition="top center",
-                                    marker=dict(size=14, color=QUADRANT_COLORS[status],
-                                               line=dict(color='white', width=2.5), opacity=0.95),
-                                    hovertemplate='<b>%{text}</b><br>RS-Ratio: %{x:.2f}<br>RS-Momentum: %{y:.2f}<extra></extra>'
-                                ))
-                        plotly_frames.append(go.Frame(data=traces, name=str(idx)))
+                    plotly_frames.append(go.Frame(data=frame_traces, name=str(frame_i - 1)))
 
-                    fig_anim.frames = plotly_frames
+                fig_anim.frames = plotly_frames
+
 
                     # Animation controls
                     fig_anim.update_layout(
