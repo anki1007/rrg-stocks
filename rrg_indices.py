@@ -32,8 +32,8 @@ DEFAULT_TF = "Weekly"
 WINDOW = 14
 DEFAULT_TAIL = 8
 PERIOD_MAP = {"3M": "3mo", "6M": "6mo", "1Y": "1y", "2Y": "2y", "3Y": "3y", "5Y": "5y", "10Y": "10y"}
-TF_LABELS = ["60 Min", "Daily", "Weekly", "Monthly"]
-TF_TO_INTERVAL = {"60 Min": "60m", "Daily": "1d", "Weekly": "1wk", "Monthly": "1mo"}
+TF_LABELS = ["60 Min", "240 Min","Daily", "Weekly", "Monthly"]
+TF_TO_INTERVAL = {"60 Min": "60m","240 Min": "240m", "Daily": "1d", "Weekly": "1wk", "Monthly": "1mo"}
 BENCH_CHOICES = {"Nifty 500": "^CRSLDX", "Nifty 200": "^CNX200", "Nifty 50": "^NSEI"}
 
 IST_TZ = "Asia/Kolkata"
