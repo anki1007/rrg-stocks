@@ -304,8 +304,9 @@ def get_status(x, y):
     return "Unknown"
 
 def status_bg_color(x, y):
+    """Get status badge color for tables - using matching quadrant colors"""
     m = get_status(x, y)
-    return {"Lagging": "#e06a6a", "Leading": "#3fa46a", "Improving": "#5d86d1", "Weakening": "#e2d06b"}.get(m, "#aaaaaa")
+    return {"Lagging": "#dc2626", "Leading": "#15803d", "Improving": "#7c3aed", "Weakening": "#a16207"}.get(m, "#aaaaaa")
 
 # -------------------- IST closed-bar checks --------------------
 def _utc_now_from_network(timeout=2.5) -> pd.Timestamp:
@@ -466,6 +467,53 @@ def download_block_with_benchmark(universe, benchmark, period, interval):
 def symbol_color_map(symbols):
     tab = plt.get_cmap("tab20").colors
     return {s: to_hex(tab[i % len(tab)], keep_alpha=False) for i, s in enumerate(symbols)}
+
+# -------------------- Quadrant Colors (matching indices screenshot) --------------------
+QUADRANT_COLORS = {
+    "Leading": "#15803d",    # Dark green
+    "Improving": "#7c3aed",  # Purple
+    "Weakening": "#a16207",  # Brown/amber
+    "Lagging": "#dc2626"     # Red
+}
+
+QUADRANT_BG_COLORS = {
+    "Leading": "rgba(187, 247, 208, 0.6)",
+    "Improving": "rgba(233, 213, 255, 0.6)",
+    "Weakening": "rgba(254, 249, 195, 0.6)",
+    "Lagging": "rgba(254, 202, 202, 0.6)"
+}
+
+def status_color(x, y):
+    """Get color based on quadrant position"""
+    return QUADRANT_COLORS.get(get_status(x, y), "#888888")
+
+# -------------------- Smooth Spline (Catmull-Rom) --------------------
+def smooth_spline_curve(x_points, y_points, points_per_segment=8):
+    """Create smooth curve using Catmull-Rom spline interpolation"""
+    if len(x_points) < 3:
+        return np.array(x_points), np.array(y_points)
+    
+    x_points, y_points = np.array(x_points, dtype=float), np.array(y_points, dtype=float)
+    
+    def catmull_rom_segment(p0, p1, p2, p3, num_points):
+        t = np.linspace(0, 1, num_points, endpoint=False)
+        t2, t3 = t * t, t * t * t
+        x = 0.5 * ((2*p1[0]) + (-p0[0]+p2[0])*t + (2*p0[0]-5*p1[0]+4*p2[0]-p3[0])*t2 + (-p0[0]+3*p1[0]-3*p2[0]+p3[0])*t3)
+        y = 0.5 * ((2*p1[1]) + (-p0[1]+p2[1])*t + (2*p0[1]-5*p1[1]+4*p2[1]-p3[1])*t2 + (-p0[1]+3*p1[1]-3*p2[1]+p3[1])*t3)
+        return x, y
+    
+    points = np.column_stack([x_points, y_points])
+    padded = np.vstack([2*points[0]-points[1], points, 2*points[-1]-points[-2]])
+    x_smooth, y_smooth = [], []
+    
+    for i in range(len(points)-1):
+        seg_x, seg_y = catmull_rom_segment(padded[i], padded[i+1], padded[i+2], padded[i+3], points_per_segment)
+        x_smooth.extend(seg_x)
+        y_smooth.extend(seg_y)
+    
+    x_smooth.append(x_points[-1])
+    y_smooth.append(y_points[-1])
+    return np.array(x_smooth), np.array(y_smooth)
 
 # -------------------- Controls --------------------
 st.sidebar.header("RRG — Controls")
@@ -705,23 +753,23 @@ with plot_col:
     # Build interactive Plotly RRG chart
     fig = go.Figure()
 
-    # Add quadrant backgrounds
-    fig.add_shape(type="rect", x0=94, y0=94, x1=100, y1=100, fillcolor="rgba(255, 0, 0, 0.15)", line_width=0, layer="below")
-    fig.add_shape(type="rect", x0=100, y0=94, x1=106, y1=100, fillcolor="rgba(255, 255, 0, 0.15)", line_width=0, layer="below")
-    fig.add_shape(type="rect", x0=100, y0=100, x1=106, y1=106, fillcolor="rgba(0, 255, 0, 0.15)", line_width=0, layer="below")
-    fig.add_shape(type="rect", x0=94, y0=100, x1=100, y1=106, fillcolor="rgba(0, 100, 255, 0.15)", line_width=0, layer="below")
+    # Add quadrant backgrounds with new colors matching indices screenshot
+    fig.add_shape(type="rect", x0=94, y0=94, x1=100, y1=100, fillcolor=QUADRANT_BG_COLORS["Lagging"], line_width=0, layer="below")
+    fig.add_shape(type="rect", x0=100, y0=94, x1=106, y1=100, fillcolor=QUADRANT_BG_COLORS["Weakening"], line_width=0, layer="below")
+    fig.add_shape(type="rect", x0=100, y0=100, x1=106, y1=106, fillcolor=QUADRANT_BG_COLORS["Leading"], line_width=0, layer="below")
+    fig.add_shape(type="rect", x0=94, y0=100, x1=100, y1=106, fillcolor=QUADRANT_BG_COLORS["Improving"], line_width=0, layer="below")
 
-    # Add center lines
-    fig.add_hline(y=100, line_dash="dot", line_color="#777", line_width=1)
-    fig.add_vline(x=100, line_dash="dot", line_color="#777", line_width=1)
+    # Add center lines (solid, not dotted - matching screenshot)
+    fig.add_hline(y=100, line_color="rgba(80,80,80,0.8)", line_width=1.5)
+    fig.add_vline(x=100, line_color="rgba(80,80,80,0.8)", line_width=1.5)
 
-    # Add quadrant labels
-    fig.add_annotation(x=95, y=105.5, text="<b>Improving</b>", showarrow=False, font=dict(size=13, color="#5d86d1"))
-    fig.add_annotation(x=105, y=105.5, text="<b>Leading</b>", showarrow=False, font=dict(size=13, color="#3fa46a"))
-    fig.add_annotation(x=105, y=94.5, text="<b>Weakening</b>", showarrow=False, font=dict(size=13, color="#e2d06b"))
-    fig.add_annotation(x=95, y=94.5, text="<b>Lagging</b>", showarrow=False, font=dict(size=13, color="#e06a6a"))
+    # Add quadrant labels with matching colors
+    fig.add_annotation(x=95, y=105.5, text="<b>IMPROVING</b>", showarrow=False, font=dict(size=13, color="#7c3aed"))
+    fig.add_annotation(x=105, y=105.5, text="<b>LEADING</b>", showarrow=False, font=dict(size=13, color="#15803d"))
+    fig.add_annotation(x=105, y=94.5, text="<b>WEAKENING</b>", showarrow=False, font=dict(size=13, color="#a16207"))
+    fig.add_annotation(x=95, y=94.5, text="<b>LAGGING</b>", showarrow=False, font=dict(size=13, color="#dc2626"))
 
-    # Plot each ticker with trail, arrow, and rich hover
+    # Plot each ticker with smooth trail, gradient width/opacity, arrow, and rich hover
     for t in tickers:
         if t not in st.session_state.visible_set:
             continue
@@ -731,7 +779,6 @@ with plot_col:
         if len(rr) < 2:
             continue
 
-        color = SYMBOL_COLORS[t]
         name = META.get(t, {}).get("name", t)
         industry = META.get(t, {}).get("industry", "-")
 
@@ -739,6 +786,9 @@ with plot_col:
         rr_last = float(rr.values[-1])
         mm_last = float(mm.values[-1])
         status = get_status(rr_last, mm_last)
+        
+        # Use quadrant-based color (matching indices screenshot)
+        color = status_color(rr_last, mm_last)
 
         # Calculate price and change
         px = tickers_data[t].reindex(idx).dropna()
@@ -748,77 +798,106 @@ with plot_col:
         # Calculate Momentum Score (distance from center, higher = stronger)
         rrg_power = float(np.hypot(rr_last - 100.0, mm_last - 100.0))
 
-        # Build hover text for each point on trail
-        hover_texts = []
-        for i in range(len(rr)):
-            pt_rr = float(rr.values[i])
-            pt_mm = float(mm.values[i])
-            pt_status = get_status(pt_rr, pt_mm)
-            hover_texts.append(
-                f"<b>{name}</b><br>"
-                + f"<b>Status:</b> {pt_status}<br>"
-                + f"<b>RS-Ratio:</b> {pt_rr:.2f}<br>"
-                + f"<b>RS-Momentum:</b> {pt_mm:.2f}<br>"
-                + f"<b>Momentum Score:</b> {rrg_power:.2f}<br>"
-                + f"<b>Price:</b> ₹{price:,.2f}<br>"
-                + f"<b>Change %:</b> {chg:+.2f}%<br>"
-                + f"<b>Industry:</b> {industry}"
-            )
-
-        # Trail line
-        fig.add_trace(
-            go.Scatter(
-                x=rr.values,
-                y=mm.values,
-                mode="lines",
-                line=dict(color=color, width=2),
-                opacity=0.6,
-                hoverinfo="skip",
-                showlegend=False,
-            )
+        # Hover text for head marker
+        hover_head = (
+            f"<b>{name}</b><br>"
+            + f"<b>Status:</b> {status}<br>"
+            + f"<b>RS-Ratio:</b> {rr_last:.2f}<br>"
+            + f"<b>RS-Momentum:</b> {mm_last:.2f}<br>"
+            + f"<b>Momentum Score:</b> {rrg_power:.2f}<br>"
+            + f"<b>Price:</b> ₹{price:,.2f}<br>"
+            + f"<b>Change %:</b> {chg:+.2f}%<br>"
+            + f"<b>Industry:</b> {industry}"
         )
 
-        # Trail points (smaller for history, larger for current)
-        sizes = [8] * (len(rr) - 1) + [16]
+        # Original data points
+        x_pts = rr.values.astype(float)
+        y_pts = mm.values.astype(float)
+        n_original = len(x_pts)
+
+        # Apply Catmull-Rom spline smoothing
+        if n_original >= 3:
+            x_smooth, y_smooth = smooth_spline_curve(x_pts, y_pts, points_per_segment=8)
+        else:
+            x_smooth, y_smooth = x_pts, y_pts
+
+        n_smooth = len(x_smooth)
+
+        # Draw smooth trail with gradient width and opacity (thin/transparent at tail, thick/opaque at head)
+        if n_smooth >= 2:
+            for i in range(n_smooth - 1):
+                prog = i / max(1, n_smooth - 2)  # Progress from 0 (tail) to 1 (head)
+                line_width = 2.5 + prog * 3  # Width: 2.5 -> 5.5
+                opacity = 0.5 + prog * 0.5   # Opacity: 0.5 -> 1.0
+                fig.add_trace(
+                    go.Scatter(
+                        x=[x_smooth[i], x_smooth[i+1]],
+                        y=[y_smooth[i], y_smooth[i+1]],
+                        mode='lines',
+                        line=dict(color=color, width=line_width),
+                        opacity=opacity,
+                        hoverinfo='skip',
+                        showlegend=False,
+                    )
+                )
+
+        # Trail marker points (on original data points, not smoothed) - gradient size
+        trail_sizes = [5 + (i / max(1, n_original - 1)) * 5 for i in range(n_original)]
+        if n_original > 1:
+            fig.add_trace(
+                go.Scatter(
+                    x=x_pts[:-1],
+                    y=y_pts[:-1],
+                    mode='markers',
+                    marker=dict(
+                        size=trail_sizes[:-1],
+                        color=color,
+                        opacity=0.8,
+                        line=dict(color='white', width=1)
+                    ),
+                    hoverinfo='skip',
+                    showlegend=False,
+                )
+            )
+
+        # Head marker (larger, with white border) - matching screenshot
         fig.add_trace(
             go.Scatter(
-                x=rr.values,
-                y=mm.values,
-                mode="markers",
-                marker=dict(size=sizes, color=color, line=dict(color="#333", width=1)),
-                text=hover_texts,
-                hoverinfo="text",
+                x=[rr_last],
+                y=[mm_last],
+                mode='markers',
+                marker=dict(
+                    size=14,
+                    color=color,
+                    line=dict(color='white', width=2.5)
+                ),
+                text=[hover_head],
+                hoverinfo='text',
                 hoverlabel=dict(bgcolor="#1a1f2e", bordercolor=color, font=dict(family="Plus Jakarta Sans, sans-serif", size=12, color="white")),
                 showlegend=False,
             )
         )
 
-        # Add arrow head showing direction
-        if len(rr) >= 2:
-            x0, y0 = float(rr.values[-2]), float(mm.values[-2])
-            x1, y1 = float(rr.values[-1]), float(mm.values[-1])
-            dx = x1 - x0
-            dy = y1 - y0
+        # Add arrow head showing direction (matching screenshot style)
+        if n_original >= 2:
+            dx = x_pts[-1] - x_pts[-2]
+            dy = y_pts[-1] - y_pts[-2]
             length = np.sqrt(dx**2 + dy**2)
             if length > 0.01:
-                arrow_scale = 0.8
-                ax_offset = (dx / length) * arrow_scale
-                ay_offset = (dy / length) * arrow_scale
                 fig.add_annotation(
-                    x=x1,
-                    y=y1,
-                    ax=x1 - ax_offset,
-                    ay=y1 - ay_offset,
-                    xref="x",
-                    yref="y",
-                    axref="x",
-                    ayref="y",
+                    x=x_pts[-1],
+                    y=y_pts[-1],
+                    ax=x_pts[-1] - dx/length * 0.35,
+                    ay=y_pts[-1] - dy/length * 0.35,
+                    xref='x',
+                    yref='y',
+                    axref='x',
+                    ayref='y',
                     showarrow=True,
                     arrowhead=2,
-                    arrowsize=1.5,
-                    arrowwidth=2,
+                    arrowsize=1.8,
+                    arrowwidth=3,
                     arrowcolor=color,
-                    opacity=0.9,
                 )
 
         # Add label for top N by distance
@@ -826,25 +905,28 @@ with plot_col:
             fig.add_annotation(
                 x=rr_last,
                 y=mm_last,
-                text=f"<b>{display_symbol(t)}</b>",
-                showarrow=False,
-                xshift=15,
-                yshift=10,
+                text=f"<b>{name}</b>",
+                showarrow=True,
+                arrowhead=0,
+                arrowwidth=1.5,
+                arrowcolor=color,
+                ax=30,
+                ay=-25,
                 font=dict(size=11, color=color),
-                bgcolor="rgba(0,0,0,0.5)",
-                borderpad=3,
+                bgcolor='rgba(0,0,0,0)',
+                borderwidth=0,
             )
 
-    # Update layout
+    # Update layout - matching dark theme from screenshot
     fig.update_layout(
-        title=dict(text="Relative Rotation Graph (RRG)", font=dict(size=16, family="Plus Jakarta Sans, sans-serif", color="#333"), x=0.5),
-        xaxis=dict(title="JdK RS-Ratio", range=[94, 106], showgrid=True, gridcolor="rgba(0,0,0,0.1)", zeroline=False, tickfont=dict(color="#333")),
-        yaxis=dict(title="JdK RS-Momentum", range=[94, 106], showgrid=True, gridcolor="rgba(0,0,0,0.1)", zeroline=False, tickfont=dict(color="#333")),
-        plot_bgcolor="#F5F5DC",
-        paper_bgcolor="#F5F5DC",
-        margin=dict(l=60, r=40, t=60, b=60),
+        title=dict(text=f"<b>Relative Rotation Graph</b> | {date_str}", font=dict(size=18, color='#e6eaee'), x=0.5),
+        xaxis=dict(title="<b>JdK RS-Ratio</b>", range=[94, 106], showgrid=True, gridcolor='rgba(150,150,150,0.2)', tickfont=dict(color='#b3bdc7')),
+        yaxis=dict(title="<b>JdK RS-Momentum</b>", range=[94, 106], showgrid=True, gridcolor='rgba(150,150,150,0.2)', tickfont=dict(color='#b3bdc7')),
+        plot_bgcolor='#fafafa',
+        paper_bgcolor='#0b0e13',
+        margin=dict(l=60, r=30, t=60, b=60),
         hoverlabel=dict(align="left"),
-        height=550,
+        height=620,
     )
 
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": True, "modeBarButtonsToRemove": ["lasso2d", "select2d"], "displaylogo": False})
@@ -866,12 +948,12 @@ with rank_col:
     for quadrant in quadrant_stocks:
         quadrant_stocks[quadrant].sort(key=lambda x: x[1], reverse=True)
     
-    # Quadrant colors and icons
+    # Quadrant colors and icons - matching chart colors
     q_config = {
-        "Leading": {"color": "#3fa46a", "bg": "rgba(63, 164, 106, 0.15)", "icon": "🟢"},
-        "Improving": {"color": "#5d86d1", "bg": "rgba(93, 134, 209, 0.15)", "icon": "🔵"},
-        "Weakening": {"color": "#e2d06b", "bg": "rgba(226, 208, 107, 0.15)", "icon": "🟡"},
-        "Lagging": {"color": "#e06a6a", "bg": "rgba(224, 106, 106, 0.15)", "icon": "🔴"},
+        "Leading": {"color": "#15803d", "bg": "rgba(187, 247, 208, 0.3)", "icon": "🟢"},
+        "Improving": {"color": "#7c3aed", "bg": "rgba(233, 213, 255, 0.3)", "icon": "🟣"},
+        "Weakening": {"color": "#a16207", "bg": "rgba(254, 249, 195, 0.3)", "icon": "🟡"},
+        "Lagging": {"color": "#dc2626", "bg": "rgba(254, 202, 202, 0.3)", "icon": "🔴"},
     }
     
     # Build collapsible HTML sections
