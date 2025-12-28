@@ -7,6 +7,7 @@ import requests
 from datetime import datetime, timedelta
 import io
 import warnings
+
 warnings.filterwarnings('ignore')
 
 # ============================================================================
@@ -233,25 +234,25 @@ def calculate_jdk_rrg(ticker_series, benchmark_series, window=WINDOW):
         'ticker': ticker_series,
         'benchmark': benchmark_series
     }).dropna()
-    
+
     if len(aligned_data) < window + 2:
         return None, None, None, None, None
-    
+
     rs = 100 * (aligned_data['ticker'] / aligned_data['benchmark'])
     rs_mean = rs.rolling(window=window).mean()
     rs_std = rs.rolling(window=window).std(ddof=0)
     rs_ratio = (100 + (rs - rs_mean) / rs_std)
-    
+
     rsr_roc = 100 * ((rs_ratio / rs_ratio.shift(1)) - 1)
     rsm_mean = rsr_roc.rolling(window=window).mean()
     rsm_std = rsr_roc.rolling(window=window).std(ddof=0)
     rs_momentum = (101 + ((rsr_roc - rsm_mean) / rsm_std))
-    
+
     distance = np.sqrt((rs_ratio - 100) ** 2 + (rs_momentum - 100) ** 2)
     heading = np.arctan2(rs_momentum - 100, rs_ratio - 100) * 180 / np.pi
     heading = (heading + 360) % 360
     velocity = distance.diff().abs()
-    
+
     min_len = min(len(rs_ratio), len(rs_momentum), len(distance), len(heading), len(velocity))
     return (rs_ratio.iloc[-min_len:].reset_index(drop=True),
             rs_momentum.iloc[-min_len:].reset_index(drop=True),
@@ -307,10 +308,10 @@ def calculate_price_change(current_price, historical_price):
 def select_graph_stocks(df, min_stocks=60):
     """Select stocks for graph display with quadrant balancing"""
     graph_stocks = []
-    
+
     for status in ["Leading", "Improving", "Weakening", "Lagging"]:
         df_quad = df[df['Status'] == status].copy()
-        
+
         if len(df_quad) == 0:
             continue
         elif len(df_quad) < 10:
@@ -321,13 +322,13 @@ def select_graph_stocks(df, min_stocks=60):
             else:
                 top_10 = df_quad.nsmallest(10, 'RRG Power')
             graph_stocks.extend(top_10.index.tolist())
-    
+
     if len(graph_stocks) < min_stocks:
         remaining_indices = df.index.difference(graph_stocks)
         additional_needed = min_stocks - len(graph_stocks)
         additional_stocks = df.loc[remaining_indices].nlargest(additional_needed, 'RRG Power')
         graph_stocks.extend(additional_stocks.index.tolist())
-    
+
     return df.loc[graph_stocks]
 
 # ============================================================================
@@ -337,25 +338,25 @@ def smooth_spline_curve(x_points, y_points, points_per_segment=8):
     """Create smooth curve using Catmull-Rom spline interpolation"""
     if len(x_points) < 3:
         return np.array(x_points), np.array(y_points)
-    
+
     x_points, y_points = np.array(x_points, dtype=float), np.array(y_points, dtype=float)
-    
+
     def catmull_rom_segment(p0, p1, p2, p3, num_points):
         t = np.linspace(0, 1, num_points, endpoint=False)
         t2, t3 = t * t, t * t * t
         x = 0.5 * ((2*p1[0]) + (-p0[0]+p2[0])*t + (2*p0[0]-5*p1[0]+4*p2[0]-p3[0])*t2 + (-p0[0]+3*p1[0]-3*p2[0]+p3[0])*t3)
         y = 0.5 * ((2*p1[1]) + (-p0[1]+p2[1])*t + (2*p0[1]-5*p1[1]+4*p2[1]-p3[1])*t2 + (-p0[1]+3*p1[1]-3*p2[1]+p3[1])*t3)
         return x, y
-    
+
     points = np.column_stack([x_points, y_points])
     padded = np.vstack([2*points[0]-points[1], points, 2*points[-1]-points[-2]])
     x_smooth, y_smooth = [], []
-    
+
     for i in range(len(points)-1):
         seg_x, seg_y = catmull_rom_segment(padded[i], padded[i+1], padded[i+2], padded[i+3], points_per_segment)
         x_smooth.extend(seg_x)
         y_smooth.extend(seg_y)
-    
+
     x_smooth.append(x_points[-1])
     y_smooth.append(y_points[-1])
     return np.array(x_smooth), np.array(y_smooth)
@@ -414,10 +415,10 @@ export_csv = st.sidebar.checkbox("Export CSV", value=True)
 
 st.sidebar.markdown("---")
 
-if st.sidebar.button("📥 Load Data", use_container_width=True, key="load_btn", type="primary"):
+if st.sidebar.button("📥 Load Data", width="stretch", key="load_btn", type="primary"):
     st.session_state.load_clicked = True
 
-if st.sidebar.button("🔄 Clear", use_container_width=True, key="clear_btn"):
+if st.sidebar.button("🔄 Clear", width="stretch", key="clear_btn"):
     st.session_state.load_clicked = False
     st.session_state.df_cache = None
     st.session_state.rs_history_cache = {}
@@ -443,15 +444,15 @@ if st.session_state.load_clicked:
     try:
         interval, yf_period = TIMEFRAMES[tf_name]
         universe = load_universe(csv_selected)
-        
+
         if universe.empty:
             st.error("❌ Failed to load universe data. Check CSV name.")
             st.stop()
-        
+
         symbols = universe['Symbol'].tolist()
         names_dict = dict(zip(universe['Symbol'], universe['Company Name']))
         industries_dict = dict(zip(universe['Symbol'], universe['Industry']))
-        
+
         with st.spinner(f"📥 Downloading {len(symbols)} symbols from {tf_name}..."):
             raw = yf.download(
                 symbols + [BENCHMARKS[bench_name]],
@@ -461,50 +462,63 @@ if st.session_state.load_clicked:
                 progress=False,
                 threads=True
             )
-        
-        if BENCHMARKS[bench_name] not in raw['Close'].columns:
+
+        if raw is None or raw.empty:
+            st.error("❌ No data received from Yahoo Finance. Try another timeframe/benchmark.")
+            st.stop()
+
+        # yfinance can return different column shapes depending on symbols count
+        if 'Close' not in raw.columns.get_level_values(0) and 'Close' not in raw.columns:
+            st.error("❌ Close data not available in Yahoo Finance response.")
+            st.stop()
+
+        close = raw['Close'] if 'Close' in raw else raw.xs('Close', axis=1, level=0, drop_level=True)
+        if isinstance(close, pd.Series):
+            close = close.to_frame()
+
+        if BENCHMARKS[bench_name] not in close.columns:
             st.error(f"❌ Benchmark {bench_name} data unavailable.")
             st.stop()
-        
-        bench = raw['Close'][BENCHMARKS[bench_name]]
+
+        bench = close[BENCHMARKS[bench_name]]
         rows = []
         rs_history = {}
         success_count = 0
         failed_count = 0
-        
+
         for s in symbols:
-            if s not in raw['Close'].columns:
+            if s not in close.columns:
                 failed_count += 1
                 continue
-            
+
             try:
                 rs_ratio, rs_momentum, distance, heading, velocity = calculate_jdk_rrg(
-                    raw['Close'][s], bench, window=WINDOW
+                    close[s], bench, window=WINDOW
                 )
-                
+
                 if rs_ratio is None or len(rs_ratio) < 3:
                     failed_count += 1
                     continue
-                
+
                 tail_len = min(14, len(rs_ratio))  # Store up to 14 periods
                 rs_history[format_symbol(s)] = {
                     'rs_ratio': rs_ratio.iloc[-tail_len:].tolist(),
                     'rs_momentum': rs_momentum.iloc[-tail_len:].tolist()
                 }
-                
+
                 rsr_current = rs_ratio.iloc[-1]
                 rsm_current = rs_momentum.iloc[-1]
                 dist_current = distance.iloc[-1]
                 head_current = heading.iloc[-1]
                 vel_current = velocity.iloc[-1] if not pd.isna(velocity.iloc[-1]) else 0
-                
+
                 power = np.sqrt((rsr_current - 100) ** 2 + (rsm_current - 100) ** 2)
-                current_price = raw['Close'][s].iloc[-1]
-                historical_price = raw['Close'][s].iloc[max(0, len(raw['Close'][s]) - PERIOD_MAP[period_name])]
+                current_price = close[s].iloc[-1]
+                historical_price = close[s].iloc[max(0, len(close[s]) - PERIOD_MAP[period_name])]
                 price_change = calculate_price_change(current_price, historical_price)
                 status = quadrant(rsr_current, rsm_current)
                 direction = get_heading_direction(head_current)
-                
+
                 rows.append({
                     'Symbol': format_symbol(s),
                     'Name': names_dict.get(s, s),
@@ -525,18 +539,18 @@ if st.session_state.load_clicked:
             except Exception:
                 failed_count += 1
                 continue
-        
+
         if success_count > 0:
             st.success(f"✅ Loaded {success_count} symbols | ⚠️ Skipped {failed_count}")
         else:
             st.error("No data available.")
             st.stop()
-        
+
         df = pd.DataFrame(rows)
         if df.empty:
             st.error("No data after processing.")
             st.stop()
-        
+
         rank_col_map = {
             "RRG Power": "RRG Power",
             "RS-Ratio": "RS-Ratio",
@@ -544,15 +558,15 @@ if st.session_state.load_clicked:
             "Distance": "Distance",
             "Price % Change": "Change %"
         }
-        
+
         rank_column = rank_col_map[rank_by]
         df['Rank'] = df[rank_column].rank(ascending=False, method='min').astype(int)
         df = df.sort_values('Rank')
         df['Sl No.'] = range(1, len(df) + 1)
-        
+
         st.session_state.df_cache = df
         st.session_state.rs_history_cache = rs_history
-        
+
     except Exception as e:
         st.error(f"❌ Error: {str(e)}")
         st.stop()
@@ -563,9 +577,9 @@ if st.session_state.load_clicked:
 if st.session_state.df_cache is not None:
     df = st.session_state.df_cache
     rs_history = st.session_state.rs_history_cache
-    
+
     col_left, col_main, col_right = st.columns([1, 3, 1], gap="medium")
-    
+
     # ========================================================================
     # LEFT SIDEBAR
     # ========================================================================
@@ -573,25 +587,25 @@ if st.session_state.df_cache is not None:
         st.markdown("### 📍 Legend")
         status_counts = df['Status'].value_counts()
         status_colors_map = {"Leading": "🟢", "Improving": "🟣", "Weakening": "🟡", "Lagging": "🔴"}
-        
+
         for status in ["Leading", "Improving", "Weakening", "Lagging"]:
             count = status_counts.get(status, 0)
             st.markdown(f"{status_colors_map[status]} {status}: {count}")
-        
+
         st.markdown("---")
         st.markdown("### 📊 Stats")
         col_stat1, col_stat2 = st.columns(2)
-        
+
         with col_stat1:
             st.metric("Total", len(df))
             st.metric("Leading", len(df[df['Status'] == 'Leading']))
-        
+
         with col_stat2:
             st.metric("Improving", len(df[df['Status'] == 'Improving']))
             st.metric("Weakening", len(df[df['Status'] == 'Weakening']))
-        
+
         st.metric("Lagging", len(df[df['Status'] == 'Lagging']))
-    
+
     # ========================================================================
     # MAIN CONTENT - RRG GRAPH
     # ========================================================================
@@ -602,9 +616,9 @@ if st.session_state.df_cache is not None:
         with tab1:
             st.markdown("## Relative Rotation Graph")
             st.markdown(f"**{csv_selected} | {tf_name} | {period_name} | Benchmark: {bench_name}**")
-            
+
             df_graph = select_graph_stocks(df, min_stocks=40)
-            
+
             # Calculate label candidates (top N by distance)
             if show_labels:
                 label_candidates = set(
@@ -612,19 +626,19 @@ if st.session_state.df_cache is not None:
                 )
             else:
                 label_candidates = set()
-            
+
             fig_rrg = go.Figure()
-            
+
             # Calculate dynamic range
             x_min = df['RS-Ratio'].min() - 2
             x_max = df['RS-Ratio'].max() + 2
             y_min = df['RS-Momentum'].min() - 2
             y_max = df['RS-Momentum'].max() + 2
-            
+
             # Ensure symmetric around 100
             x_range = max(abs(100 - x_min), abs(x_max - 100))
             y_range = max(abs(100 - y_min), abs(y_max - 100))
-            
+
             # Quadrant backgrounds with matching colors
             fig_rrg.add_shape(type="rect", x0=100, y0=100, x1=100+x_range+2, y1=100+y_range+2,
                              fillcolor=QUADRANT_BG_COLORS["Leading"], line_width=0, layer="below")
@@ -634,11 +648,11 @@ if st.session_state.df_cache is not None:
                              fillcolor=QUADRANT_BG_COLORS["Lagging"], line_width=0, layer="below")
             fig_rrg.add_shape(type="rect", x0=100, y0=100-y_range-2, x1=100+x_range+2, y1=100,
                              fillcolor=QUADRANT_BG_COLORS["Weakening"], line_width=0, layer="below")
-            
+
             # Center lines (solid, not dashed - matching reference)
             fig_rrg.add_hline(y=100, line_color="rgba(80,80,80,0.8)", line_width=1.5)
             fig_rrg.add_vline(x=100, line_color="rgba(80,80,80,0.8)", line_width=1.5)
-            
+
             # Quadrant labels with matching colors
             label_offset_x = x_range * 0.6
             label_offset_y = y_range * 0.7
@@ -650,31 +664,31 @@ if st.session_state.df_cache is not None:
                                   showarrow=False, font=dict(size=14, color=QUADRANT_COLORS["Lagging"]))
             fig_rrg.add_annotation(x=100+label_offset_x, y=100-label_offset_y, text="<b>WEAKENING</b>",
                                   showarrow=False, font=dict(size=14, color=QUADRANT_COLORS["Weakening"]))
-            
+
             # Add data points with smooth tails
             for _, row in df_graph.iterrows():
                 sym = row['Symbol']
                 status = row['Status']
                 color = QUADRANT_COLORS[status]
-                
+
                 if sym in rs_history:
                     tail_data = rs_history[sym]
                     rs_ratio_tail = tail_data['rs_ratio'][-trail_length:]
                     rs_momentum_tail = tail_data['rs_momentum'][-trail_length:]
-                    
+
                     x_pts = np.array(rs_ratio_tail, dtype=float)
                     y_pts = np.array(rs_momentum_tail, dtype=float)
                     n_original = len(x_pts)
-                    
+
                     if n_original >= 2:
                         # Apply Catmull-Rom spline smoothing
                         if n_original >= 3:
                             x_smooth, y_smooth = smooth_spline_curve(x_pts, y_pts, points_per_segment=8)
                         else:
                             x_smooth, y_smooth = x_pts, y_pts
-                        
+
                         n_smooth = len(x_smooth)
-                        
+
                         # Draw smooth trail with gradient width and opacity
                         if n_smooth >= 2:
                             for i in range(n_smooth - 1):
@@ -692,7 +706,7 @@ if st.session_state.df_cache is not None:
                                         showlegend=False,
                                     )
                                 )
-                        
+
                         # Trail marker points (on original data points) - gradient size
                         trail_sizes = [5 + (i / max(1, n_original - 1)) * 5 for i in range(n_original)]
                         if n_original > 1:
@@ -711,7 +725,7 @@ if st.session_state.df_cache is not None:
                                     showlegend=False,
                                 )
                             )
-                        
+
                         # Arrow head showing direction
                         dx = x_pts[-1] - x_pts[-2]
                         dy = y_pts[-1] - y_pts[-2]
@@ -732,7 +746,7 @@ if st.session_state.df_cache is not None:
                                 arrowwidth=3,
                                 arrowcolor=color,
                             )
-                
+
                 # Hover text
                 hover_info = (
                     f"<b>{row['Symbol']}</b> - {row['Name']}<br>"
@@ -745,7 +759,7 @@ if st.session_state.df_cache is not None:
                     f"<b>Industry:</b> {row['Industry']}<br>"
                     f"<b>Direction:</b> {row['Direction']}"
                 )
-                
+
                 # Head marker (larger, with white border)
                 fig_rrg.add_trace(go.Scatter(
                     x=[row['RS-Ratio']],
@@ -758,11 +772,11 @@ if st.session_state.df_cache is not None:
                     ),
                     text=[hover_info],
                     hoverinfo='text',
-                    hoverlabel=dict(bgcolor="#1a1f2e", bordercolor=color, 
+                    hoverlabel=dict(bgcolor="#1a1f2e", bordercolor=color,
                                    font=dict(family="Plus Jakarta Sans, sans-serif", size=12, color="white")),
                     showlegend=False,
                 ))
-                
+
                 # Add label for selected stocks
                 if show_labels and sym in label_candidates:
                     fig_rrg.add_annotation(
@@ -779,8 +793,8 @@ if st.session_state.df_cache is not None:
                         bgcolor='rgba(0,0,0,0)',
                         borderwidth=0,
                     )
-            
-            # Enhanced dark theme layout
+
+            # Enhanced dark theme layout (NO titlefont)
             fig_rrg.update_layout(
                 height=620,
                 title=dict(
@@ -789,21 +803,20 @@ if st.session_state.df_cache is not None:
                     x=0.5
                 ),
                 xaxis=dict(
-    title=dict(
-        text="<b>JdK RS-Ratio</b>",
-        font=dict(color="#e6eaee")
-    ),
-    ...,
-    tickfont=dict(color="#b3bdc7")
-),
-yaxis=dict(
-    title=dict(
-        text="<b>JdK RS-Momentum</b>",
-        font=dict(color="#e6eaee")
-    ),
-    ...,
-    tickfont=dict(color="#b3bdc7")
-),
+                    title=dict(text="<b>JdK RS-Ratio</b>", font=dict(color="#e6eaee")),
+                    range=[100 - x_range - 1, 100 + x_range + 1],
+                    showgrid=True,
+                    gridcolor='rgba(150,150,150,0.2)',
+                    zeroline=False,
+                    tickfont=dict(color='#b3bdc7')
+                ),
+                yaxis=dict(
+                    title=dict(text="<b>JdK RS-Momentum</b>", font=dict(color="#e6eaee")),
+                    range=[100 - y_range - 1, 100 + y_range + 1],
+                    showgrid=True,
+                    gridcolor='rgba(150,150,150,0.2)',
+                    zeroline=False,
+                    tickfont=dict(color='#b3bdc7')
                 ),
                 plot_bgcolor='#fafafa',
                 paper_bgcolor='#0b0e13',
@@ -812,11 +825,11 @@ yaxis=dict(
                 showlegend=False,
                 margin=dict(l=60, r=30, t=80, b=60),
             )
-            
-            st.plotly_chart(fig_rrg, use_container_width=True, config={'displayModeBar': True, 'displaylogo': False})
-            
+
+            st.plotly_chart(fig_rrg, width="stretch", config={'displayModeBar': True, 'displaylogo': False})
+
             st.markdown("---")
-            
+
             # INTERACTIVE TABLE WITH SORTING, FILTERING, AND SEARCH
             with st.expander("📊 **Detailed Analysis** (Click to expand/collapse)", expanded=True):
                 table_rows = ""
@@ -824,7 +837,7 @@ yaxis=dict(
                     status = row['Status']
                     status_color = QUADRANT_COLORS.get(status, "#808080")
                     chg_color = "#4ade80" if row['Change %'] > 0 else "#f87171" if row['Change %'] < 0 else "#9ca3af"
-                    
+
                     table_rows += f"""
                     <tr>
                         <td>{int(row['Sl No.'])}</td>
@@ -841,15 +854,15 @@ yaxis=dict(
                         <td style="color: #fbbf24;">{row['Direction']}</td>
                     </tr>
                     """
-                
+
                 html_table = f"""
                 <style>
                     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
-                    
+
                     * {{
                         box-sizing: border-box;
                     }}
-                    
+
                     .table-container {{
                         font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
                         background: #10141b;
@@ -857,7 +870,7 @@ yaxis=dict(
                         overflow: hidden;
                         border: 1px solid #1f2732;
                     }}
-                    
+
                     .search-container {{
                         padding: 12px;
                         background: #0b0e13;
@@ -867,7 +880,7 @@ yaxis=dict(
                         align-items: center;
                         flex-wrap: wrap;
                     }}
-                    
+
                     .search-box {{
                         padding: 8px 12px;
                         background: #1a2230;
@@ -879,11 +892,11 @@ yaxis=dict(
                         min-width: 200px;
                         font-family: inherit;
                     }}
-                    
+
                     .search-box:focus {{
                         border-color: #7a5cff;
                     }}
-                    
+
                     .filter-select {{
                         padding: 8px 12px;
                         background: #1a2230;
@@ -894,7 +907,7 @@ yaxis=dict(
                         outline: none;
                         font-family: inherit;
                     }}
-                    
+
                     .filter-badge {{
                         background: #7a5cff;
                         color: white;
@@ -903,18 +916,18 @@ yaxis=dict(
                         font-size: 12px;
                         font-weight: 700;
                     }}
-                    
+
                     .table-wrapper {{
                         max-height: 550px;
                         overflow: auto;
                     }}
-                    
+
                     .rrg-table {{
                         width: 100%;
                         border-collapse: collapse;
                         font-size: 13px;
                     }}
-                    
+
                     .rrg-table th {{
                         position: sticky;
                         top: 0;
@@ -929,56 +942,56 @@ yaxis=dict(
                         user-select: none;
                         white-space: nowrap;
                     }}
-                    
+
                     .rrg-table th:hover {{
                         background: #1a2233;
                     }}
-                    
+
                     .sort-icon {{
                         margin-left: 6px;
                         opacity: 0.5;
                         font-size: 10px;
                     }}
-                    
+
                     .rrg-table td {{
                         padding: 10px;
                         border-bottom: 1px solid #1a2230;
                         color: #e6eaee;
                     }}
-                    
+
                     .rrg-table tbody tr {{
                         background: #0d1117;
                         transition: background 0.15s;
                     }}
-                    
+
                     .rrg-table tbody tr:nth-child(even) {{
                         background: #0f1419;
                     }}
-                    
+
                     .rrg-table tbody tr:hover {{
                         background: #161b22;
                     }}
-                    
+
                     .symbol-cell a {{
                         color: #58a6ff;
                         text-decoration: none;
                         font-weight: 700;
                     }}
-                    
+
                     .symbol-cell a:hover {{
                         text-decoration: underline;
                     }}
-                    
+
                     .name-cell {{
                         color: #9ca3af;
                         font-size: 12px;
                     }}
-                    
+
                     .industry-cell {{
                         color: #8b949e;
                         font-size: 12px;
                     }}
-                    
+
                     .status-badge {{
                         display: inline-block;
                         padding: 4px 10px;
@@ -988,16 +1001,16 @@ yaxis=dict(
                         color: white;
                         text-transform: uppercase;
                     }}
-                    
+
                     .power-cell {{
                         font-weight: 600;
                         color: #a78bfa;
                     }}
-                    
+
                     tr.hidden {{
                         display: none;
                     }}
-                    
+
                     /* Scrollbar */
                     .table-wrapper::-webkit-scrollbar {{
                         height: 10px;
@@ -1011,7 +1024,8 @@ yaxis=dict(
                         background: #10141b;
                     }}
                 </style>
-                
+
+
                 <div class="table-container">
                     <div class="search-container">
                         <input type="text" id="searchBox" class="search-box" placeholder="🔍 Search symbol or name..." onkeyup="filterTable()">
@@ -1028,7 +1042,7 @@ yaxis=dict(
                         </select>
                         <span class="filter-badge" id="countBadge">{len(df)} / {len(df)}</span>
                     </div>
-                    
+
                     <div class="table-wrapper">
                         <table class="rrg-table" id="dataTable">
                             <thead>
@@ -1053,39 +1067,39 @@ yaxis=dict(
                         </table>
                     </div>
                 </div>
-                
+
                 <script>
                     let sortDirection = {{}};
                     const totalRows = {len(df)};
-                    
+
                     function sortTable(columnIndex) {{
                         const tbody = document.getElementById("tableBody");
                         const rows = Array.from(tbody.querySelectorAll("tr"));
-                        
+
                         sortDirection[columnIndex] = !sortDirection[columnIndex];
                         const ascending = sortDirection[columnIndex];
-                        
+
                         rows.sort((a, b) => {{
                             let aValue = a.cells[columnIndex].textContent.trim();
                             let bValue = b.cells[columnIndex].textContent.trim();
-                            
+
                             aValue = aValue.replace(/[₹,%]/g, '');
                             bValue = bValue.replace(/[₹,%]/g, '');
-                            
+
                             const aNum = parseFloat(aValue);
                             const bNum = parseFloat(bValue);
-                            
+
                             if (!isNaN(aNum) && !isNaN(bNum)) {{
                                 return ascending ? aNum - bNum : bNum - aNum;
                             }}
-                            
+
                             return ascending ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
                         }});
-                        
+
                         tbody.innerHTML = '';
                         rows.forEach(row => tbody.appendChild(row));
                     }}
-                    
+
                     function filterTable() {{
                         const searchBox = document.getElementById("searchBox").value.toLowerCase();
                         const statusFilter = document.getElementById("statusFilter").value;
@@ -1093,18 +1107,18 @@ yaxis=dict(
                         const tbody = document.getElementById("tableBody");
                         const rows = tbody.getElementsByTagName("tr");
                         let visibleCount = 0;
-                        
+
                         for (let i = 0; i < rows.length; i++) {{
                             const row = rows[i];
                             const symbol = row.cells[1].textContent.toLowerCase();
                             const name = row.cells[2].textContent.toLowerCase();
                             const industry = row.cells[3].textContent;
                             const status = row.cells[6].textContent.trim();
-                            
+
                             const matchesSearch = symbol.includes(searchBox) || name.includes(searchBox);
                             const matchesStatus = !statusFilter || status === statusFilter;
                             const matchesIndustry = !industryFilter || industry === industryFilter;
-                            
+
                             if (matchesSearch && matchesStatus && matchesIndustry) {{
                                 row.classList.remove('hidden');
                                 visibleCount++;
@@ -1112,12 +1126,12 @@ yaxis=dict(
                                 row.classList.add('hidden');
                             }}
                         }}
-                        
+
                         document.getElementById('countBadge').textContent = visibleCount + ' / ' + totalRows;
                     }}
                 </script>
                 """
-                
+
                 st.components.v1.html(html_table, height=650, scrolling=False)
 
         # ====================================================================
@@ -1139,7 +1153,7 @@ yaxis=dict(
                     }
 
             if animation_history:
-                max_frames = max([len(animation_history[sym]['rs_ratio']) 
+                max_frames = max([len(animation_history[sym]['rs_ratio'])
                                 for sym in animation_history if animation_history[sym]['rs_ratio']], default=1)
 
                 # Calculate range
@@ -1282,7 +1296,7 @@ yaxis=dict(
                                   font=dict(size=16, color='#e6eaee'), x=0.5, xanchor='center')
                     )
 
-                    st.plotly_chart(fig_anim, use_container_width=True, config={'displayModeBar': True})
+                    st.plotly_chart(fig_anim, width="stretch", config={'displayModeBar': True})
                     st.success(f"✅ Animation: {len(anim_frames)} periods | Trail: {trail_length}")
             else:
                 st.warning("No animation data available. Load data first.")
@@ -1292,29 +1306,29 @@ yaxis=dict(
     # ========================================================================
     with col_right:
         st.markdown("### 🚀 Top 30 Per Quadrant")
-        
+
         # Quadrant icons matching new colors
         status_icons = {"Leading": "🟢", "Improving": "🟣", "Weakening": "🟡", "Lagging": "🔴"}
-        
+
         for status in ["Leading", "Improving", "Weakening", "Lagging"]:
             df_status_all = df[df['Status'] == status].sort_values('RRG Power', ascending=False)
             df_status_top30 = df_status_all.head(30)
-            
+
             if not df_status_top30.empty:
                 status_color = QUADRANT_COLORS.get(status, "#808080")
                 status_icon = status_icons[status]
-                
+
                 total_in_quadrant = len(df_status_all)
                 showing = len(df_status_top30)
-                
+
                 with st.expander(f"{status_icon} **{status}** (Top {showing} of {total_in_quadrant})", expanded=(status == "Leading")):
                     for idx, (_, row) in enumerate(df_status_top30.iterrows(), 1):
                         tv_link = row['TV Link']
-                        
+
                         st.markdown(f"""
-                        <div style="padding: 6px; margin-bottom: 4px; background: rgba(200,200,200,0.05); 
+                        <div style="padding: 6px; margin-bottom: 4px; background: rgba(200,200,200,0.05);
                                     border-left: 3px solid {status_color}; border-radius: 4px;">
-                            <small><b><a href="{tv_link}" target="_blank" 
+                            <small><b><a href="{tv_link}" target="_blank"
                                 style="color: #58a6ff; text-decoration: none;">#{int(row['Sl No.'])}</a></b></small>
                             <br><b style="color: {status_color}; font-size: 12px;">{row['Symbol']}</b>
                             <br><small style="font-size: 10px; color: #9ca3af;">{row['Industry'][:18]}</small>
@@ -1322,9 +1336,9 @@ yaxis=dict(
                             <small style="color: #6b7280; font-size: 10px;"> | 📏 {row['Distance']:.2f}</small>
                         </div>
                         """, unsafe_allow_html=True)
-        
+
         st.markdown("---")
-    
+
     # ========================================================================
     # FOOTER
     # ========================================================================
@@ -1334,17 +1348,17 @@ yaxis=dict(
         <b>RRG Analysis Dashboard</b><br>
         Data: Yahoo Finance | Charts: TradingView<br>
         Displaying {len(df_graph)} stocks on graph | Total {len(df)} stocks analyzed<br>
-        Reference: <a href="https://www.optuma.com/blog/scripting-for-rrgs" target="_blank" 
+        Reference: <a href="https://www.optuma.com/blog/scripting-for-rrgs" target="_blank"
                       style="color: #7a5cff;">Optuma RRG Scripting Guide</a><br>
         <i>Disclaimer: For educational purposes only. Not financial advice.</i>
     </div>
     """, unsafe_allow_html=True)
-    
+
     if export_csv:
         csv_buffer = io.StringIO()
         df.to_csv(csv_buffer, index=False)
         csv_data = csv_buffer.getvalue()
-        
+
         st.download_button(
             label="📥 Download Complete Data",
             data=csv_data,
@@ -1354,4 +1368,3 @@ yaxis=dict(
 
 else:
     st.info("⬅️ Select indices and click **Load Data** to start analysis")
-
