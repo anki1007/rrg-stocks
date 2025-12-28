@@ -417,11 +417,11 @@ SYMBOL_COLORS = symbol_color_map(tickers)
 idx = bench_idx
 idx_len = len(idx)
 
-# Session state
-if "chart_visible" not in st.session_state: st.session_state.chart_visible = {t: True for t in tickers}
+# Session state - initialize checkbox keys for each ticker
 for t in tickers:
-    if t not in st.session_state.chart_visible: st.session_state.chart_visible[t] = True
-st.session_state.chart_visible = {t: v for t, v in st.session_state.chart_visible.items() if t in tickers}
+    cb_key = f"cb_{t}"
+    if cb_key not in st.session_state:
+        st.session_state[cb_key] = True  # Default all visible
 
 if "end_idx" not in st.session_state: st.session_state.end_idx = idx_len - 1
 st.session_state.end_idx = min(max(st.session_state.end_idx, DEFAULT_TAIL), idx_len - 1)
@@ -478,21 +478,33 @@ with main_col:
     # Slider
     end_idx = st.slider("Date", min_value=DEFAULT_TAIL, max_value=idx_len-1, step=1, key="end_idx", format=" ", label_visibility="collapsed")
     
-    # Controls
-    ctrl_cols = st.columns([1,1,1,1,1,1,3])
+    # Controls row with All/None buttons
+    ctrl_cols = st.columns([1,1,1,1,1,1,1,1,2])
+    
+    with ctrl_cols[0]:
+        if st.button("All", use_container_width=True, key="sel_all"):
+            for t in tickers: 
+                st.session_state[f"cb_{t}"] = True
+            st.rerun()
+    with ctrl_cols[1]:
+        if st.button("None", use_container_width=True, key="clr_all"):
+            for t in tickers: 
+                st.session_state[f"cb_{t}"] = False
+            st.rerun()
+    
     def go_prev():
         if st.session_state.end_idx > DEFAULT_TAIL: st.session_state.end_idx -= 1
     def go_next():
         if st.session_state.end_idx < idx_len - 1: st.session_state.end_idx += 1
     def go_latest(): st.session_state.end_idx = idx_len - 1
-    with ctrl_cols[0]: st.button("◀ Prev", use_container_width=True, on_click=go_prev)
-    with ctrl_cols[1]: st.button("Next ▶", use_container_width=True, on_click=go_next)
-    with ctrl_cols[2]: st.button("Latest", use_container_width=True, on_click=go_latest)
-    with ctrl_cols[3]:
-        if st.button("Fit", use_container_width=True): st.session_state.view_mode = "Fit"
-    with ctrl_cols[4]:
-        if st.button("Center", use_container_width=True): st.session_state.view_mode = "Center"
+    with ctrl_cols[2]: st.button("◀ Prev", use_container_width=True, on_click=go_prev)
+    with ctrl_cols[3]: st.button("Next ▶", use_container_width=True, on_click=go_next)
+    with ctrl_cols[4]: st.button("Latest", use_container_width=True, on_click=go_latest)
     with ctrl_cols[5]:
+        if st.button("Fit", use_container_width=True): st.session_state.view_mode = "Fit"
+    with ctrl_cols[6]:
+        if st.button("Center", use_container_width=True): st.session_state.view_mode = "Center"
+    with ctrl_cols[7]:
         if st.button("Max", use_container_width=True): st.session_state.view_mode = "Max"
     
     start_idx = max(end_idx - tail_len, 0)
@@ -500,7 +512,9 @@ with main_col:
     # Chart range
     all_rr, all_mm = [], []
     for t in tickers:
-        if st.session_state.chart_visible.get(t, True):
+        # Read visibility from checkbox key
+        is_visible = st.session_state.get(f"cb_{t}", True)
+        if is_visible:
             rr = rs_ratio_map[t].iloc[start_idx:end_idx+1].dropna()
             mm = rs_mom_map[t].iloc[start_idx:end_idx+1].dropna()
             all_rr.extend(rr.values); all_mm.extend(mm.values)
@@ -529,7 +543,7 @@ with main_col:
     fig.add_annotation(x=x_min+lox, y=y_min+loy, text="<b>LAGGING</b>", showarrow=False, font=dict(size=13, color="#dc2626"))
     
     for t in tickers:
-        if not st.session_state.chart_visible.get(t, True): continue
+        if not st.session_state.get(f"cb_{t}", True): continue
         rr = rs_ratio_map[t].iloc[start_idx+1:end_idx+1].dropna()
         mm = rs_mom_map[t].iloc[start_idx+1:end_idx+1].dropna()
         rr, mm = rr.align(mm, join="inner")
@@ -583,15 +597,6 @@ with main_col:
 # Right panel - Quadrant checkboxes
 with right_col:
     st.markdown("**Symbols**")
-    btn_cols = st.columns(2)
-    with btn_cols[0]:
-        if st.button("All", use_container_width=True, key="sel_all"):
-            for t in tickers: st.session_state.chart_visible[t] = True
-            st.rerun()
-    with btn_cols[1]:
-        if st.button("None", use_container_width=True, key="clr_all"):
-            for t in tickers: st.session_state.chart_visible[t] = False
-            st.rerun()
     
     q_icons = {"Leading": "🟢", "Improving": "🟣", "Weakening": "🟡", "Lagging": "🔴"}
     for quadrant in ["Leading", "Improving", "Weakening", "Lagging"]:
@@ -599,8 +604,10 @@ with right_col:
         with st.expander(f"{q_icons[quadrant]} {quadrant} ({len(q_tickers)})", expanded=(quadrant in ["Leading", "Improving"])):
             for t in q_tickers:
                 name = META.get(t, {}).get("name", t)
-                is_vis = st.checkbox(f"{name[:20]}{'...' if len(name)>20 else ''}", value=st.session_state.chart_visible.get(t, True), key=f"cb_{t}")
-                st.session_state.chart_visible[t] = is_vis
+                st.checkbox(
+                    f"{name[:20]}{'...' if len(name)>20 else ''}", 
+                    key=f"cb_{t}"
+                )
 
 # -------------------- Interactive Table --------------------
 def make_interactive_table(rows):
