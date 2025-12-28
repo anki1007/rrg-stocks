@@ -565,7 +565,7 @@ show_quadrants = {
 }
 st.sidebar.markdown("---")
 
-show_labels = st.sidebar.toggle("Show labels on chart", value=False)
+show_labels = st.sidebar.toggle("Show labels on chart", value=True)
 label_top_n = st.sidebar.slider("Label top N by distance", 3, 30, 12, 1, disabled=not show_labels)
 max_rank_display = st.sidebar.slider("Max items in ranking panel", 10, 50, 30, 1)
 
@@ -905,7 +905,7 @@ with plot_col:
             fig.add_annotation(
                 x=rr_last,
                 y=mm_last,
-                text=f"<b>{name}</b>",
+                text=f"<b>{symbol}</b>",
                 showarrow=True,
                 arrowhead=0,
                 arrowwidth=1.5,
@@ -1528,3 +1528,4 @@ with c2:
     )
 
 st.caption("Names open TradingView. Use Play/Pause to watch rotation; Speed controls frame interval; Loop wraps frames.")
+
