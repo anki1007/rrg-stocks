@@ -864,185 +864,29 @@ if st.session_state.df_cache is not None:
                     """
                 
                 html_table = f"""
-                <style>
-                    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
-                    
-                    html, body {
-                        width: 50%;
-                        margin: 0;
-                        padding: 0;
-                        background: #0b0e13;
-                    }
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
 
-                    
-                    * {{
-                        box-sizing: border-box;
-                    }}
-                    
-                    .table-container {{
-                        font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
-                        background: #10141b;
-                        border-radius: 10px;
-                        overflow: hidden;
-                        border: 1px solid #1f2732;
-                        width: 100%;
-                        display: block;
-                    }}
-                    
-                    .search-container {{
-                        padding: 12px;
-                        background: #0b0e13;
-                        border-bottom: 1px solid #1f2732;
-                        display: flex;
-                        gap: 10px;
-                        align-items: center;
-                        flex-wrap: wrap;
-                        width: 100%;
-                    }}
-                    
-                    .search-box {{
-                        padding: 8px 12px;
-                        background: #1a2230;
-                        border: 1px solid #2e3745;
-                        border-radius: 8px;
-                        color: #e6eaee;
-                        font-size: 13px;
-                        outline: none;
-                        min-width: 200px;
-                        font-family: inherit;
-                    }}
-                    
-                    .search-box:focus {{
-                        border-color: #7a5cff;
-                    }}
-                    
-                    .filter-select {{
-                        padding: 8px 12px;
-                        background: #1a2230;
-                        border: 1px solid #2e3745;
-                        border-radius: 8px;
-                        color: #e6eaee;
-                        font-size: 13px;
-                        outline: none;
-                        font-family: inherit;
-                    }}
-                    
-                    .filter-badge {{
-                        background: #7a5cff;
-                        color: white;
-                        padding: 5px 12px;
-                        border-radius: 20px;
-                        font-size: 12px;
-                        font-weight: 700;
-                    }}
-                    
-                    .table-wrapper {{
-                        max-height: 550px;
-                        overflow: auto;
-                    }}
-                    
-                    .rrg-table {{
-                        width: 100%;
-                        border-collapse: collapse;
-                        font-size: 13px;
-                    }}
-                    
-                    .rrg-table th {{
-                        position: sticky;
-                        top: 0;
-                        z-index: 10;
-                        background: #121823;
-                        color: #b3bdc7;
-                        padding: 12px 10px;
-                        text-align: left;
-                        font-weight: 800;
-                        border-bottom: 1px solid #1f2732;
-                        cursor: pointer;
-                        user-select: none;
-                        white-space: nowrap;
-                    }}
-                    
-                    .rrg-table th:hover {{
-                        background: #1a2233;
-                    }}
-                    
-                    .sort-icon {{
-                        margin-left: 6px;
-                        opacity: 0.5;
-                        font-size: 10px;
-                    }}
-                    
-                    .rrg-table td {{
-                        padding: 10px;
-                        border-bottom: 1px solid #1a2230;
-                        color: #e6eaee;
-                    }}
-                    
-                    .rrg-table tbody tr {{
-                        background: #0d1117;
-                        transition: background 0.15s;
-                    }}
-                    
-                    .rrg-table tbody tr:nth-child(even) {{
-                        background: #0f1419;
-                    }}
-                    
-                    .rrg-table tbody tr:hover {{
-                        background: #161b22;
-                    }}
-                    
-                    .symbol-cell a {{
-                        color: #58a6ff;
-                        text-decoration: none;
-                        font-weight: 700;
-                    }}
-                    
-                    .symbol-cell a:hover {{
-                        text-decoration: underline;
-                    }}
-                    
-                    .name-cell {{
-                        color: #9ca3af;
-                        font-size: 12px;
-                    }}
-                    
-                    .industry-cell {{
-                        color: #8b949e;
-                        font-size: 12px;
-                    }}
-                    
-                    .status-badge {{
-                        display: inline-block;
-                        padding: 4px 10px;
-                        border-radius: 6px;
-                        font-size: 11px;
-                        font-weight: 700;
-                        color: white;
-                        text-transform: uppercase;
-                    }}
-                    
-                    .power-cell {{
-                        font-weight: 600;
-                        color: #a78bfa;
-                    }}
-                    
-                    tr.hidden {{
-                        display: none;
-                    }}
-                    
-                    /* Scrollbar */
-                    .table-wrapper::-webkit-scrollbar {{
-                        height: 10px;
-                        width: 10px;
-                    }}
-                    .table-wrapper::-webkit-scrollbar-thumb {{
-                        background: #2e3745;
-                        border-radius: 8px;
-                    }}
-                    .table-wrapper::-webkit-scrollbar-track {{
-                        background: #10141b;
-                    }}
-                </style>
+    html, body {{
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        background: #0b0e13;
+    }}
+
+    .table-container {{
+        font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+        background: #10141b;
+        border-radius: 10px;
+        overflow: hidden;
+        border: 1px solid #1f2732;
+        width: 100%;
+        display: block;
+    }}
+    ...
+</style>
+"""
+
                 
                 <div class="table-container" style="width:100%;">
                     <div class="search-container">
@@ -1468,4 +1312,5 @@ if st.session_state.df_cache is not None:
 
 else:
     st.info("⬅️ Select indices and click **Load Data** to start analysis")
+
 
