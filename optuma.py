@@ -790,7 +790,7 @@ if st.session_state.df_cache is not None:
                         ax=25,
                         ay=-20,
                         font=dict(size=10, color=color),
-                        bgcolor='rgba(0,0,0,0)',
+                        bgcolor='rgba(1,1,1,1)',
                         borderwidth=0,
                     )
 
@@ -1368,3 +1368,4 @@ if st.session_state.df_cache is not None:
 
 else:
     st.info("⬅️ Select indices and click **Load Data** to start analysis")
+
